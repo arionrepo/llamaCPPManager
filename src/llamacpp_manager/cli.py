@@ -14,7 +14,7 @@ from .config import (
     save_config,
     update_model,
 )
-from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json
+from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -120,6 +120,30 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(f"Removed model '{args.name}'")
         return 0
 
+    if sub == "migrate":
+        # Determine current directories from environment (already applied in main)
+        cur_cfg_dir = app_support_dir()
+        cur_log_dir = logs_dir()
+        to_cfg = args.to_config_dir
+        to_logs = args.to_log_dir
+        move_flag = args.move
+        force_flag = args.force
+        if not to_cfg and not to_logs:
+            print("error: specify at least --to-config-dir or --to-log-dir", file=sys.stderr)
+            return 2
+        try:
+            if to_cfg:
+                msg = migrate_directory(cur_cfg_dir, Path(to_cfg).expanduser().resolve(), move=move_flag, force=force_flag)
+                print(msg)
+            if to_logs:
+                msg = migrate_directory(cur_log_dir, Path(to_logs).expanduser().resolve(), move=move_flag, force=force_flag)
+                print(msg)
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print("Migration complete. Use --config-dir/--log-dir flags (or env LLAMACPP_MANAGER_CONFIG_DIR/LLAMACPP_MANAGER_LOG_DIR) to use the new locations.")
+        return 0
+
     print("unknown config subcommand", file=sys.stderr)
     return 2
 
@@ -167,6 +191,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp_cfg_rm = cfg_sub.add_parser("remove", help="Remove a model entry")
     sp_cfg_rm.add_argument("name")
     sp_cfg_rm.set_defaults(func=cmd_config)
+
+    sp_cfg_mig = cfg_sub.add_parser("migrate", help="Migrate config and/or logs to new locations")
+    sp_cfg_mig.add_argument("--to-config-dir", help="Destination directory for config (Application Support)")
+    sp_cfg_mig.add_argument("--to-log-dir", help="Destination directory for logs")
+    sp_cfg_mig.add_argument("--move", action="store_true", help="Move instead of copy (removes source)")
+    sp_cfg_mig.add_argument("--force", action="store_true", help="Backup and overwrite destination if it exists")
+    sp_cfg_mig.set_defaults(func=cmd_config)
 
     return p
 

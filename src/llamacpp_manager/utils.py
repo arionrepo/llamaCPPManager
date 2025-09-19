@@ -4,6 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Dict
+from datetime import datetime
 
 import yaml
 
@@ -41,6 +42,57 @@ def is_inside_git_repo(path: Path) -> bool:
         if p == p.parent or p == root:
             return False
         p = p.parent
+
+
+def dir_empty_or_missing(p: Path) -> bool:
+    if not p.exists():
+        return True
+    if not p.is_dir():
+        return False
+    return not any(p.iterdir())
+
+
+def timestamp() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def backup_existing(dst: Path) -> Path:
+    """If dst exists, move it aside to a timestamped backup directory."""
+    if not dst.exists():
+        return dst
+    bak = dst.parent / f"{dst.name}.bak-{timestamp()}"
+    shutil.move(str(dst), str(bak))
+    return bak
+
+
+def migrate_directory(src: Path, dst: Path, *, move: bool = False, force: bool = False) -> str:
+    """Copy or move a directory to a new location safely.
+
+    - If dst exists and not force, raise.
+    - If dst exists and force, move it to a timestamped backup first.
+    - If src is missing or empty, create dst if needed and no-op copy.
+    """
+    src = src.resolve()
+    dst = dst.resolve()
+    ensure_dir(dst.parent)
+
+    if dst.exists():
+        if not force and not dir_empty_or_missing(dst):
+            raise ValueError(f"destination exists and not empty: {dst}; use --force to backup and overwrite")
+        if force:
+            backup_existing(dst)
+
+    if not src.exists() or dir_empty_or_missing(src):
+        ensure_dir(dst)
+        return f"created destination (source empty or missing): {dst}"
+
+    if move:
+        shutil.move(str(src), str(dst))
+        return f"moved {src} -> {dst}"
+    else:
+        # Python 3.9+: dirs_exist_ok
+        shutil.copytree(str(src), str(dst), dirs_exist_ok=True)
+        return f"copied {src} -> {dst}"
 
 
 def config_path() -> Path:
