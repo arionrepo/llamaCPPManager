@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict
 from datetime import datetime
+import signal
 
 import yaml
 
@@ -75,6 +76,19 @@ def remove_pid(name: str) -> None:
             p.unlink()
     except Exception:
         pass
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        # On POSIX, signal 0 checks existence/permission
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except Exception:
+        return False
 
 
 def dir_empty_or_missing(p: Path) -> bool:

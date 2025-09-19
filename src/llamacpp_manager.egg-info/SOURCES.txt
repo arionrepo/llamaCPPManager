@@ -20,3 +20,4 @@ tests/test_health.py
 tests/test_logs.py
 tests/test_migrate.py
 tests/test_process.py
+tests/test_status.py

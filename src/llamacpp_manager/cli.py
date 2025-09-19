@@ -15,8 +15,9 @@ from .config import (
     save_config,
     update_model,
 )
-from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid
+from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive
 from .process import start_process, stop_process, build_argv
+from .health import check_endpoint
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -216,6 +217,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp_restart.add_argument("--dry-run", action="store_true")
     sp_restart.set_defaults(func=cmd_restart)
 
+    # status
+    sp_status = sub.add_parser("status", help="Show model status and health")
+    sp_status.add_argument("--json", action="store_true", help="Output JSON array")
+    sp_status.add_argument("--watch", action="store_true", help="Refresh repeatedly")
+    sp_status.add_argument("--interval", type=float, default=2.0, help="Watch refresh interval seconds")
+    sp_status.set_defaults(func=cmd_status)
+
     return p
 
 
@@ -298,6 +306,63 @@ def cmd_restart(args: argparse.Namespace) -> int:
         return 0
     r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False))
     return max(r1, r2)
+
+
+def _gather_status(cfg: Dict[str, Any]) -> list:
+    timeout_ms = int(cfg.get("timeout_ms", 2000))
+    out = []
+    for m in cfg.get("models", []):
+        name = m.get("name")
+        host = m.get("host", "127.0.0.1")
+        port = int(m.get("port"))
+        pid = None
+        mode = "stopped"
+        try:
+            pid = read_pid(name)
+            mode = "direct" if process_alive(pid) else "stopped"
+        except Exception:
+            mode = "stopped"
+        health = check_endpoint(host, port, timeout_ms=timeout_ms)
+        entry = {
+            "name": name,
+            "pid": pid,
+            "host": host,
+            "port": port,
+            "up": bool(health.get("up")),
+            "latency_ms": health.get("latency_ms"),
+            "http_status": health.get("http_status"),
+            "version": health.get("version"),
+            "mode": mode,
+            "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
+        }
+        out.append(entry)
+    return out
+
+
+def _print_table(rows: list) -> None:
+    headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms"]
+    print(" ".join(f"{h:>12}" for h in headers))
+    for r in rows:
+        vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms")]
+        print(" ".join(f"{str(v):>12}" for v in vals))
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    import time
+    while True:
+        rows = _gather_status(cfg)
+        if args.json:
+            print(to_json(rows))
+        else:
+            _print_table(rows)
+        if not args.watch:
+            break
+        try:
+            time.sleep(max(0.2, float(args.interval)))
+        except KeyboardInterrupt:
+            break
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover
