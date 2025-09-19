@@ -15,25 +15,26 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 ## M1 — CLI + Config (Current)
 - [x] Add project scaffold (pyproject.toml, package dir)
 - [x] Create package `src/llamacpp_manager/__init__.py`
-- [ ] Implement `config.py` (paths, YAML load/save, validation)
-- [ ] Implement `utils.py` (paths, atomic write, expanduser)
-- [ ] Implement `cli.py` with commands: `init`, `config list|add|update|remove`
-- [ ] Write basic unit tests for config parsing/validation
-- [ ] Update README with quick start for M1
+- [x] Implement `config.py` (paths, YAML load/save, validation)
+- [x] Implement `utils.py` (paths, atomic write, expanduser)
+- [x] Implement `cli.py` with commands: `init`, `config list|add|update|remove`
+- [x] Write basic unit tests for config parsing/validation
+- [x] Update README with quick start for M1
+- [x] Add `config migrate` (safe copy/move with backup)
 
 ## M2 — Process Control + Logs (Direct)
-- [ ] Implement `process.py` (spawn/terminate, signals)
-- [ ] Implement `logs.py` (log file mgmt + rotation)
-- [ ] CLI: `start <name|all> [--dry-run]`, `stop <name|all>`, `restart`
-- [ ] Tests with mocked `subprocess` and log writes
+- [x] Implement `process.py` (spawn/terminate, signals)
+- [x] Implement `logs.py` (log file mgmt + rotation)
+- [x] CLI: `start <name|all> [--dry-run]`, `stop <name|all>`, `restart`
+- [x] Tests with mocked `subprocess` and log writes
 - [ ] README/examples for starting/stopping models
 
 ## M3 — Discovery, Status, Health
 - [ ] Add process discovery (map running llama-server → models)
-- [ ] Implement `health.py` (TCP + HTTP checks, latency, version)
+- [x] Implement `health.py` (TCP + HTTP checks, latency, version)
 - [ ] CLI: `status [--watch]` (table) and `status --json`
-- [ ] CLI: `config list --json`
-- [ ] Tests for health and JSON serialization
+- [x] CLI: `config list --json`
+- [x] Tests for health and JSON serialization
 
 ## M4 — launchd Autostart
 - [ ] Implement `launchd.py` (render/load/unload plists)
