@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 from datetime import datetime
 import signal
+import socket
 
 import yaml
 
@@ -85,10 +86,21 @@ def process_alive(pid: int) -> bool:
         return True
     except ProcessLookupError:
         return False
-    except PermissionError:
-        return True
-    except Exception:
+
+
+def port_in_use(host: str, port: int) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind((host, int(port)))
+        # if bind succeeds, port is not in use
         return False
+    except OSError:
+        return True
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
 
 
 def dir_empty_or_missing(p: Path) -> bool:

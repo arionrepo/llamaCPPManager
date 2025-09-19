@@ -27,6 +27,7 @@ tests/test_launchd.py
 tests/test_launchd_install_uninstall.py
 tests/test_logs.py
 tests/test_migrate.py
+tests/test_ports_and_warnings.py
 tests/test_process.py
 tests/test_security_and_bincheck.py
 tests/test_status.py

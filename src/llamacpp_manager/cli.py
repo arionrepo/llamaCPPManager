@@ -15,7 +15,7 @@ from .config import (
     save_config,
     update_model,
 )
-from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive
+from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive, port_in_use
 from .process import start_process, stop_process, build_argv
 from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
@@ -91,6 +91,12 @@ def cmd_config(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+        # Friendly warning if port looks busy now (non-fatal)
+        try:
+            if port_in_use(spec.host, spec.port):
+                print(f"warning: port {spec.port} on {spec.host} appears in use right now", file=sys.stderr)
+        except Exception:
+            pass
         print(f"Added model '{spec.name}'")
         return 0
 
@@ -114,6 +120,14 @@ def cmd_config(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+        # Friendly warning if updated port looks busy
+        try:
+            m = [m for m in cfg.get("models", []) if m.get("name") == args.name][0]
+            host = m.get("host", "127.0.0.1"); port = int(m.get("port"))
+            if port_in_use(host, port):
+                print(f"warning: port {port} on {host} appears in use right now", file=sys.stderr)
+        except Exception:
+            pass
         print(f"Updated model '{args.name}'")
         return 0
 
@@ -318,6 +332,11 @@ def cmd_start(args: argparse.Namespace) -> int:
             _ = launchctl_kickstart(spec.name)
             print(f"launchd started {spec.name} port={spec.port}")
         else:
+            # Prevent collision if port already in use by some service
+            if port_in_use(spec.host, spec.port):
+                print(f"error: port {spec.port} on {spec.host} is already in use; cannot start {spec.name}", file=sys.stderr)
+                rc = 2
+                continue
             pid = start_process(llama_path, spec, log_dir)
             write_pid(spec.name, pid)
             print(f"started {spec.name} pid={pid} port={spec.port}")

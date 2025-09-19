@@ -78,6 +78,13 @@ Notes:
   - Launchd mode: `llamacpp-manager ensure-running --mode launchd`
   - This uses a quick health check per model and starts only those that are down.
 
+## Security Notes
+
+- Local binds by default: models should bind to `127.0.0.1` (or `localhost`).
+- The CLI refuses to start models bound to non‑local hosts unless you pass `--allow-remote` explicitly (e.g., for a trusted LAN).
+- Port checks: the CLI detects when a target port is already in use and will refuse to start a model on that port.
+- Binary check: `llamacpp-manager start` validates that `llama_server_path` exists and is executable (bypass for tests via `LLAMACPP_MANAGER_SKIP_BIN_CHECK=1`).
+
 ## Local Testing
 
 - One‑shot run: `make test`
