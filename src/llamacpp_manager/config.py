@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -17,8 +15,8 @@ class ModelSpec:
     model_path: str
     host: str = "127.0.0.1"
     port: int = 0
-    args: List[str] | None = None
-    env: Dict[str, str] | None = None
+    args: Optional[List[str]] = None
+    env: Optional[Dict[str, str]] = None
     autostart: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
@@ -137,4 +135,3 @@ def remove_model(cfg: Dict[str, Any], name: str) -> bool:
             del models[i]
             return True
     return False
-

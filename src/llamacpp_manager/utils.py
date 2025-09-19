@@ -44,6 +44,39 @@ def is_inside_git_repo(path: Path) -> bool:
         p = p.parent
 
 
+def pid_dir() -> Path:
+    override = os.environ.get("LLAMACPP_MANAGER_PID_DIR")
+    if override:
+        return expand(override)
+    return app_support_dir() / "pids"
+
+
+def pid_path(name: str) -> Path:
+    return pid_dir() / f"{name}.pid"
+
+
+def write_pid(name: str, pid: int) -> None:
+    p = pid_path(name)
+    ensure_dir(p.parent)
+    atomic_write_text(p, str(pid))
+
+
+def read_pid(name: str) -> int:
+    p = pid_path(name)
+    if not p.exists():
+        raise FileNotFoundError(f"pid file not found for {name}: {p}")
+    return int(p.read_text().strip())
+
+
+def remove_pid(name: str) -> None:
+    p = pid_path(name)
+    try:
+        if p.exists():
+            p.unlink()
+    except Exception:
+        pass
+
+
 def dir_empty_or_missing(p: Path) -> bool:
     if not p.exists():
         return True

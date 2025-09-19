@@ -1,0 +1,43 @@
+Metadata-Version: 2.4
+Name: llamacpp-manager
+Version: 0.1.0
+Summary: macOS tooling to manage llama.cpp llama-server instances
+Author: arionrepo
+License: Proprietary
+Keywords: llama.cpp,llama-server,macOS,menu bar,CLI
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: PyYAML>=6.0
+
+# llamaCPPManager
+
+Toolkit for managing local `llama-server` instances (from llama.cpp) on macOS.
+
+## Project Goals
+- Provide a macOS-friendly launcher to start/stop/monitor multiple llama.cpp model services.
+- Offer simple visibility into model status, ports, and logs.
+- Package tooling so it can be launched from the Applications folder with an icon.
+
+See `docs/requirements.md` for the detailed requirements backlog.
+
+## Quick Start (M1 - CLI + Config)
+
+- Install dependencies for development:
+  - Python 3.11+ and `pipx` recommended: `pipx install --suffix=@local .` (from repo root)
+  - Or use a venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -e .`
+
+- Initialize config and directories (default locations):
+  - `llamacpp-manager init`
+
+- Use custom locations (kept outside any repo):
+  - `llamacpp-manager --config-dir ~/Configs/llamacpp --log-dir ~/Logs/llamacpp init`
+  - These flags work with all commands and keep proprietary paths out of the repo.
+
+- Add a model entry:
+  - `llamacpp-manager config add smollm3 ~/llms/smollm3/SmolLM3-Q8_0.gguf --port 8081 --extra-args "-c 8192 -ngl 9999 -t 12 --parallel 4 --cont-batching"`
+
+- View config (human or JSON):
+  - `llamacpp-manager config list`
+  - `llamacpp-manager config list --json`
+
+More commands will arrive in subsequent milestones (`start/stop/status`, launchd, GUI). See `docs/implementation-plan.md`.

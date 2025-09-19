@@ -2,7 +2,8 @@ import argparse
 import os
 import shlex
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from pathlib import Path
 
 from . import __version__
 from .config import (
@@ -14,7 +15,8 @@ from .config import (
     save_config,
     update_model,
 )
-from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory
+from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid
+from .process import start_process, stop_process, build_argv
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -27,7 +29,7 @@ def parse_env(items: List[str]) -> Dict[str, str]:
     return env
 
 
-def parse_args_list(s: str | None) -> List[str]:
+def parse_args_list(s: Optional[str]) -> List[str]:
     if not s:
         return []
     try:
@@ -199,10 +201,28 @@ def build_parser() -> argparse.ArgumentParser:
     sp_cfg_mig.add_argument("--force", action="store_true", help="Backup and overwrite destination if it exists")
     sp_cfg_mig.set_defaults(func=cmd_config)
 
+    # start/stop/restart commands
+    sp_start = sub.add_parser("start", help="Start a model or all models")
+    sp_start.add_argument("target", help="Model name or 'all'")
+    sp_start.add_argument("--dry-run", action="store_true", help="Print the command without executing")
+    sp_start.set_defaults(func=cmd_start)
+
+    sp_stop = sub.add_parser("stop", help="Stop a model or all models (via pid files)")
+    sp_stop.add_argument("target", help="Model name or 'all'")
+    sp_stop.set_defaults(func=cmd_stop)
+
+    sp_restart = sub.add_parser("restart", help="Restart a model or all models")
+    sp_restart.add_argument("target", help="Model name or 'all'")
+    sp_restart.add_argument("--dry-run", action="store_true")
+    sp_restart.set_defaults(func=cmd_restart)
+
     return p
 
 
-def main(argv: List[str] | None = None) -> int:
+from typing import Optional
+
+
+def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     # Apply directory overrides early so all helpers resolve paths consistently
@@ -211,6 +231,73 @@ def main(argv: List[str] | None = None) -> int:
     if getattr(args, "log_dir", None):
         os.environ["LLAMACPP_MANAGER_LOG_DIR"] = args.log_dir
     return args.func(args)
+
+
+def _select_models(cfg: Dict[str, Any], target: str) -> List[Dict[str, Any]]:
+    models = cfg.get("models", [])
+    if target == "all":
+        return models
+    sel = [m for m in models if m.get("name") == target]
+    if not sel:
+        raise SystemExit(f"model '{target}' not found")
+    return sel
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    llama_path = cfg.get("llama_server_path")
+    log_dir = Path(cfg.get("log_dir"))
+    selected = _select_models(cfg, args.target)
+    rc = 0
+    for m in selected:
+        spec = ModelSpec(
+            name=m["name"],
+            model_path=m["model_path"],
+            host=m.get("host", "127.0.0.1"),
+            port=int(m["port"]),
+            args=list(m.get("args", []) or []),
+            env=dict(m.get("env", {}) or {}),
+            autostart=bool(m.get("autostart", False)),
+        )
+        argv = build_argv(llama_path, spec)
+        if args.dry_run:
+            print("DRY-RUN:", " ".join(shlex.quote(a) for a in argv))
+            continue
+        pid = start_process(llama_path, spec, log_dir)
+        write_pid(spec.name, pid)
+        print(f"started {spec.name} pid={pid} port={spec.port}")
+    return rc
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    selected = _select_models(cfg, args.target)
+    rc = 0
+    for m in selected:
+        name = m["name"]
+        try:
+            pid = read_pid(name)
+        except FileNotFoundError:
+            print(f"warning: no pid file for {name}", file=sys.stderr)
+            rc = max(rc, 1)
+            continue
+        try:
+            stop_process(pid)
+            remove_pid(name)
+            print(f"stopped {name} pid={pid}")
+        except Exception as e:
+            print(f"error stopping {name}: {e}", file=sys.stderr)
+            rc = 2
+    return rc
+
+
+def cmd_restart(args: argparse.Namespace) -> int:
+    # Stop ignores missing pid files
+    r1 = cmd_stop(argparse.Namespace(target=args.target))
+    if args.dry_run:
+        return 0
+    r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False))
+    return max(r1, r2)
 
 
 if __name__ == "__main__":  # pragma: no cover

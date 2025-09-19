@@ -1,0 +1,2 @@
+[console_scripts]
+llamacpp-manager = llamacpp_manager.cli:main
