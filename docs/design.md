@@ -8,9 +8,9 @@ A macOS‑friendly toolkit to configure, launch, and monitor multiple llama.cpp 
 ```mermaid
 graph TD
   U[User] -->|Menu actions| GUI[SwiftUI Menu Bar App]
-  U -->|Terminal| CLI[llamacpp-manager (Python CLI)]
+  U -->|Terminal| CLI[llamacpp-manager CLI]
 
-  subgraph Core Modules (Python)
+  subgraph Core_Modules_Python
     CLI --> CFG[config.py]
     CLI --> PROC[process.py]
     CLI --> H[health.py]
@@ -18,17 +18,17 @@ graph TD
     CLI --> LD[launchd.py]
   end
 
-  GUI -->|exec + parse JSON| CLI
+  GUI -->|exec and parse JSON| CLI
 
-  CFG -->|YAML read/write| Y[Config (~/Library/Application Support/llamaCPPManager/config.yaml)]
-  L -->|append/rotate| LOGS[Log files (~/Library/Logs/llamaCPPManager/*.log)]
+  CFG -->|YAML read and write| Y[Config: ~/Library/Application Support/llamaCPPManager/config.yaml]
+  L -->|append and rotate| LOGS[Logs: ~/Library/Logs/llamaCPPManager/*.log]
 
-  PROC -->|spawn/terminate| OS[(macOS)]
+  PROC -->|spawn or terminate| OS([macOS])
   OS -->|exec| S1[llama-server A]
   OS -->|exec| S2[llama-server B]
   OS -->|exec| S3[llama-server C]
 
-  LD -->|generate/load/unload| P1[launchd agents]
+  LD -->|generate and load| P1[launchd agents]
   P1 --> OS
 
   H -->|HTTP checks| S1
@@ -48,8 +48,8 @@ Communication paths:
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant GUI as GUI (SwiftUI)
-  participant CLI as CLI (llamacpp-manager)
+  participant GUI as GUI SwiftUI
+  participant CLI as CLI llamacpp-manager
   participant CFG as config.py
   participant PROC as process.py
   participant OS as macOS
@@ -58,13 +58,13 @@ sequenceDiagram
 
   U->>GUI: Start model
   GUI->>CLI: start <name>
-  CLI->>CFG: load + validate(model, ports, paths)
-  CFG-->>CLI: model spec (args/env/port)
-  CLI->>PROC: spawn(model, args, env, stdout/stderr->LOG)
-  PROC->>OS: exec /opt/homebrew/bin/llama-server ...
+  CLI->>CFG: load and validate (model, ports, paths)
+  CFG-->>CLI: model spec (args, env, port)
+  CLI->>PROC: spawn (stdout and stderr to LOG)
+  PROC->>OS: exec llama-server ...
   OS->>S: start process
-  S-->>LOG: write stdout/stderr
-  CLI-->>GUI: ok + pid + log path
+  S-->>LOG: write stdout and stderr
+  CLI-->>GUI: ok with pid and log path
 ```
 
 ## Autostart Flow (launchd Mode)
@@ -80,17 +80,17 @@ sequenceDiagram
 
   GUI->>CLI: launchd install <name>
   CLI->>LD: render plist (ProgramArguments, Env, Logs, KeepAlive)
-  LD->>PLIST: write ~/Library/LaunchAgents/ai.llamacpp.<name>.plist
-  CLI->>LCTL: bootstrap gui/$UID PLIST
-  LCTL->>S: manage lifecycle (RunAtLoad/KeepAlive)
-  CLI-->>GUI: installed + active
+  LD->>PLIST: write LaunchAgents plist
+  CLI->>LCTL: bootstrap gui/$UID plist
+  LCTL->>S: manage lifecycle (RunAtLoad and KeepAlive)
+  CLI-->>GUI: installed and active
 ```
 
 ## Status/Health Poll
 
 ```mermaid
 sequenceDiagram
-  participant GUI as Menu Bar App (--refresh N s)
+  participant GUI as Menu Bar App (refresh N seconds)
   participant CLI as llamacpp-manager
   participant DISC as process discovery
   participant H as health.py
@@ -98,13 +98,13 @@ sequenceDiagram
 
   loop every N seconds
     GUI->>CLI: status --json
-    CLI->>DISC: ps/launchctl discovery
+    CLI->>DISC: ps and launchctl discovery
     CLI->>H: check each host:port
-    H->>S: GET /v1/models (or /)
-    S-->>H: 200 + latency/version
+    H->>S: GET /v1/models or /
+    S-->>H: 200 with latency and version
     H-->>CLI: aggregated status
-    CLI-->>GUI: [{name, pid, port, up, latency, version, mode, log_path}]
-    GUI-->>GUI: Update menu items + badges
+    CLI-->>GUI: status JSON array
+    GUI-->>GUI: update menu items and badges
   end
 ```
 
