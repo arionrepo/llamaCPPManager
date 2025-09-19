@@ -9,6 +9,7 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LLAMACPP_MANAGER_CONFIG_DIR", str(cfgdir))
     monkeypatch.setenv("LLAMACPP_MANAGER_LOG_DIR", str(logdir))
     monkeypatch.setenv("LLAMACPP_MANAGER_PID_DIR", str(piddir))
+    monkeypatch.setenv("LLAMACPP_MANAGER_SKIP_BIN_CHECK", "1")
     return cfgdir, logdir, piddir
 
 
@@ -30,4 +31,3 @@ def test_start_stop_with_launchd_flags(tmp_path, monkeypatch, capsys):
     assert main(["stop", "m1", "--launchd"]) == 0
     out = capsys.readouterr().out
     assert "launchd stopped m1" in out
-

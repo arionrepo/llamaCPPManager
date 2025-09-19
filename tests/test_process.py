@@ -69,16 +69,25 @@ def test_stop_process_sends_sigterm(monkeypatch):
     dummy = DummyPopen(["bin"])  # not used directly by stop, we simulate OS APIs
 
     # Patch os.kill to simulate successful signal
-    sent = {}
+    sent_calls = []
 
     def fake_kill(pid, sig):
-        sent["pid"] = pid
-        sent["sig"] = sig
+        sent_calls.append((pid, sig))
 
-    monkeypatch.setattr(proc, "os", type("_O", (), {"kill": fake_kill, "getpgid": lambda x: 0}))
+    # Simulate process disappears after first check
+    state = {"alive_checks": 0}
+
+    def fake_os_kill(pid, sig):
+        if sig == 0:
+            # first existence check says alive, second raises not found
+            state["alive_checks"] += 1
+            if state["alive_checks"] >= 2:
+                raise ProcessLookupError
+            return
+        return fake_kill(pid, sig)
+
+    monkeypatch.setattr(proc, "os", type("_O", (), {"kill": fake_os_kill, "getpgid": lambda x: 0}))
 
     # stop should call os.kill with SIGTERM
     proc.stop_process(dummy.pid)
-    assert sent["pid"] == dummy.pid
-    assert sent["sig"] == signal.SIGTERM
-
+    assert sent_calls[0] == (dummy.pid, signal.SIGTERM)

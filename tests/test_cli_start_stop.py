@@ -11,6 +11,7 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LLAMACPP_MANAGER_CONFIG_DIR", str(cfgdir))
     monkeypatch.setenv("LLAMACPP_MANAGER_LOG_DIR", str(logdir))
     monkeypatch.setenv("LLAMACPP_MANAGER_PID_DIR", str(piddir))
+    monkeypatch.setenv("LLAMACPP_MANAGER_SKIP_BIN_CHECK", "1")
     return cfgdir, logdir, piddir
 
 
@@ -47,4 +48,3 @@ def test_start_stop_dry_run_and_pidfile(tmp_path, monkeypatch, capsys):
     # Stop (reads pid and removes file)
     assert main(["stop", "m1"]) == 0
     assert not p.exists()
-

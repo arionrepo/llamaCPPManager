@@ -2,6 +2,7 @@ import os
 import signal
 from pathlib import Path
 from subprocess import Popen
+import time
 from typing import List, Optional
 
 from .config import ModelSpec
@@ -25,12 +26,27 @@ def start_process(llama_server_path: str, spec: ModelSpec, log_dir: Path, extra_
     if extra_env:
         env.update(extra_env)
     argv = build_argv(llama_server_path, spec)
-    f = open_log_append(log_path)
     # use the same file for stdout and stderr (append, line-buffered)
-    proc = Popen(argv, stdout=f, stderr=f, env=env)
+    with open_log_append(log_path) as f:
+        proc = Popen(argv, stdout=f, stderr=f, env=env)
     return proc.pid
 
 
-def stop_process(pid: int) -> None:
+def stop_process(pid: int, timeout: float = 5.0) -> None:
     os.kill(pid, signal.SIGTERM)
-
+    # wait up to timeout for process to exit; if still alive, SIGKILL
+    deadline = time.time() + max(0.1, float(timeout))
+    while time.time() < deadline:
+        try:
+            # signal 0 checks existence
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            # assume still alive
+            pass
+        time.sleep(0.1)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass

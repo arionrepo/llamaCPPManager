@@ -209,6 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp_start.add_argument("target", help="Model name or 'all'")
     sp_start.add_argument("--dry-run", action="store_true", help="Print the command without executing")
     sp_start.add_argument("--launchd", action="store_true", help="Use launchd to start instead of direct process")
+    sp_start.add_argument("--allow-remote", action="store_true", help="Allow non-local host binds (0.0.0.0 or external IP)")
     sp_start.set_defaults(func=cmd_start)
 
     sp_stop = sub.add_parser("stop", help="Stop a model or all models")
@@ -220,6 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp_restart.add_argument("target", help="Model name or 'all'")
     sp_restart.add_argument("--dry-run", action="store_true")
     sp_restart.add_argument("--launchd", action="store_true")
+    sp_restart.add_argument("--allow-remote", action="store_true")
     sp_restart.set_defaults(func=cmd_restart)
 
     # status
@@ -277,6 +279,12 @@ def cmd_start(args: argparse.Namespace) -> int:
     cfg = load_config()
     llama_path = cfg.get("llama_server_path")
     log_dir = Path(cfg.get("log_dir"))
+    # Validate llama-server binary unless overridden for tests
+    if not os.environ.get("LLAMACPP_MANAGER_SKIP_BIN_CHECK"):
+        lp = Path(llama_path).expanduser()
+        if not (lp.exists() and os.access(str(lp), os.X_OK)):
+            print(f"error: llama-server not found or not executable at {lp}. Install via Homebrew: brew install llama.cpp", file=sys.stderr)
+            return 2
     selected = _select_models(cfg, args.target)
     rc = 0
     for m in selected:
@@ -289,6 +297,11 @@ def cmd_start(args: argparse.Namespace) -> int:
             env=dict(m.get("env", {}) or {}),
             autostart=bool(m.get("autostart", False)),
         )
+        # Warn/refuse remote binds unless explicitly allowed
+        if spec.host not in ("127.0.0.1", "localhost", "::1") and not getattr(args, "allow_remote", False):
+            print(f"error: refusing to bind non-local host '{spec.host}' without --allow-remote", file=sys.stderr)
+            rc = 2
+            continue
         argv = build_argv(llama_path, spec)
         if args.dry_run:
             print("DRY-RUN:", " ".join(shlex.quote(a) for a in argv))
@@ -350,7 +363,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
     r1 = cmd_stop(argparse.Namespace(target=args.target, launchd=getattr(args, "launchd", False)))
     if args.dry_run:
         return 0
-    r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False, launchd=getattr(args, "launchd", False)))
+    r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False, launchd=getattr(args, "launchd", False), allow_remote=getattr(args, "allow_remote", False)))
     return max(r1, r2)
 
 
