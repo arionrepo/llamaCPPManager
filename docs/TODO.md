@@ -27,7 +27,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] Implement `logs.py` (log file mgmt + rotation)
 - [x] CLI: `start <name|all> [--dry-run]`, `stop <name|all>`, `restart`
 - [x] Tests with mocked `subprocess` and log writes
-- [ ] README/examples for starting/stopping models
+- [x] README/examples for starting/stopping models
 
 ## M3 — Discovery, Status, Health
 - [ ] Add process discovery (map running llama-server → models)
