@@ -237,6 +237,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp_ld_uninstall.add_argument("target", help="Model name or 'all'")
     sp_ld_uninstall.set_defaults(func=cmd_launchd)
 
+    # ensure-running (auto-start missing autostart models)
+    sp_ens = sub.add_parser("ensure-running", help="Start models with autostart=true that are not reachable")
+    sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
+    sp_ens.set_defaults(func=cmd_ensure_running)
+
     return p
 
 
@@ -424,6 +429,50 @@ def cmd_launchd(args: argparse.Namespace) -> int:
 
     print("unknown launchd subcommand", file=sys.stderr)
     return 2
+
+
+def cmd_ensure_running(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    llama_path = cfg.get("llama_server_path")
+    log_dir = Path(cfg.get("log_dir")).expanduser()
+    timeout_ms = int(cfg.get("timeout_ms", 2000))
+    started = 0
+    for m in cfg.get("models", []):
+        if not bool(m.get("autostart", False)):
+            continue
+        name = m.get("name")
+        host = m.get("host", "127.0.0.1")
+        port = int(m.get("port"))
+        health = check_endpoint(host, port, timeout_ms=timeout_ms)
+        if health.get("up"):
+            continue
+        spec = ModelSpec(
+            name=name,
+            model_path=m["model_path"],
+            host=host,
+            port=port,
+            args=list(m.get("args", []) or []),
+            env=dict(m.get("env", {}) or {}),
+            autostart=True,
+        )
+        if args.mode == "launchd":
+            data = render_plist(llama_path, spec, log_dir=log_dir)
+            p = plist_path(spec.name)
+            write_plist(p, data)
+            r1 = launchctl_bootstrap(p)
+            if r1.returncode != 0 and "Service already loaded" not in (r1.stderr or ""):
+                print(f"error: launchctl bootstrap failed for {spec.name}: {r1.stderr}", file=sys.stderr)
+                continue
+            _ = launchctl_kickstart(spec.name)
+            print(f"launchd started {spec.name} on {host}:{port}")
+            started += 1
+        else:
+            pid = start_process(llama_path, spec, log_dir)
+            write_pid(spec.name, pid)
+            print(f"started {spec.name} pid={pid} port={spec.port}")
+            started += 1
+    print(f"ensure-running: started {started} model(s)")
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

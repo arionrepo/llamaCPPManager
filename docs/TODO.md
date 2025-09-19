@@ -35,6 +35,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [ ] CLI: `status [--watch]` (table) and `status --json`
 - [x] CLI: `config list --json`
 - [x] Tests for health and JSON serialization
+ - [x] CLI: `ensure-running` to auto-start missing autostart models
 
 ## M4 — launchd Autostart
 - [x] Implement `launchd.py` (render/load/unload plists)

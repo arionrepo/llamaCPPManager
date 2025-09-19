@@ -17,6 +17,7 @@ src/llamacpp_manager.egg-info/top_level.txt
 tests/test_cli_config.py
 tests/test_cli_start_stop.py
 tests/test_config.py
+tests/test_ensure_running.py
 tests/test_health.py
 tests/test_launchd.py
 tests/test_logs.py
