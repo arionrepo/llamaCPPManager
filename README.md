@@ -56,6 +56,21 @@ Notes:
 - The CLI writes per‑model logs to the configured log directory and rotates them when large.
 - PID files are maintained under the config directory in a `pids/` subfolder (overridable via `LLAMACPP_MANAGER_PID_DIR`).
 
+### launchd integration
+
+- Install launchd agents for one or all models:
+  - `llamacpp-manager launchd install smollm3`
+  - `llamacpp-manager launchd install all`
+  - This writes `~/Library/LaunchAgents/ai.llamacpp.<name>.plist`, bootstraps and kickstarts it.
+
+- Uninstall launchd agents:
+  - `llamacpp-manager launchd uninstall smollm3`
+  - `llamacpp-manager launchd uninstall all`
+
+Notes:
+- launchd mode is optional; direct start/stop works without it.
+- Plists point stdout/stderr to `<log_dir>/<name>.out.log|.err.log` and keep the service alive.
+
 ## Local Testing
 
 - One‑shot run: `make test`

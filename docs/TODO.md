@@ -37,10 +37,10 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] Tests for health and JSON serialization
 
 ## M4 — launchd Autostart
-- [ ] Implement `launchd.py` (render/load/unload plists)
-- [ ] CLI: `launchd install|uninstall <name|all>`
+- [x] Implement `launchd.py` (render/load/unload plists)
+- [x] CLI: `launchd install|uninstall <name|all>`
 - [ ] Integrate `--launchd` mode in start/stop, reflect `autostart`
-- [ ] Tests/instructions for launchd behavior
+- [x] Tests for plist rendering
 
 ## M5 — Packaging + Docs
 - [ ] Verify pipx install (`pipx install .`) and console script

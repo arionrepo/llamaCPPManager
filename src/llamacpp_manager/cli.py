@@ -18,6 +18,7 @@ from .config import (
 from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive
 from .process import start_process, stop_process, build_argv
 from .health import check_endpoint
+from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -224,6 +225,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp_status.add_argument("--interval", type=float, default=2.0, help="Watch refresh interval seconds")
     sp_status.set_defaults(func=cmd_status)
 
+    # launchd
+    sp_ld = sub.add_parser("launchd", help="Manage launchd agents per model")
+    ld_sub = sp_ld.add_subparsers(dest="subcommand", required=True)
+
+    sp_ld_install = ld_sub.add_parser("install", help="Generate plist and bootstrap it")
+    sp_ld_install.add_argument("target", help="Model name or 'all'")
+    sp_ld_install.set_defaults(func=cmd_launchd)
+
+    sp_ld_uninstall = ld_sub.add_parser("uninstall", help="Bootout and remove plist")
+    sp_ld_uninstall.add_argument("target", help="Model name or 'all'")
+    sp_ld_uninstall.set_defaults(func=cmd_launchd)
+
     return p
 
 
@@ -363,6 +376,54 @@ def cmd_status(args: argparse.Namespace) -> int:
         except KeyboardInterrupt:
             break
     return 0
+
+
+def cmd_launchd(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    selected = _select_models(cfg, args.target)
+    llama_path = cfg.get("llama_server_path")
+    log_dir = Path(cfg.get("log_dir")).expanduser()
+    if args.subcommand == "install":
+        for m in selected:
+            spec = ModelSpec(
+                name=m["name"],
+                model_path=m["model_path"],
+                host=m.get("host", "127.0.0.1"),
+                port=int(m["port"]),
+                args=list(m.get("args", []) or []),
+                env=dict(m.get("env", {}) or {}),
+                autostart=bool(m.get("autostart", False)),
+            )
+            data = render_plist(llama_path, spec, log_dir=log_dir)
+            p = plist_path(spec.name)
+            write_plist(p, data)
+            r1 = launchctl_bootstrap(p)
+            if r1.returncode != 0 and "Service already loaded" not in (r1.stderr or ""):
+                print(f"error: launchctl bootstrap failed for {spec.name}: {r1.stderr}", file=sys.stderr)
+                return 2
+            r2 = launchctl_kickstart(spec.name)
+            if r2.returncode != 0:
+                print(f"warning: kickstart may have failed for {spec.name}: {r2.stderr}", file=sys.stderr)
+            print(f"installed launchd agent for {spec.name}: {p}")
+        return 0
+
+    if args.subcommand == "uninstall":
+        for m in selected:
+            name = m["name"]
+            r = launchctl_bootout(name)
+            if r.returncode != 0 and "No such process" not in (r.stderr or ""):
+                print(f"warning: bootout returned {r.returncode} for {name}: {r.stderr}", file=sys.stderr)
+            p = plist_path(name)
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception as e:
+                print(f"warning: failed to remove plist {p}: {e}", file=sys.stderr)
+            print(f"uninstalled launchd agent for {name}")
+        return 0
+
+    print("unknown launchd subcommand", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":  # pragma: no cover

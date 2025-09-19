@@ -4,6 +4,7 @@ src/llamacpp_manager/__init__.py
 src/llamacpp_manager/cli.py
 src/llamacpp_manager/config.py
 src/llamacpp_manager/health.py
+src/llamacpp_manager/launchd.py
 src/llamacpp_manager/logs.py
 src/llamacpp_manager/process.py
 src/llamacpp_manager/utils.py
@@ -17,6 +18,7 @@ tests/test_cli_config.py
 tests/test_cli_start_stop.py
 tests/test_config.py
 tests/test_health.py
+tests/test_launchd.py
 tests/test_logs.py
 tests/test_migrate.py
 tests/test_process.py
