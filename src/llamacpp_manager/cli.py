@@ -1,4 +1,5 @@
 import argparse
+import os
 import shlex
 import sys
 from typing import Any, Dict, List
@@ -8,14 +9,12 @@ from .config import (
     DEFAULT_LLAMA_SERVER_PATH,
     ModelSpec,
     add_model,
-    app_support_dir,  # type: ignore[attr-defined]
     load_config,
-    logs_dir,  # type: ignore[attr-defined]
     remove_model,
     save_config,
     update_model,
 )
-from .utils import config_path, ensure_dir, to_json
+from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -128,6 +127,8 @@ def cmd_config(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="llamacpp-manager", description="Manage llama.cpp llama-server instances on macOS")
     p.add_argument("--version", action="version", version=f"llamacpp-manager {__version__}")
+    p.add_argument("--config-dir", help="Override configuration directory (e.g., ~/my-llama-config)")
+    p.add_argument("--log-dir", help="Override logs directory (e.g., ~/my-llama-logs)")
     sub = p.add_subparsers(dest="command", required=True)
 
     # init
@@ -173,9 +174,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: List[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Apply directory overrides early so all helpers resolve paths consistently
+    if getattr(args, "config_dir", None):
+        os.environ["LLAMACPP_MANAGER_CONFIG_DIR"] = args.config_dir
+    if getattr(args, "log_dir", None):
+        os.environ["LLAMACPP_MANAGER_LOG_DIR"] = args.log_dir
     return args.func(args)
 
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
-

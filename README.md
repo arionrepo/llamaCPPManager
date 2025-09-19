@@ -15,8 +15,12 @@ See `docs/requirements.md` for the detailed requirements backlog.
   - Python 3.11+ and `pipx` recommended: `pipx install --suffix=@local .` (from repo root)
   - Or use a venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -e .`
 
-- Initialize config and directories:
+- Initialize config and directories (default locations):
   - `llamacpp-manager init`
+
+- Use custom locations (kept outside any repo):
+  - `llamacpp-manager --config-dir ~/Configs/llamacpp --log-dir ~/Logs/llamacpp init`
+  - These flags work with all commands and keep proprietary paths out of the repo.
 
 - Add a model entry:
   - `llamacpp-manager config add smollm3 ~/llms/smollm3/SmolLM3-Q8_0.gguf --port 8081 --extra-args "-c 8192 -ngl 9999 -t 12 --parallel 4 --cont-batching"`

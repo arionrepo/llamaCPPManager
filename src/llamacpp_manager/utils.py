@@ -16,13 +16,31 @@ def expand(path: str) -> Path:
 
 
 def app_support_dir() -> Path:
+    # Allow override for testing or custom setups
+    override = os.environ.get("LLAMACPP_MANAGER_CONFIG_DIR")
+    if override:
+        return expand(override)
     # macOS Application Support path
     base = expand("~/Library/Application Support")
     return base / APP_NAME
 
 
 def logs_dir() -> Path:
+    override = os.environ.get("LLAMACPP_MANAGER_LOG_DIR")
+    if override:
+        return expand(override)
     return expand(f"~/Library/Logs/{APP_NAME}")
+
+
+def is_inside_git_repo(path: Path) -> bool:
+    p = path.resolve()
+    root = Path(p.root)
+    while True:
+        if (p / ".git").exists():
+            return True
+        if p == p.parent or p == root:
+            return False
+        p = p.parent
 
 
 def config_path() -> Path:
@@ -65,4 +83,3 @@ def write_yaml(path: Path, data: Dict[str, Any]) -> None:
 
 def to_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2)
-

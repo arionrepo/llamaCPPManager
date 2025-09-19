@@ -12,3 +12,10 @@ venv/
 # Logs
 logs/
 *.log
+
+# Local environment and private overrides
+.env
+.env.*
+*.local.yaml
+*.local.yml
+*.local.json
