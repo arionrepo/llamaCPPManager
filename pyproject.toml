@@ -1,0 +1,27 @@
+[project]
+name = "llamacpp-manager"
+version = "0.1.0"
+description = "macOS tooling to manage llama.cpp llama-server instances"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+keywords = ["llama.cpp", "llama-server", "macOS", "menu bar", "CLI"]
+authors = [{ name = "arionrepo" }]
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+llamacpp-manager = "llamacpp_manager.cli:main"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["llamacpp_manager*"]
+

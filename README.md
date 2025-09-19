@@ -8,3 +8,21 @@ Toolkit for managing local `llama-server` instances (from llama.cpp) on macOS.
 - Package tooling so it can be launched from the Applications folder with an icon.
 
 See `docs/requirements.md` for the detailed requirements backlog.
+
+## Quick Start (M1 - CLI + Config)
+
+- Install dependencies for development:
+  - Python 3.11+ and `pipx` recommended: `pipx install --suffix=@local .` (from repo root)
+  - Or use a venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -e .`
+
+- Initialize config and directories:
+  - `llamacpp-manager init`
+
+- Add a model entry:
+  - `llamacpp-manager config add smollm3 ~/llms/smollm3/SmolLM3-Q8_0.gguf --port 8081 --extra-args "-c 8192 -ngl 9999 -t 12 --parallel 4 --cont-batching"`
+
+- View config (human or JSON):
+  - `llamacpp-manager config list`
+  - `llamacpp-manager config list --json`
+
+More commands will arrive in subsequent milestones (`start/stop/status`, launchd, GUI). See `docs/implementation-plan.md`.
