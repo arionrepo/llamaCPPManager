@@ -174,3 +174,56 @@ models:
 - Python package with console script `llamacpp-manager` (pipx‑friendly)
 - GUI app in `gui-macos/` (SwiftUI, macOS 14+), distributed as `.app`
 - Optional Automator app as interim launcher
+
+## GUI Mockups
+
+The following Mermaid diagrams approximate the menu bar dropdown and a simple preferences window for a native macOS app. These are conceptual wireframes to communicate layout and actions; final visuals will follow macOS system styles.
+
+```mermaid
+flowchart TB
+  subgraph Menu_Bar_Dropdown
+    title[llamaCPPManager]
+    status[Overall status: 2 running, 1 stopped]
+
+    sm[SmolLM3 127.0.0.1:8081 UP 12ms]
+    sm_actions[Start  Stop  Restart  Tail Logs]
+
+    mi[Mistral7B 127.0.0.1:8082 UP 18ms]
+    mi_actions[Start  Stop  Restart  Tail Logs]
+
+    phi[Phi3 127.0.0.1:8083 DOWN]
+    phi_actions[Start  Stop  Restart  Tail Logs]
+
+    sep1[---]
+    prefs[Preferences]
+    open_cfg[Open Config]
+    sep2[---]
+    quit[Quit]
+  end
+
+  status --> sm
+  status --> mi
+  status --> phi
+  sm --> sm_actions
+  mi --> mi_actions
+  phi --> phi_actions
+  prefs -.-> open_cfg
+```
+
+```mermaid
+flowchart LR
+  subgraph Preferences_Window
+    hdr[Preferences]
+    llama_path[Llama server path]
+    log_dir[Log directory]
+    refresh_int[Refresh interval seconds]
+    launch_login[Launch at login toggle]
+    sep[---]
+    save_btn[Save]
+    cancel_btn[Cancel]
+  end
+
+  hdr --> llama_path --> log_dir --> refresh_int --> launch_login
+  launch_login --> save_btn
+  launch_login --> cancel_btn
+```
