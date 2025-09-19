@@ -3,6 +3,7 @@ pyproject.toml
 src/llamacpp_manager/__init__.py
 src/llamacpp_manager/cli.py
 src/llamacpp_manager/config.py
+src/llamacpp_manager/discovery.py
 src/llamacpp_manager/health.py
 src/llamacpp_manager/launchd.py
 src/llamacpp_manager/logs.py
@@ -15,8 +16,10 @@ src/llamacpp_manager.egg-info/entry_points.txt
 src/llamacpp_manager.egg-info/requires.txt
 src/llamacpp_manager.egg-info/top_level.txt
 tests/test_cli_config.py
+tests/test_cli_launchd_flags.py
 tests/test_cli_start_stop.py
 tests/test_config.py
+tests/test_discovery_status.py
 tests/test_ensure_running.py
 tests/test_health.py
 tests/test_launchd.py

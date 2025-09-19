@@ -19,6 +19,7 @@ from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, 
 from .process import start_process, stop_process, build_argv
 from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
+from .discovery import find_llama_processes
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -207,15 +208,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp_start = sub.add_parser("start", help="Start a model or all models")
     sp_start.add_argument("target", help="Model name or 'all'")
     sp_start.add_argument("--dry-run", action="store_true", help="Print the command without executing")
+    sp_start.add_argument("--launchd", action="store_true", help="Use launchd to start instead of direct process")
     sp_start.set_defaults(func=cmd_start)
 
-    sp_stop = sub.add_parser("stop", help="Stop a model or all models (via pid files)")
+    sp_stop = sub.add_parser("stop", help="Stop a model or all models")
     sp_stop.add_argument("target", help="Model name or 'all'")
+    sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd agent instead of PID stop")
     sp_stop.set_defaults(func=cmd_stop)
 
     sp_restart = sub.add_parser("restart", help="Restart a model or all models")
     sp_restart.add_argument("target", help="Model name or 'all'")
     sp_restart.add_argument("--dry-run", action="store_true")
+    sp_restart.add_argument("--launchd", action="store_true")
     sp_restart.set_defaults(func=cmd_restart)
 
     # status
@@ -289,9 +293,21 @@ def cmd_start(args: argparse.Namespace) -> int:
         if args.dry_run:
             print("DRY-RUN:", " ".join(shlex.quote(a) for a in argv))
             continue
-        pid = start_process(llama_path, spec, log_dir)
-        write_pid(spec.name, pid)
-        print(f"started {spec.name} pid={pid} port={spec.port}")
+        if getattr(args, "launchd", False):
+            data = render_plist(llama_path, spec, log_dir=log_dir)
+            p = plist_path(spec.name)
+            write_plist(p, data)
+            r1 = launchctl_bootstrap(p)
+            if r1.returncode != 0 and "Service already loaded" not in (r1.stderr or ""):
+                print(f"error: launchctl bootstrap failed for {spec.name}: {r1.stderr}", file=sys.stderr)
+                rc = 2
+                continue
+            _ = launchctl_kickstart(spec.name)
+            print(f"launchd started {spec.name} port={spec.port}")
+        else:
+            pid = start_process(llama_path, spec, log_dir)
+            write_pid(spec.name, pid)
+            print(f"started {spec.name} pid={pid} port={spec.port}")
     return rc
 
 
@@ -301,33 +317,46 @@ def cmd_stop(args: argparse.Namespace) -> int:
     rc = 0
     for m in selected:
         name = m["name"]
-        try:
-            pid = read_pid(name)
-        except FileNotFoundError:
-            print(f"warning: no pid file for {name}", file=sys.stderr)
-            rc = max(rc, 1)
-            continue
-        try:
-            stop_process(pid)
-            remove_pid(name)
-            print(f"stopped {name} pid={pid}")
-        except Exception as e:
-            print(f"error stopping {name}: {e}", file=sys.stderr)
-            rc = 2
+        if getattr(args, "launchd", False):
+            r = launchctl_bootout(name)
+            if r.returncode != 0 and "No such process" not in (r.stderr or ""):
+                print(f"warning: bootout returned {r.returncode} for {name}: {r.stderr}", file=sys.stderr)
+            p = plist_path(name)
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+            print(f"launchd stopped {name}")
+        else:
+            try:
+                pid = read_pid(name)
+            except FileNotFoundError:
+                print(f"warning: no pid file for {name}", file=sys.stderr)
+                rc = max(rc, 1)
+                continue
+            try:
+                stop_process(pid)
+                remove_pid(name)
+                print(f"stopped {name} pid={pid}")
+            except Exception as e:
+                print(f"error stopping {name}: {e}", file=sys.stderr)
+                rc = 2
     return rc
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
     # Stop ignores missing pid files
-    r1 = cmd_stop(argparse.Namespace(target=args.target))
+    r1 = cmd_stop(argparse.Namespace(target=args.target, launchd=getattr(args, "launchd", False)))
     if args.dry_run:
         return 0
-    r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False))
+    r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False, launchd=getattr(args, "launchd", False)))
     return max(r1, r2)
 
 
 def _gather_status(cfg: Dict[str, Any]) -> list:
     timeout_ms = int(cfg.get("timeout_ms", 2000))
+    procs = find_llama_processes()
     out = []
     for m in cfg.get("models", []):
         name = m.get("name")
@@ -339,7 +368,25 @@ def _gather_status(cfg: Dict[str, Any]) -> list:
             pid = read_pid(name)
             mode = "direct" if process_alive(pid) else "stopped"
         except Exception:
-            mode = "stopped"
+            # try to match discovered processes by model_path or --port
+            model_path = str(m.get("model_path", ""))
+            found = None
+            for p in procs:
+                argv = p.get("argv", [])
+                if model_path and model_path in argv:
+                    found = p
+                    break
+                if "--port" in argv:
+                    try:
+                        idx = argv.index("--port")
+                        if str(port) == argv[idx + 1]:
+                            found = p
+                            break
+                    except Exception:
+                        pass
+            if found:
+                pid = found.get("pid")
+                mode = "direct"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
         entry = {
             "name": name,

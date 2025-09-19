@@ -82,6 +82,13 @@ Notes:
 - launchd mode is optional; direct start/stop works without it.
 - Plists point stdout/stderr to `<log_dir>/<name>.out.log|.err.log` and keep the service alive.
 
+### Auto-start missing services
+
+- Start any models marked `autostart: true` that are currently unreachable:
+  - Direct mode: `llamacpp-manager ensure-running`
+  - Launchd mode: `llamacpp-manager ensure-running --mode launchd`
+  - This uses a quick health check per model and starts only those that are down.
+
 ## Local Testing
 
 - One‑shot run: `make test`

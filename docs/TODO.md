@@ -30,7 +30,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] README/examples for starting/stopping models
 
 ## M3 — Discovery, Status, Health
-- [ ] Add process discovery (map running llama-server → models)
+- [x] Add process discovery (map running llama-server → models)
 - [x] Implement `health.py` (TCP + HTTP checks, latency, version)
 - [ ] CLI: `status [--watch]` (table) and `status --json`
 - [x] CLI: `config list --json`
@@ -40,7 +40,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 ## M4 — launchd Autostart
 - [x] Implement `launchd.py` (render/load/unload plists)
 - [x] CLI: `launchd install|uninstall <name|all>`
-- [ ] Integrate `--launchd` mode in start/stop, reflect `autostart`
+- [x] Integrate `--launchd` mode in start/stop/restart
 - [x] Tests for plist rendering
 
 ## M5 — Packaging + Docs
