@@ -19,11 +19,14 @@ tests/test_cli_config.py
 tests/test_cli_launchd_flags.py
 tests/test_cli_start_stop.py
 tests/test_config.py
+tests/test_discovery_parse.py
 tests/test_discovery_status.py
 tests/test_ensure_running.py
 tests/test_health.py
 tests/test_launchd.py
+tests/test_launchd_install_uninstall.py
 tests/test_logs.py
 tests/test_migrate.py
 tests/test_process.py
+tests/test_security_and_bincheck.py
 tests/test_status.py
