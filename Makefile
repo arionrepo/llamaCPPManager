@@ -22,7 +22,7 @@ test-integration: install-dev
 	$(PYTEST) -q -m integration
 
 gui-test:
-	@echo "GUI tests will be added once gui-macos/ SwiftUI app is scaffolded."
+	cd gui-macos && swift test -q
 
 clean:
 	rm -rf $(VENV) .pytest_cache .coverage dist build

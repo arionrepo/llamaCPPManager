@@ -1,0 +1,4 @@
+module llamacpp_guiPackageTests {
+    header "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiPackageTests.build/llamacpp-guiPackageTests-Swift.h"
+    requires objc
+}

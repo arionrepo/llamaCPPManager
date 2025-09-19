@@ -94,6 +94,22 @@ Notes:
 
 See `docs/testing.md` for details on test structure and conventions.
 
+## GUI (SwiftUI Menu Bar)
+
+- Location: `gui-macos/` (Swift Package with an executable target)
+- Build and run tests locally:
+  - `make gui-test` (runs `swift test` in `gui-macos/`)
+- Run the GUI from Xcode:
+  - Open `gui-macos/Package.swift` in Xcode and run the `llamacpp-gui` scheme.
+  - The app appears in the menu bar as “llamaCPP”.
+- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it’s on your PATH or at one of:
+  - `/opt/homebrew/bin/llamacpp-manager`
+  - `/usr/local/bin/llamacpp-manager`
+- To use a custom config/logs location set in the CLI, export:
+  - `LLAMACPP_MANAGER_CONFIG_DIR=/path/to/config`
+  - `LLAMACPP_MANAGER_LOG_DIR=/path/to/logs`
+
+
 - Add a model entry:
   - `llamacpp-manager config add smollm3 ~/llms/smollm3/SmolLM3-Q8_0.gguf --port 8081 --extra-args "-c 8192 -ngl 9999 -t 12 --parallel 4 --cont-batching"`
 

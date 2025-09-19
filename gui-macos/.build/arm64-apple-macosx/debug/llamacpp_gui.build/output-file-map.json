@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_gui.build/master.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Sources/App.swift": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_gui.build/App.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_gui.build/App.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_gui.build/App~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_gui.build/App.swiftdeps"
+  }
+}
