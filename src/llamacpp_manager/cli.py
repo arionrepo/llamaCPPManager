@@ -20,6 +20,7 @@ from .process import start_process, stop_process, build_argv
 from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 from .discovery import find_llama_processes
+from .query import query_model_completion, query_model_chat, list_available_models, ModelQueryError
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:

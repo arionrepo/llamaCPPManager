@@ -8,6 +8,9 @@ Keywords: llama.cpp,llama-server,macOS,menu bar,CLI
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 Requires-Dist: PyYAML>=6.0
+Requires-Dist: mcp>=1.0.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: pydantic>=2.0.0
 
 # llamaCPPManager
 
@@ -89,6 +92,13 @@ Notes:
   - Launchd mode: `llamacpp-manager ensure-running --mode launchd`
   - This uses a quick health check per model and starts only those that are down.
 
+## Security Notes
+
+- Local binds by default: models should bind to `127.0.0.1` (or `localhost`).
+- The CLI refuses to start models bound to non‑local hosts unless you pass `--allow-remote` explicitly (e.g., for a trusted LAN).
+- Port checks: the CLI detects when a target port is already in use and will refuse to start a model on that port.
+- Binary check: `llamacpp-manager start` validates that `llama_server_path` exists and is executable (bypass for tests via `LLAMACPP_MANAGER_SKIP_BIN_CHECK=1`).
+
 ## Local Testing
 
 - One‑shot run: `make test`
@@ -97,6 +107,22 @@ Notes:
 - Direct script: `bash scripts/run_local_tests.sh`
 
 See `docs/testing.md` for details on test structure and conventions.
+
+## GUI (SwiftUI Menu Bar)
+
+- Location: `gui-macos/` (Swift Package with an executable target)
+- Build and run tests locally:
+  - `make gui-test` (runs `swift test` in `gui-macos/`)
+- Run the GUI from Xcode:
+  - Open `gui-macos/Package.swift` in Xcode and run the `llamacpp-gui` scheme.
+  - The app appears in the menu bar as “llamaCPP”.
+- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it’s on your PATH or at one of:
+  - `/opt/homebrew/bin/llamacpp-manager`
+  - `/usr/local/bin/llamacpp-manager`
+- To use a custom config/logs location set in the CLI, export:
+  - `LLAMACPP_MANAGER_CONFIG_DIR=/path/to/config`
+  - `LLAMACPP_MANAGER_LOG_DIR=/path/to/logs`
+
 
 - Add a model entry:
   - `llamacpp-manager config add smollm3 ~/llms/smollm3/SmolLM3-Q8_0.gguf --port 8081 --extra-args "-c 8192 -ngl 9999 -t 12 --parallel 4 --cont-batching"`

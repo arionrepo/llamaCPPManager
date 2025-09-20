@@ -9,10 +9,14 @@ keywords = ["llama.cpp", "llama-server", "macOS", "menu bar", "CLI"]
 authors = [{ name = "arionrepo" }]
 dependencies = [
   "PyYAML>=6.0",
+  "mcp>=1.0.0",
+  "httpx>=0.25.0",
+  "pydantic>=2.0.0",
 ]
 
 [project.scripts]
 llamacpp-manager = "llamacpp_manager.cli:main"
+llamacpp-mcp-server = "llamacpp_manager.mcp_server:main"
 
 [build-system]
 requires = ["setuptools>=67", "wheel"]

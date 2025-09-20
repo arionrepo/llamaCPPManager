@@ -1,2 +1,3 @@
 [console_scripts]
 llamacpp-manager = llamacpp_manager.cli:main
+llamacpp-mcp-server = llamacpp_manager.mcp_server:main

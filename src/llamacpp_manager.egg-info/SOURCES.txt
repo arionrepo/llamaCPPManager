@@ -8,6 +8,7 @@ src/llamacpp_manager/health.py
 src/llamacpp_manager/launchd.py
 src/llamacpp_manager/logs.py
 src/llamacpp_manager/process.py
+src/llamacpp_manager/query.py
 src/llamacpp_manager/utils.py
 src/llamacpp_manager.egg-info/PKG-INFO
 src/llamacpp_manager.egg-info/SOURCES.txt
