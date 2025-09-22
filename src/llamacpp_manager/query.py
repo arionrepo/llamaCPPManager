@@ -68,6 +68,8 @@ def query_model_completion(
         raise ModelQueryError(f"Failed to connect to model '{name}': {e}")
     except httpx.HTTPStatusError as e:
         raise ModelQueryError(f"Model '{name}' returned error {e.response.status_code}: {e.response.text}")
+    except Exception as e:
+        raise ModelQueryError(f"Failed to query model '{name}': {e}")
 
 
 def _stream_completion(client: httpx.Client, url: str, payload: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
@@ -117,6 +119,8 @@ def query_model_chat(
         raise ModelQueryError(f"Failed to connect to model '{name}': {e}")
     except httpx.HTTPStatusError as e:
         raise ModelQueryError(f"Model '{name}' returned error {e.response.status_code}: {e.response.text}")
+    except Exception as e:
+        raise ModelQueryError(f"Failed to query model '{name}': {e}")
 
 
 def _stream_chat(client: httpx.Client, url: str, payload: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:

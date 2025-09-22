@@ -78,6 +78,28 @@ Notes:
   - Launchd mode: `llamacpp-manager ensure-running --mode launchd`
   - This uses a quick health check per model and starts only those that are down.
 
+### Query models
+
+- List available models:
+  - `llamacpp-manager query list`
+
+- Get text completion from a model:
+  - `llamacpp-manager query complete model-name "Hello world"`
+  - `llamacpp-manager query complete model-name "Hello world" --max-tokens 256 --temperature 0.9`
+  - `llamacpp-manager query complete model-name "Hello world" --stream`
+
+- Chat with a model:
+  - `llamacpp-manager query chat model-name --message "user:Hello there"`
+  - `llamacpp-manager query chat model-name --message "system:You are helpful" --message "user:Hello"`
+  - `llamacpp-manager query chat model-name --message "user:Hello" --stream`
+
+### MCP Server
+
+- Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality as tools:
+  - `llamacpp-mcp-server`
+  - Available tools: `list_models`, `start_model`, `stop_model`, `model_status`, `query_completion`, `query_chat`, `add_model`, `remove_model`
+  - Use with MCP clients like Claude Desktop or other MCP-enabled applications
+
 ## Security Notes
 
 - Local binds by default: models should bind to `127.0.0.1` (or `localhost`).

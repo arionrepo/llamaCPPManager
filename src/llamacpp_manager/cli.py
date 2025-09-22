@@ -263,6 +263,31 @@ def build_parser() -> argparse.ArgumentParser:
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
     sp_ens.set_defaults(func=cmd_ensure_running)
 
+    # query commands
+    sp_query = sub.add_parser("query", help="Query models for completions and chat")
+    query_sub = sp_query.add_subparsers(dest="subcommand", required=True)
+
+    sp_query_complete = query_sub.add_parser("complete", help="Get text completion from a model")
+    sp_query_complete.add_argument("model_name", help="Name of the model to query")
+    sp_query_complete.add_argument("prompt", help="Prompt text for completion")
+    sp_query_complete.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
+    sp_query_complete.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    sp_query_complete.add_argument("--stream", action="store_true", help="Stream the response")
+    sp_query_complete.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_query_complete.set_defaults(func=cmd_query)
+
+    sp_query_chat = query_sub.add_parser("chat", help="Chat with a model using conversation format")
+    sp_query_chat.add_argument("model_name", help="Name of the model to query")
+    sp_query_chat.add_argument("--message", "-m", action="append", help="Add message in format 'role:content' (e.g., 'user:Hello')")
+    sp_query_chat.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
+    sp_query_chat.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    sp_query_chat.add_argument("--stream", action="store_true", help="Stream the response")
+    sp_query_chat.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_query_chat.set_defaults(func=cmd_query)
+
+    sp_query_list = query_sub.add_parser("list", help="List available models")
+    sp_query_list.set_defaults(func=cmd_query)
+
     return p
 
 
@@ -553,6 +578,107 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
             started += 1
     print(f"ensure-running: started {started} model(s)")
     return 0
+
+
+def cmd_query(args: argparse.Namespace) -> int:
+    sub = args.subcommand
+
+    if sub == "list":
+        try:
+            available = list_available_models()
+            if available:
+                print("Available models:")
+                for model in available:
+                    print(f"  - {model}")
+            else:
+                print("No models are currently available")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "complete":
+        try:
+            if args.stream:
+                for chunk in query_model_completion(
+                    args.model_name,
+                    args.prompt,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    stream=True,
+                    timeout=args.timeout
+                ):
+                    content = chunk.get("content", "")
+                    if content:
+                        print(content, end="", flush=True)
+                print()  # Final newline
+            else:
+                result = query_model_completion(
+                    args.model_name,
+                    args.prompt,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    stream=False,
+                    timeout=args.timeout
+                )
+                print(result.get("content", ""))
+            return 0
+        except ModelQueryError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "chat":
+        if not args.message:
+            print("error: at least one --message is required", file=sys.stderr)
+            return 2
+
+        messages = []
+        try:
+            for msg in args.message:
+                if ":" not in msg:
+                    print(f"error: invalid message format '{msg}' (expected 'role:content')", file=sys.stderr)
+                    return 2
+                role, content = msg.split(":", 1)
+                if role not in ["system", "user", "assistant"]:
+                    print(f"error: invalid role '{role}' (must be system, user, or assistant)", file=sys.stderr)
+                    return 2
+                messages.append({"role": role, "content": content})
+
+            if args.stream:
+                for chunk in query_model_chat(
+                    args.model_name,
+                    messages,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    stream=True,
+                    timeout=args.timeout
+                ):
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        print(content, end="", flush=True)
+                print()  # Final newline
+            else:
+                result = query_model_chat(
+                    args.model_name,
+                    messages,
+                    max_tokens=args.max_tokens,
+                    temperature=args.temperature,
+                    stream=False,
+                    timeout=args.timeout
+                )
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                print(content)
+            return 0
+        except ModelQueryError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    print("unknown query subcommand", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -26,6 +26,9 @@ struct LlamaCPPManagerApp: App {
                             Button("Start") { vm.start(name: row.name) }
                             Button("Stop") { vm.stop(name: row.name) }
                             Button("Restart") { vm.restart(name: row.name) }
+                            if row.up {
+                                Button("Chat") { vm.openChat(name: row.name) }
+                            }
                             Button("Tail Logs") { vm.tailLogs(name: row.name) }
                         }
                         .buttonStyle(.borderless)
@@ -64,6 +67,7 @@ final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
     private let service = CLIService()
     private var timer: Timer?
+    private var chatWindows: [String: NSWindow] = [:]
 
     func startPolling(interval: TimeInterval = 2.0) {
         timer?.invalidate()
@@ -93,6 +97,39 @@ final class StatusViewModel: ObservableObject {
         guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
         let url = URL(fileURLWithPath: path)
         NSWorkspace.shared.open(url)
+    }
+
+    func openChat(name: String) {
+        // Check if chat window already exists for this model
+        if let existingWindow = chatWindows[name] {
+            existingWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        // Create new chat window
+        let chatViewModel = ChatViewModel(modelName: name, cliService: service)
+        let chatView = ChatView(viewModel: chatViewModel)
+        let hostingController = NSHostingController(rootView: chatView)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 800),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        window.title = "Chat with \(name)"
+        window.contentViewController = hostingController
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+
+        // Store window reference
+        chatWindows[name] = window
+
+        // Set up window delegate to clean up when closed
+        window.delegate = ChatWindowDelegate { [weak self] in
+            self?.chatWindows.removeValue(forKey: name)
+        }
     }
 
     func openConfig() {
@@ -160,5 +197,244 @@ final class CLIService {
         }
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home.appendingPathComponent("Library/Application Support/llamaCPPManager")
+    }
+
+    func queryChat(modelName: String, messages: [ChatMessage]) async throws -> String {
+        var args = ["query", "chat", modelName]
+        for message in messages {
+            args.append("--message")
+            args.append("\(message.role):\(message.content)")
+        }
+        return try await runAndCapture(args)
+    }
+
+    func queryCompletion(modelName: String, prompt: String, maxTokens: Int = 512, temperature: Double = 0.7) async throws -> String {
+        let args = [
+            "query", "complete", modelName, prompt,
+            "--max-tokens", String(maxTokens),
+            "--temperature", String(temperature)
+        ]
+        return try await runAndCapture(args)
+    }
+}
+
+// MARK: - Chat Functionality
+
+struct ChatMessage: Identifiable, Equatable {
+    let id = UUID()
+    let role: String // "system", "user", "assistant"
+    let content: String
+    let timestamp: Date = Date()
+}
+
+final class ChatViewModel: ObservableObject {
+    @Published var messages: [ChatMessage] = []
+    @Published var currentInput: String = ""
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+
+    let modelName: String
+    private let cliService: CLIService
+
+    init(modelName: String, cliService: CLIService) {
+        self.modelName = modelName
+        self.cliService = cliService
+
+        // Add system message
+        messages.append(ChatMessage(
+            role: "system",
+            content: "You are a helpful AI assistant running on llama.cpp via llamaCPPManager."
+        ))
+    }
+
+    func sendMessage() {
+        guard !currentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !isLoading else { return }
+
+        let userMessage = ChatMessage(role: "user", content: currentInput)
+        messages.append(userMessage)
+
+        let inputText = currentInput
+        currentInput = ""
+        isLoading = true
+        errorMessage = nil
+
+        Task { @MainActor in
+            do {
+                let response = try await cliService.queryChat(modelName: modelName, messages: messages)
+                let assistantMessage = ChatMessage(role: "assistant", content: response.trimmingCharacters(in: .whitespacesAndNewlines))
+                messages.append(assistantMessage)
+            } catch {
+                errorMessage = "Failed to send message: \(error.localizedDescription)"
+                // Remove the user message if the API call failed
+                if let lastIndex = messages.lastIndex(where: { $0.content == inputText && $0.role == "user" }) {
+                    messages.remove(at: lastIndex)
+                }
+            }
+            isLoading = false
+        }
+    }
+
+    func clearChat() {
+        messages.removeAll()
+        messages.append(ChatMessage(
+            role: "system",
+            content: "You are a helpful AI assistant running on llama.cpp via llamaCPPManager."
+        ))
+        errorMessage = nil
+    }
+}
+
+struct ChatView: View {
+    @StateObject var viewModel: ChatViewModel
+    @State private var scrollProxy: ScrollViewReader? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Chat with \(viewModel.modelName)")
+                    .font(.headline)
+                Spacer()
+                Button("Clear") {
+                    viewModel.clearChat()
+                }
+                .buttonStyle(.borderless)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+
+            // Messages
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(viewModel.messages.filter { $0.role != "system" }) { message in
+                            ChatMessageView(message: message)
+                                .id(message.id)
+                        }
+
+                        if viewModel.isLoading {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Thinking...")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
+                    .padding()
+                }
+                .onAppear {
+                    scrollProxy = proxy
+                }
+                .onChange(of: viewModel.messages.count) { _ in
+                    if let lastMessage = viewModel.messages.last {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+
+            // Error message
+            if let error = viewModel.errorMessage {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    Spacer()
+                    Button("Dismiss") {
+                        viewModel.errorMessage = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+            }
+
+            // Input area
+            HStack {
+                TextField("Type your message...", text: $viewModel.currentInput, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...6)
+                    .onSubmit {
+                        viewModel.sendMessage()
+                    }
+
+                Button("Send") {
+                    viewModel.sendMessage()
+                }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(viewModel.currentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isLoading)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+        }
+        .frame(minWidth: 400, minHeight: 300)
+    }
+}
+
+struct ChatMessageView: View {
+    let message: ChatMessage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Avatar
+            Circle()
+                .fill(message.role == "user" ? Color.blue : Color.green)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Text(message.role == "user" ? "U" : "AI")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                )
+
+            // Message content
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(message.role.capitalized)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text(message.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Text(message.content)
+                    .textSelection(.enabled)
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(message.role == "user"
+                                ? Color.blue.opacity(0.1)
+                                : Color.gray.opacity(0.1))
+                    )
+            }
+
+            Spacer()
+        }
+    }
+}
+
+class ChatWindowDelegate: NSObject, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        super.init()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
     }
 }
