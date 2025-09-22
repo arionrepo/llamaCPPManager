@@ -68,6 +68,7 @@ final class StatusViewModel: ObservableObject {
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
+    private var windowDelegates: [String: ChatWindowDelegate] = [:]
 
     func startPolling(interval: TimeInterval = 2.0) {
         timer?.invalidate()
@@ -127,9 +128,12 @@ final class StatusViewModel: ObservableObject {
         chatWindows[name] = window
 
         // Set up window delegate to clean up when closed
-        window.delegate = ChatWindowDelegate { [weak self] in
+        let delegate = ChatWindowDelegate { [weak self] in
             self?.chatWindows.removeValue(forKey: name)
+            self?.windowDelegates.removeValue(forKey: name)
         }
+        windowDelegates[name] = delegate
+        window.delegate = delegate
     }
 
     func openConfig() {
@@ -287,7 +291,6 @@ final class ChatViewModel: ObservableObject {
 
 struct ChatView: View {
     @StateObject var viewModel: ChatViewModel
-    @State private var scrollProxy: ScrollViewReader? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -325,9 +328,6 @@ struct ChatView: View {
                         }
                     }
                     .padding()
-                }
-                .onAppear {
-                    scrollProxy = proxy
                 }
                 .onChange(of: viewModel.messages.count) { _ in
                     if let lastMessage = viewModel.messages.last {
