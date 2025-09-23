@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  {{ model_name }}:
+    image: {{ image_name }}:{{ tag }}
+    container_name: llamacpp-{{ model_name }}
+    restart: unless-stopped
+    ports:
+      - "{{ host_port }}:8080"
+    volumes:
+      - "{{ model_path }}:/models/{{ model_file }}:ro"
+      - "llamacpp-{{ model_name }}-logs:/logs"
+    environment:
+      - MODEL_PATH=/models/{{ model_file }}
+      - PORT=8080
+      {% for key, value in env_vars.items() %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+      {% if extra_args %}
+      - EXTRA_ARGS={{ extra_args }}
+      {% endif %}
+    deploy:
+      resources:
+        limits:
+          memory: {{ memory_limit }}
+          cpus: '{{ cpu_limit }}'
+        reservations:
+          memory: {{ memory_request }}
+          cpus: '{{ cpu_request }}'
+    networks:
+      - llamacpp-network
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "llamacpp-manager.model={{ model_name }}"
+      - "llamacpp-manager.managed=true"
+
+volumes:
+  llamacpp-{{ model_name }}-logs:
+    driver: local
+
+networks:
+  llamacpp-network:
+    driver: bridge

@@ -3,10 +3,19 @@
 ## 1. Purpose
 Create a lightweight macOS-friendly utility that helps operate multiple `llama-server` (llama.cpp) instances, exposing easy start/stop controls, health status, and quick access to logs/configs, with an optional native GUI.
 
-## 2. Target Environment
+## 2. Target Environments
+
+### Local Development (macOS M4 Max)
 - macOS (Apple Silicon, Ventura or newer)
 - llama.cpp via Homebrew (`/opt/homebrew/bin/llama-server`) or user-specified path
 - Models hosted locally under `~/llms/...`
+- Docker/Colima for containerized deployments
+
+### Remote Production (Ubuntu OpenStack)
+- Kubernetes clusters on Ubuntu OpenStack
+- Container registry for model images
+- Persistent storage for model files
+- Remote kubectl access from macOS CLI
 
 ## 3. Granular Requirements (Patterned)
 
@@ -137,11 +146,63 @@ Acceptance Criteria
 - Safe shutdown handling to avoid orphaned processes
 - Config and logs under `~/Library/Application Support/llamaCPPManager` and `~/Library/Logs/llamaCPPManager` by default
 
+Requirement 13: Container Deployment Support
+Phase: MVP-Containers
+
+User Story: As a user with Docker/Colima setup, I want to deploy models in containers so that I can isolate resources, manage dependencies consistently, and enable easier scaling.
+
+Acceptance Criteria
+- WHEN I configure a model with `--container` flag THEN the system SHALL build and run the model in a Docker container
+- WHEN starting containerized models THEN the system SHALL mount model files as volumes and manage port mapping
+- WHEN I run `status` THEN the system SHALL detect both bare-metal and containerized models with appropriate indicators
+- WHEN using container mode THEN the system SHALL validate Docker availability and provide clear error messages if missing
+- WHEN I run `container build` THEN the system SHALL create optimized Docker images for llama.cpp models
+- WHEN I deploy multiple models THEN the system SHALL support Docker Compose orchestration for multi-model setups
+
+Requirement 14: Multi-Scenario Deployment Support
+Phase: MVP-Containers
+
+User Story: As a user with different environments, I want to choose the deployment scenario that fits my infrastructure (macOS bare-metal, macOS containers, or remote Kubernetes) so that I can optimize for my specific use case.
+
+Acceptance Criteria
+- WHEN I configure a model THEN the system SHALL support selecting deployment scenario: `bare-metal`, `container`, or `kubernetes`
+- WHEN using macOS scenarios THEN the system SHALL manage models on the local M4 Max device efficiently
+- WHEN using Kubernetes scenario THEN the system SHALL deploy to remote Ubuntu OpenStack clusters
+- WHEN switching scenarios THEN the system SHALL provide migration tools and clear guidance
+- WHEN managing different scenarios THEN the system SHALL maintain consistent CLI interface across all deployment types
+
+Requirement 15: Container Resource Management
+Phase: MVP-Containers
+
+User Story: As a resource-conscious user, I want to control container resource limits so that models don't consume excessive system resources.
+
+Acceptance Criteria
+- WHEN configuring containerized models THEN the system SHALL allow setting memory limits, CPU limits, and GPU access
+- WHEN containers exceed limits THEN the system SHALL restart them gracefully and log the incidents
+- WHEN I run `status --resources` THEN the system SHALL show resource usage for both containerized and bare-metal models
+- WHEN Docker daemon is unavailable THEN the system SHALL gracefully fall back to bare-metal mode with user notification
+
+Requirement 16: Kubernetes Deployment Support
+Phase: MVP-K8s
+
+User Story: As a user with Kubernetes clusters, I want to deploy models to Kubernetes so that I can leverage advanced orchestration, scaling, and resource management capabilities.
+
+Acceptance Criteria
+- WHEN I configure a model with `--kubernetes` flag THEN the system SHALL generate and apply Kubernetes manifests (Deployment, Service, ConfigMap)
+- WHEN deploying to Kubernetes THEN the system SHALL support multiple deployment strategies (local cluster, remote cluster via kubectl context)
+- WHEN managing K8s deployments THEN the system SHALL integrate with kubectl for status checks and log retrieval
+- WHEN scaling models THEN the system SHALL support horizontal pod autoscaling based on CPU/memory metrics
+- WHEN I run `status` THEN the system SHALL detect and report on bare-metal, container, and Kubernetes-deployed models
+- WHEN using persistent volumes THEN the system SHALL manage model file storage via PVC for efficient sharing across pods
+
 ## 5. Stretch Goals (Optional)
 - macOS menu bar advanced features (quick prompts, Raycast integration)
 - Prometheus endpoint exposing metrics
 - Quick actions to switch model quantizations or update binaries
 - Workspace profiles (switch between dev/prod model sets)
+- Multi-cloud Kubernetes support (EKS, GKE, AKS)
+- GitOps integration for declarative model deployments
+- Auto-scaling based on request load and resource utilization
 
 ## 6. Open Questions
 - Preferred packaging for GUI (App Store vs. downloadable .dmg)

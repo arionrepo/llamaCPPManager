@@ -36,3 +36,4 @@ tests/test_process.py
 tests/test_query.py
 tests/test_security_and_bincheck.py
 tests/test_status.py
+tests/test_status_watch.py
