@@ -2,15 +2,24 @@ Metadata-Version: 2.4
 Name: llamacpp-manager
 Version: 0.1.0
 Summary: macOS tooling to manage llama.cpp llama-server instances
+Home-page: https://github.com/your-username/llamacpp-manager
 Author: arionrepo
+Author-email: team@llamacpp-manager.dev
 License: Proprietary
 Keywords: llama.cpp,llama-server,macOS,menu bar,CLI
+Platform: darwin
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 Requires-Dist: PyYAML>=6.0
 Requires-Dist: mcp>=1.0.0
 Requires-Dist: httpx>=0.25.0
 Requires-Dist: pydantic>=2.0.0
+Requires-Dist: docker>=6.1.0
+Requires-Dist: jinja2>=3.1.0
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: platform
+Dynamic: requires-python
 
 # llamaCPPManager
 

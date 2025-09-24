@@ -2,10 +2,10 @@
   "": {
     "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/master.swiftdeps"
   },
-  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/JSONParsingTests.swift": {
-    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.d",
-    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.swift.o",
-    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests~partial.swiftmodule",
-    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.swiftdeps"
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.swiftdeps"
   }
 }

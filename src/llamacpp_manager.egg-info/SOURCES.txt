@@ -1,5 +1,6 @@
 README.md
 pyproject.toml
+setup.py
 src/llamacpp_manager/__init__.py
 src/llamacpp_manager/cli.py
 src/llamacpp_manager/config.py
@@ -8,6 +9,7 @@ src/llamacpp_manager/health.py
 src/llamacpp_manager/launchd.py
 src/llamacpp_manager/logs.py
 src/llamacpp_manager/mcp_server.py
+src/llamacpp_manager/monitor.py
 src/llamacpp_manager/process.py
 src/llamacpp_manager/query.py
 src/llamacpp_manager/utils.py
@@ -15,6 +17,7 @@ src/llamacpp_manager.egg-info/PKG-INFO
 src/llamacpp_manager.egg-info/SOURCES.txt
 src/llamacpp_manager.egg-info/dependency_links.txt
 src/llamacpp_manager.egg-info/entry_points.txt
+src/llamacpp_manager.egg-info/not-zip-safe
 src/llamacpp_manager.egg-info/requires.txt
 src/llamacpp_manager.egg-info/top_level.txt
 tests/test_cli_config.py

@@ -1,0 +1,12 @@
+{
+  "": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/llamacpp_guiTests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/llamacpp_guiTests.o",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/master.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift": {
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/StatusViewModelTests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/StatusViewModelTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiTests.build/StatusViewModelTests.swiftdeps"
+  }
+}

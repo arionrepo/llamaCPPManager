@@ -1,0 +1,17 @@
+{
+  "": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/llamacpp_guiUITests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/llamacpp_guiUITests.o",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/master.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift": {
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuBarUITests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuBarUITests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuBarUITests.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift": {
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuInteractionTests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuInteractionTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiUITests.build/MenuInteractionTests.swiftdeps"
+  }
+}

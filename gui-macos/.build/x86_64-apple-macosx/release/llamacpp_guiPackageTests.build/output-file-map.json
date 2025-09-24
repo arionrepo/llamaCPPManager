@@ -1,0 +1,12 @@
+{
+  "": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/llamacpp_guiPackageTests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/llamacpp_guiPackageTests.o",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/master.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp-guiPackageTests.derived/runner.swift": {
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/release/llamacpp_guiPackageTests.build/runner.swiftdeps"
+  }
+}

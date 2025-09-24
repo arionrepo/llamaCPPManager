@@ -129,6 +129,10 @@
         },
         {
           "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules/llamacpp_guiUITests.swiftmodule"
+        },
+        {
+          "kind" : "file",
           "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules/llamacpp_guiTests.swiftmodule"
         },
         {
@@ -217,7 +221,7 @@
       "inputs" : [
         {
           "kind" : "file",
-          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/JSONParsingTests.swift"
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift"
         },
         {
           "kind" : "file",
@@ -236,7 +240,7 @@
       "moduleName" : "llamacpp_guiTests",
       "moduleOutputPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules/llamacpp_guiTests.swiftmodule",
       "objects" : [
-        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.swift.o"
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.swift.o"
       ],
       "otherArguments" : [
         "-target",
@@ -291,7 +295,7 @@
       "outputs" : [
         {
           "kind" : "file",
-          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.swift.o"
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.swift.o"
         },
         {
           "kind" : "file",
@@ -300,9 +304,114 @@
       ],
       "prepareForIndexing" : false,
       "sources" : [
-        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/JSONParsingTests.swift"
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift"
       ],
       "tempsPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.llamacpp-guiUITests-x86_64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/sources",
+      "importPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp-gui"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "llamacpp_guiUITests",
+      "moduleOutputPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules/llamacpp_guiUITests.swiftmodule",
+      "objects" : [
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.swift.o",
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "x86_64-apple-macosx14.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j16",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "gui_macos"
+      ],
+      "outputFileMapPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules/llamacpp_guiUITests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift",
+        "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift"
+      ],
+      "tempsPath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build",
       "wholeModuleOptimization" : false
     }
   },
@@ -443,7 +552,69 @@
       "gui_macos",
       "-incremental",
       "-c",
-      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/JSONParsingTests.swift",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift",
+      "-I",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules",
+      "-target",
+      "x86_64-apple-macosx14.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j16",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "gui_macos",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "llamacpp_guiUITests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "llamacpp_guiUITests",
+      "-package-name",
+      "gui_macos",
+      "-incremental",
+      "-c",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift",
+      "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift",
       "-I",
       "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/Modules",
       "-target",
@@ -503,9 +674,13 @@
     ],
     "llamacpp_guiPackageTests" : [
       "llamacpp_guiTests",
+      "llamacpp_guiUITests",
       "llamacpp_gui"
     ],
     "llamacpp_guiTests" : [
+      "llamacpp_gui"
+    ],
+    "llamacpp_guiUITests" : [
       "llamacpp_gui"
     ]
   },
@@ -574,7 +749,15 @@
         },
         {
           "kind" : "file",
-          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/JSONParsingTests.swift.o"
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/StatusViewModelTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.swift.o"
         }
       ],
       "outputFilePath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp-guiPackageTests.product/Objects.LinkFileList"
@@ -616,10 +799,28 @@
         },
         {
           "kind" : "file",
-          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/JSONParsingTests.swift"
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/Unit/StatusViewModelTests.swift"
         }
       ],
       "outputFilePath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiTests.build/sources"
+    },
+    "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/llamacpp_guiUITests.build/sources"
     },
     "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/x86_64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
       "alwaysOutOfDate" : true,

@@ -12,27 +12,56 @@ struct LlamaCPPManagerApp: App {
                     Text("No models configured")
                 } else {
                     ForEach(vm.rows, id: \.name) { row in
-                        HStack {
-                            Circle()
-                                .fill(row.up ? Color.green : Color.red)
-                                .frame(width: 8, height: 8)
-                            Text(row.name)
-                            Spacer()
-                            Text("\(row.host):\(row.port)")
-                            if let ms = row.latency_ms { Text("\(ms) ms") }
-                        }
-                        .padding(.horizontal, 8)
-                        HStack {
-                            Button("Start") { vm.start(name: row.name) }
-                            Button("Stop") { vm.stop(name: row.name) }
-                            Button("Restart") { vm.restart(name: row.name) }
-                            if row.up {
-                                Button("Chat") { vm.openChat(name: row.name) }
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                // Enhanced health indicator
+                                Circle()
+                                    .fill(vm.healthColor(for: row))
+                                    .frame(width: 10, height: 10)
+
+                                VStack(alignment: .leading) {
+                                    Text(row.name)
+                                        .font(.headline)
+                                    Text(vm.healthStatus(for: row))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                VStack(alignment: .trailing) {
+                                    Text("\(row.host):\(row.port)")
+                                        .font(.caption)
+                                    if let ms = row.latency_ms, ms > 0 {
+                                        Text("\(ms) ms")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                             }
-                            Button("Tail Logs") { vm.tailLogs(name: row.name) }
+                            .padding(.horizontal, 8)
+
+                            // Control buttons
+                            HStack {
+                                Button("Start") { vm.start(name: row.name) }
+                                    .disabled(row.up)
+                                Button("Stop") { vm.stop(name: row.name) }
+                                    .disabled(!row.up)
+                                Button("Restart") { vm.restart(name: row.name) }
+
+                                if row.up {
+                                    Button("Chat") { vm.openChat(name: row.name) }
+                                }
+
+                                Button("Monitor") { vm.toggleMonitoring(name: row.name) }
+                                    .foregroundColor(vm.isMonitored(name: row.name) ? .orange : .blue)
+
+                                Button("Logs") { vm.tailLogs(name: row.name) }
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .padding(.leading, 18)
                         }
-                        .buttonStyle(.borderless)
-                        .padding(.leading, 16)
                         Divider()
                     }
                 }
@@ -40,6 +69,10 @@ struct LlamaCPPManagerApp: App {
                 Divider()
                 Button("Refresh") { vm.refresh() }
                 Button("Open Config") { vm.openConfig() }
+                Button("Open CLI") { vm.openCLI() }
+                Divider()
+                Button("Help") { vm.openHelp() }
+                Button("About") { vm.openAbout() }
                 Divider()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
@@ -61,6 +94,7 @@ struct StatusRow: Codable {
     let version: String?
     let mode: String?
     let log_path: String?
+    let health_state: String?
 }
 
 final class StatusViewModel: ObservableObject {
@@ -69,6 +103,7 @@ final class StatusViewModel: ObservableObject {
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
     private var windowDelegates: [String: ChatWindowDelegate] = [:]
+    private var monitoredModels: Set<String> = []
 
     func startPolling(interval: TimeInterval = 2.0) {
         timer?.invalidate()
@@ -139,6 +174,141 @@ final class StatusViewModel: ObservableObject {
     func openConfig() {
         // Open config dir in Finder
         if let dir = service.configDirURL() { NSWorkspace.shared.activateFileViewerSelecting([dir]) }
+    }
+
+    // MARK: - Enhanced Health Status Methods
+
+    func healthColor(for row: StatusRow) -> Color {
+        let healthState = row.health_state ?? "down"
+        switch healthState {
+        case "ok":
+            return .green
+        case "starting":
+            return .orange
+        case "down":
+            return .red
+        default:
+            return .gray
+        }
+    }
+
+    func healthStatus(for row: StatusRow) -> String {
+        let healthState = row.health_state ?? "down"
+        let mode = row.mode ?? "unknown"
+
+        switch healthState {
+        case "ok":
+            return "Running (\(mode))"
+        case "starting":
+            return "Starting..."
+        case "down":
+            return "Stopped"
+        default:
+            return "Unknown"
+        }
+    }
+
+    func isMonitored(name: String) -> Bool {
+        return monitoredModels.contains(name)
+    }
+
+    func toggleMonitoring(name: String) {
+        if monitoredModels.contains(name) {
+            // Untrack model
+            Task {
+                _ = try? await service.run(["monitor", "untrack", name])
+                await MainActor.run {
+                    monitoredModels.remove(name)
+                }
+            }
+        } else {
+            // Track model
+            Task {
+                _ = try? await service.run(["monitor", "track", name])
+                await MainActor.run {
+                    monitoredModels.insert(name)
+                }
+            }
+        }
+    }
+
+    func openCLI() {
+        // Open Terminal with llamacpp-manager ready to use
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "export PATH=\\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\\"; echo \\"llamaCPP Manager CLI - Ready!\\"; echo \\"Try: llamacpp-manager --help\\"; echo"
+        end tell
+        """
+
+        if let appleScript = NSAppleScript(source: script) {
+            appleScript.executeAndReturnError(nil)
+        }
+    }
+
+    func openHelp() {
+        // Open help documentation
+        let helpText = """
+        llamaCPP Manager - Quick Help
+
+        🧠 GUI Controls:
+        • Red Circle = Model stopped
+        • Green Circle = Model running
+        • Start/Stop = Control individual models
+        • Chat = Open chat window (when model running)
+        • Tail Logs = View model logs
+        • Refresh = Update status
+
+        📋 Model Management:
+        • Open Config = Add models manually
+        • Open CLI = Access full command line
+        • Ensure Running = Start configured models
+
+        💡 Quick Start:
+        1. Add models via 'Open Config' or 'Open CLI'
+        2. Click 'Start' to run a model
+        3. Click 'Chat' to open chat window
+        4. Visit http://127.0.0.1:[port] in browser
+
+        🔧 CLI Commands:
+        llamacpp-manager config add [name] [path] --port [port]
+        llamacpp-manager start [name]
+        llamacpp-manager status
+        llamacpp-manager --help
+
+        📖 Full Documentation:
+        Run 'Open CLI' and type: llamacpp-manager --help
+        """
+
+        showAlert(title: "llamaCPP Manager Help", message: helpText)
+    }
+
+    func openAbout() {
+        let aboutText = """
+        llamaCPP Manager v1.0.0
+
+        A toolkit for managing local llama.cpp server instances on macOS.
+
+        Features:
+        • Multiple model management
+        • Menu bar integration
+        • Built-in chat interface
+        • CLI automation
+        • Container & Kubernetes support
+
+        GitHub: https://github.com/your-username/llamacpp-manager
+        """
+
+        showAlert(title: "About llamaCPP Manager", message: aboutText)
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 

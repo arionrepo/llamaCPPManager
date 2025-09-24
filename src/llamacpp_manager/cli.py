@@ -169,32 +169,51 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="llamacpp-manager", description="Manage llama.cpp llama-server instances on macOS")
+    p = argparse.ArgumentParser(
+        prog="llamacpp-manager",
+        description="""Manage llama.cpp llama-server instances on macOS
+
+Examples:
+  # Quick Start
+  llamacpp-manager init                                    # Initialize config
+  llamacpp-manager config add mymodel ~/models/model.gguf --port 8081  # Add model
+  llamacpp-manager start mymodel                          # Start model
+  llamacpp-manager status                                 # Check status
+
+  # Query running models
+  llamacpp-manager query complete mymodel "Write a poem about AI"
+  llamacpp-manager query chat mymodel --message "user:Hello there!"
+
+  # Browse to http://127.0.0.1:8081 to use web interface
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--version", action="version", version=f"llamacpp-manager {__version__}")
     p.add_argument("--config-dir", help="Override configuration directory (e.g., ~/my-llama-config)")
     p.add_argument("--log-dir", help="Override logs directory (e.g., ~/my-llama-logs)")
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(dest="command", required=True, help="Available commands")
 
     # init
-    sp_init = sub.add_parser("init", help="Create default config and directories")
+    sp_init = sub.add_parser("init", help="🚀 Create default config and directories (run this first)")
     sp_init.set_defaults(func=cmd_init)
 
     # config group
-    sp_cfg = sub.add_parser("config", help="Manage model configuration")
-    cfg_sub = sp_cfg.add_subparsers(dest="subcommand", required=True)
+    sp_cfg = sub.add_parser("config", help="⚙️  Manage model configuration")
+    cfg_sub = sp_cfg.add_subparsers(dest="subcommand", required=True, help="Configuration commands")
 
-    sp_cfg_list = cfg_sub.add_parser("list", help="List config and models")
+    sp_cfg_list = cfg_sub.add_parser("list", help="📋 List configured models and settings")
     sp_cfg_list.add_argument("--json", action="store_true", help="Output as JSON")
     sp_cfg_list.set_defaults(func=cmd_config)
 
-    sp_cfg_add = cfg_sub.add_parser("add", help="Add a new model entry")
-    sp_cfg_add.add_argument("name")
-    sp_cfg_add.add_argument("model_path")
-    sp_cfg_add.add_argument("--host", default="127.0.0.1")
-    sp_cfg_add.add_argument("--port", type=int, required=True)
-    sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as a single string")
-    sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables KEY=VALUE ...")
-    sp_cfg_add.add_argument("--autostart", action="store_true", help="Mark model for autostart (used by launchd mode)")
+    sp_cfg_add = cfg_sub.add_parser("add",
+        help="➕ Add a model (example: config add phi3 ~/models/phi3.gguf --port 8081)")
+    sp_cfg_add.add_argument("name", help="Model name (used for start/stop commands)")
+    sp_cfg_add.add_argument("model_path", help="Path to .gguf model file")
+    sp_cfg_add.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
+    sp_cfg_add.add_argument("--port", type=int, required=True, help="Port number (required, e.g., 8081)")
+    sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
+    sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
+    sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
     sp_cfg_add.set_defaults(func=cmd_config)
 
     sp_cfg_upd = cfg_sub.add_parser("update", help="Update an existing model entry")
@@ -220,30 +239,30 @@ def build_parser() -> argparse.ArgumentParser:
     sp_cfg_mig.set_defaults(func=cmd_config)
 
     # start/stop/restart commands
-    sp_start = sub.add_parser("start", help="Start a model or all models")
-    sp_start.add_argument("target", help="Model name or 'all'")
-    sp_start.add_argument("--dry-run", action="store_true", help="Print the command without executing")
-    sp_start.add_argument("--launchd", action="store_true", help="Use launchd to start instead of direct process")
-    sp_start.add_argument("--allow-remote", action="store_true", help="Allow non-local host binds (0.0.0.0 or external IP)")
+    sp_start = sub.add_parser("start", help="▶️  Start model(s) - makes them available at http://localhost:PORT")
+    sp_start.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_start.add_argument("--dry-run", action="store_true", help="Show command that would run without executing")
+    sp_start.add_argument("--launchd", action="store_true", help="Use macOS launchd for background service")
+    sp_start.add_argument("--allow-remote", action="store_true", help="Allow external IP binds (security risk)")
     sp_start.set_defaults(func=cmd_start)
 
-    sp_stop = sub.add_parser("stop", help="Stop a model or all models")
-    sp_stop.add_argument("target", help="Model name or 'all'")
-    sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd agent instead of PID stop")
+    sp_stop = sub.add_parser("stop", help="⏹️  Stop running model(s)")
+    sp_stop.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd service instead of direct process")
     sp_stop.set_defaults(func=cmd_stop)
 
-    sp_restart = sub.add_parser("restart", help="Restart a model or all models")
-    sp_restart.add_argument("target", help="Model name or 'all'")
-    sp_restart.add_argument("--dry-run", action="store_true")
-    sp_restart.add_argument("--launchd", action="store_true")
-    sp_restart.add_argument("--allow-remote", action="store_true")
+    sp_restart = sub.add_parser("restart", help="🔄 Restart model(s) (stop + start)")
+    sp_restart.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_restart.add_argument("--dry-run", action="store_true", help="Show commands without executing")
+    sp_restart.add_argument("--launchd", action="store_true", help="Use launchd for restart")
+    sp_restart.add_argument("--allow-remote", action="store_true", help="Allow external IP binds")
     sp_restart.set_defaults(func=cmd_restart)
 
     # status
-    sp_status = sub.add_parser("status", help="Show model status and health")
-    sp_status.add_argument("--json", action="store_true", help="Output JSON array")
-    sp_status.add_argument("--watch", action="store_true", help="Refresh repeatedly")
-    sp_status.add_argument("--interval", type=float, default=2.0, help="Watch refresh interval seconds")
+    sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
+    sp_status.add_argument("--json", action="store_true", help="Output as JSON for scripting")
+    sp_status.add_argument("--watch", action="store_true", help="Live refresh (press Ctrl+C to exit)")
+    sp_status.add_argument("--interval", type=float, default=2.0, help="Refresh interval in seconds")
     sp_status.set_defaults(func=cmd_status)
 
     # launchd
@@ -263,29 +282,54 @@ def build_parser() -> argparse.ArgumentParser:
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
     sp_ens.set_defaults(func=cmd_ensure_running)
 
-    # query commands
-    sp_query = sub.add_parser("query", help="Query models for completions and chat")
-    query_sub = sp_query.add_subparsers(dest="subcommand", required=True)
+    # monitor commands (enhanced crash monitoring)
+    sp_mon = sub.add_parser("monitor", help="🔍 Advanced model monitoring and crash detection")
+    mon_sub = sp_mon.add_subparsers(dest="subcommand", required=True, help="Monitor commands")
 
-    sp_query_complete = query_sub.add_parser("complete", help="Get text completion from a model")
-    sp_query_complete.add_argument("model_name", help="Name of the model to query")
-    sp_query_complete.add_argument("prompt", help="Prompt text for completion")
-    sp_query_complete.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
-    sp_query_complete.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
-    sp_query_complete.add_argument("--stream", action="store_true", help="Stream the response")
-    sp_query_complete.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_mon_track = mon_sub.add_parser("track", help="📌 Track model for auto-restart monitoring")
+    sp_mon_track.add_argument("model_name", help="Name of model to track")
+    sp_mon_track.set_defaults(func=cmd_monitor)
+
+    sp_mon_untrack = mon_sub.add_parser("untrack", help="📌 Stop tracking model")
+    sp_mon_untrack.add_argument("model_name", help="Name of model to untrack")
+    sp_mon_untrack.set_defaults(func=cmd_monitor)
+
+    sp_mon_status = mon_sub.add_parser("status", help="📊 Show monitoring status and tracked models")
+    sp_mon_status.add_argument("--detailed", action="store_true", help="Show detailed health for each tracked model")
+    sp_mon_status.set_defaults(func=cmd_monitor)
+
+    sp_mon_start = mon_sub.add_parser("start", help="🚀 Start monitoring daemon (background)")
+    sp_mon_start.set_defaults(func=cmd_monitor)
+
+    sp_mon_stop = mon_sub.add_parser("stop", help="⏹️ Stop monitoring daemon")
+    sp_mon_stop.set_defaults(func=cmd_monitor)
+
+    # query commands
+    sp_query = sub.add_parser("query", help="💬 Query running models for AI responses")
+    query_sub = sp_query.add_subparsers(dest="subcommand", required=True, help="Query commands")
+
+    sp_query_complete = query_sub.add_parser("complete",
+        help="🤖 Get text completion (example: query complete phi3 'Write a story about')")
+    sp_query_complete.add_argument("model_name", help="Name of running model (e.g., phi3)")
+    sp_query_complete.add_argument("prompt", help="Text prompt to complete")
+    sp_query_complete.add_argument("--max-tokens", type=int, default=512, help="Max response length (default: 512)")
+    sp_query_complete.add_argument("--temperature", type=float, default=0.7, help="Creativity level 0.0-2.0 (default: 0.7)")
+    sp_query_complete.add_argument("--stream", action="store_true", help="Stream response word-by-word")
+    sp_query_complete.add_argument("--timeout", type=float, default=30.0, help="Request timeout seconds")
     sp_query_complete.set_defaults(func=cmd_query)
 
-    sp_query_chat = query_sub.add_parser("chat", help="Chat with a model using conversation format")
-    sp_query_chat.add_argument("model_name", help="Name of the model to query")
-    sp_query_chat.add_argument("--message", "-m", action="append", help="Add message in format 'role:content' (e.g., 'user:Hello')")
-    sp_query_chat.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
-    sp_query_chat.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
-    sp_query_chat.add_argument("--stream", action="store_true", help="Stream the response")
-    sp_query_chat.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_query_chat = query_sub.add_parser("chat",
+        help="💬 Chat conversation (example: query chat phi3 -m 'user:Hello!' -m 'assistant:Hi there!' -m 'user:How are you?')")
+    sp_query_chat.add_argument("model_name", help="Name of running model (e.g., phi3)")
+    sp_query_chat.add_argument("--message", "-m", action="append",
+        help="Add message: 'user:Hello' or 'system:You are helpful' or 'assistant:Hi!'")
+    sp_query_chat.add_argument("--max-tokens", type=int, default=512, help="Max response length")
+    sp_query_chat.add_argument("--temperature", type=float, default=0.7, help="Creativity level 0.0-2.0")
+    sp_query_chat.add_argument("--stream", action="store_true", help="Stream response")
+    sp_query_chat.add_argument("--timeout", type=float, default=30.0, help="Request timeout seconds")
     sp_query_chat.set_defaults(func=cmd_query)
 
-    sp_query_list = query_sub.add_parser("list", help="List available models")
+    sp_query_list = query_sub.add_parser("list", help="📋 List currently running models")
     sp_query_list.set_defaults(func=cmd_query)
 
     return p
@@ -457,6 +501,7 @@ def _gather_status(cfg: Dict[str, Any]) -> list:
             "version": health.get("version"),
             "mode": mode,
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
+            "health_state": health.get("health_state", "down"),  # Enhanced health state
         }
         out.append(entry)
     return out
@@ -578,6 +623,98 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
             started += 1
     print(f"ensure-running: started {started} model(s)")
     return 0
+
+
+def cmd_monitor(args: argparse.Namespace) -> int:
+    from .monitor import get_monitor
+    monitor = get_monitor()
+    sub = args.subcommand
+
+    if sub == "track":
+        try:
+            # Verify model exists in config
+            cfg = load_config()
+            models = cfg.get("models", [])
+            if not any(m.get("name") == args.model_name for m in models):
+                print(f"error: model '{args.model_name}' not found in configuration", file=sys.stderr)
+                print("Available models:", ", ".join(m.get("name", "") for m in models), file=sys.stderr)
+                return 2
+
+            monitor.track_model(args.model_name)
+            print(f"Now tracking '{args.model_name}' for auto-restart")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "untrack":
+        try:
+            monitor.untrack_model(args.model_name)
+            print(f"Stopped tracking '{args.model_name}'")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "status":
+        try:
+            status = monitor.get_monitoring_status()
+            print(f"Monitor Status: {'RUNNING' if status['running'] else 'STOPPED'}")
+            print(f"Check Interval: {status['check_interval']}s")
+            print(f"State Directory: {status['state_dir']}")
+            print()
+
+            tracked = status["tracked_models"]
+            if not tracked:
+                print("No models currently tracked for auto-restart")
+                return 0
+
+            print("Tracked Models:")
+            if not args.detailed:
+                for model in tracked:
+                    print(f"  - {model}")
+            else:
+                cfg = load_config()
+                print(f"{'Model':<12} {'Health':<10} {'Process':<10} {'Port':<6} {'Latency':<8} {'Status'}")
+                print("-" * 65)
+
+                for model in tracked:
+                    model_status = monitor.get_model_status(model, cfg)
+                    health = model_status.get("health_state", "unknown")
+                    process = model_status.get("process_state", "unknown")
+                    port = model_status.get("port", "?")
+                    latency = model_status.get("latency_ms", 0)
+                    http_status = model_status.get("http_status", "")
+
+                    status_str = f"HTTP {http_status}" if http_status else ""
+                    print(f"{model:<12} {health:<10} {process:<10} {port:<6} {latency:<8} {status_str}")
+
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "start":
+        try:
+            monitor.start_monitoring()
+            print("Model monitoring daemon started")
+            print("Use 'llamacpp-manager monitor status' to check status")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "stop":
+        try:
+            monitor.stop_monitoring()
+            print("Model monitoring daemon stopped")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    print("unknown monitor subcommand", file=sys.stderr)
+    return 2
 
 
 def cmd_query(args: argparse.Namespace) -> int:

@@ -1,0 +1,17 @@
+{
+  "": {
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/master.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuBarUITests.swift": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuBarUITests.swiftdeps"
+  },
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Tests/UI/MenuInteractionTests.swift": {
+    "dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.d",
+    "object": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.swift.o",
+    "swiftmodule": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/.build/arm64-apple-macosx/debug/llamacpp_guiUITests.build/MenuInteractionTests.swiftdeps"
+  }
+}
