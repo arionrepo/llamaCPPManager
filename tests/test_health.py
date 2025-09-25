@@ -7,7 +7,7 @@ from llamacpp_manager.health import check_endpoint
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
-        body = b"{\n  \"object\": \"list\",\n  \"data\": [],\n  \"server\": \"llama.cpp test\",\n  \"version\": \"test-1\"\n}\n"
+        body = b"{\"object\":\"list\",\"data\":[],\"server\":\"llama.cpp test\",\"version\":\"test-1\",\"status\":\"ok\"}"
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
