@@ -89,7 +89,7 @@ infrastructure:
     binary_path: /opt/homebrew/bin/cloudflared
     config_path: ~/.cloudflared/config.yml
     working_dir: ~/.cloudflared
-    args: ["tunnel", "run", "llamacpp-tunnel"]
+    args: ["tunnel", "run", "lisLaptop"]
     env: {}
     autostart: true
     health_check:
@@ -106,26 +106,29 @@ infrastructure:
   llm_controller:
     enabled: true
     type: http_service
-    binary_path: ~/llms/bin/llm-controller
-    config_path: ~/llms/config/controller.yml
+    binary_path: ~/llms/controller.sh
+    config_path: ~/llms/controller/app.py  # FastAPI app location (for reference)
     working_dir: ~/llms
-    args: ["--config", "controller.yml"]
+    args: ["start"]
     env:
-      PORT: "8080"
-      LOG_LEVEL: "info"
+      LLM_CTRL_KEY: "choose-a-shared-key"  # API key for auth
     autostart: true
     health_check:
       type: http
-      endpoint: http://localhost:8080/health
+      endpoint: http://127.0.0.1:8090/status
       interval_seconds: 30
       timeout_ms: 5000
       expected_status: 200
+      headers:
+        X-API-Key: "choose-a-shared-key"
     restart_policy:
       enabled: true
       max_retries: 3
       backoff_seconds: 10
       backoff_multiplier: 2.0
       health_check_failures_threshold: 3
+    # Note: controller.sh has its own auto-restart logic
+    # llamaCPPManager supervision is additional layer
 
 # Global monitoring settings
 monitoring:
