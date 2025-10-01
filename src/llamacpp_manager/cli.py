@@ -14,6 +14,8 @@ from .config import (
     remove_model,
     save_config,
     update_model,
+    list_infrastructure_components,
+    get_infrastructure_component,
 )
 from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive, port_in_use
 from .process import start_process, stop_process, build_argv
@@ -21,6 +23,7 @@ from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 from .discovery import find_llama_processes
 from .query import query_model_completion, query_model_chat, list_available_models, ModelQueryError
+from . import infrastructure
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -168,6 +171,187 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_infra(args: argparse.Namespace) -> int:
+    """
+    Handle infrastructure component management commands.
+
+    Business Purpose: Provides unified control over infrastructure components
+    (cloudflared tunnel and LLM controller) through wrapping existing management scripts.
+    """
+    cfg = load_config()
+    sub = args.subcommand
+
+    if sub == "list":
+        components = list_infrastructure_components(cfg)
+        if args.json:
+            print(to_json(components))
+        else:
+            print("Infrastructure Components:")
+            for name, comp in components.items():
+                enabled = "enabled" if comp.get("enabled", True) else "disabled"
+                comp_type = comp.get("type", "unknown")
+                print(f"  {name} ({comp_type}) - {enabled}")
+                if comp_type == "script_managed":
+                    script = comp.get("management_script", "N/A")
+                    print(f"    Management script: {script}")
+                elif comp_type == "launchd_managed":
+                    label = comp.get("launchd_label", "N/A")
+                    installer = comp.get("installer_script", "N/A")
+                    print(f"    Launchd label: {label}")
+                    print(f"    Installer script: {installer}")
+        return 0
+
+    if sub == "start":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items() if comp.get("enabled", True)]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Starting {name}...")
+            success, msg = infrastructure.start_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: {msg}")
+            else:
+                print(f"  ✗ {name}: {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "stop":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items()]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Stopping {name}...")
+            success, msg = infrastructure.stop_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: {msg}")
+            else:
+                print(f"  ✗ {name}: {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "restart":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items() if comp.get("enabled", True)]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Restarting {name}...")
+            # Stop first
+            success, msg = infrastructure.stop_infrastructure_component(comp)
+            if not success:
+                print(f"  Warning during stop: {msg}", file=sys.stderr)
+
+            # Brief delay
+            import time
+            time.sleep(2)
+
+            # Start
+            success, msg = infrastructure.start_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: restarted - {msg}")
+            else:
+                print(f"  ✗ {name}: failed to restart - {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "status":
+        components = list_infrastructure_components(cfg)
+        statuses = []
+
+        for name, comp in components.items():
+            running, status_msg = infrastructure.get_infrastructure_status(comp)
+            statuses.append({
+                "name": name,
+                "type": comp.get("type", "unknown"),
+                "enabled": comp.get("enabled", True),
+                "running": running,
+                "status": status_msg
+            })
+
+        if args.json:
+            print(to_json({"infrastructure": statuses}))
+        else:
+            print("Infrastructure Component Status:")
+            for s in statuses:
+                indicator = "✓" if s["running"] else "✗"
+                enabled_str = "" if s["enabled"] else " (disabled)"
+                print(f"  {indicator} {s['name']}{enabled_str}: {s['status']}")
+        return 0
+
+    if sub == "logs":
+        component_name = args.component
+        comp = get_infrastructure_component(cfg, component_name)
+        if not comp:
+            print(f"error: infrastructure component '{component_name}' not found", file=sys.stderr)
+            return 2
+
+        log_type = "err" if args.stderr else "out"
+        log_path = infrastructure.get_log_path(comp, log_type)
+
+        if not log_path:
+            print(f"error: no log directory configured for {component_name}", file=sys.stderr)
+            return 2
+
+        if not Path(log_path).exists():
+            print(f"warning: log file not found: {log_path}", file=sys.stderr)
+            return 1
+
+        if args.tail:
+            # Stream logs
+            try:
+                import subprocess
+                subprocess.run(["tail", "-f", log_path])
+            except KeyboardInterrupt:
+                print("\nStopped tailing logs")
+            return 0
+        else:
+            # Show last 50 lines
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["tail", "-n", "50", log_path],
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+                return 0
+            except Exception as e:
+                print(f"error: failed to read logs: {e}", file=sys.stderr)
+                return 2
+
+    print("unknown infra subcommand", file=sys.stderr)
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="llamacpp-manager",
@@ -237,6 +421,36 @@ Examples:
     sp_cfg_mig.add_argument("--move", action="store_true", help="Move instead of copy (removes source)")
     sp_cfg_mig.add_argument("--force", action="store_true", help="Backup and overwrite destination if it exists")
     sp_cfg_mig.set_defaults(func=cmd_config)
+
+    # infra group - infrastructure management
+    sp_infra = sub.add_parser("infra", help="🏗️  Manage infrastructure components (cloudflared, controller)")
+    infra_sub = sp_infra.add_subparsers(dest="subcommand", required=True, help="Infrastructure commands")
+
+    sp_infra_list = infra_sub.add_parser("list", help="📋 List configured infrastructure components")
+    sp_infra_list.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_infra_list.set_defaults(func=cmd_infra)
+
+    sp_infra_start = infra_sub.add_parser("start", help="▶️  Start infrastructure component(s)")
+    sp_infra_start.add_argument("target", help="Component name (cloudflared, llm_controller) or 'all'")
+    sp_infra_start.set_defaults(func=cmd_infra)
+
+    sp_infra_stop = infra_sub.add_parser("stop", help="⏹️  Stop infrastructure component(s)")
+    sp_infra_stop.add_argument("target", help="Component name or 'all'")
+    sp_infra_stop.set_defaults(func=cmd_infra)
+
+    sp_infra_restart = infra_sub.add_parser("restart", help="🔄 Restart infrastructure component(s)")
+    sp_infra_restart.add_argument("target", help="Component name or 'all'")
+    sp_infra_restart.set_defaults(func=cmd_infra)
+
+    sp_infra_status = infra_sub.add_parser("status", help="📊 Show infrastructure component status")
+    sp_infra_status.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_infra_status.set_defaults(func=cmd_infra)
+
+    sp_infra_logs = infra_sub.add_parser("logs", help="📜 View logs for infrastructure component")
+    sp_infra_logs.add_argument("component", help="Component name (cloudflared, llm_controller)")
+    sp_infra_logs.add_argument("--tail", action="store_true", help="Follow log output (like tail -f)")
+    sp_infra_logs.add_argument("--stderr", action="store_true", help="Show stderr instead of stdout")
+    sp_infra_logs.set_defaults(func=cmd_infra)
 
     # start/stop/restart commands
     sp_start = sub.add_parser("start", help="▶️  Start model(s) - makes them available at http://localhost:PORT")

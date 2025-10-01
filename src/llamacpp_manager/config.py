@@ -7,6 +7,9 @@ from .utils import app_support_dir, config_path, logs_dir, ensure_dir, read_yaml
 
 
 DEFAULT_LLAMA_SERVER_PATH = "/opt/homebrew/bin/llama-server"
+DEFAULT_CLOUDFLARED_PATH = "/opt/homebrew/bin/cloudflared"
+DEFAULT_CONTROLLER_SCRIPT = "~/llms/controller.sh"
+DEFAULT_CLOUDFLARED_INSTALLER = "~/llms/install_cloudflared_launchagent.sh"
 
 
 @dataclass
@@ -29,12 +32,82 @@ class ModelSpec:
         return d
 
 
+@dataclass
+class InfrastructureComponentSpec:
+    """
+    Represents infrastructure component configuration.
+
+    Business Purpose: Encapsulates settings for infrastructure components
+    (cloudflared tunnel, LLM controller) that are managed via external scripts.
+    """
+    name: str
+    enabled: bool
+    type: str  # "launchd_managed" or "script_managed"
+    management_script: Optional[str] = None
+    installer_script: Optional[str] = None
+    launchd_label: Optional[str] = None
+    log_dir: Optional[str] = None
+    health_check: Optional[Dict[str, Any]] = None
+    autostart: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        # Clean up None values for YAML
+        return {k: v for k, v in d.items() if v is not None}
+
+
+def default_infrastructure_config() -> Dict[str, Any]:
+    """
+    Return default infrastructure configuration.
+
+    Business Purpose: Provides sensible defaults for infrastructure components
+    based on the user's actual setup with controller.sh and cloudflared.
+    """
+    home = str(Path.home())
+    return {
+        "cloudflared": {
+            "enabled": True,
+            "type": "launchd_managed",
+            "launchd_label": "llms.tunnel",
+            "installer_script": f"{home}/llms/install_cloudflared_launchagent.sh",
+            "log_dir": f"{home}/llms/logs",
+            "health_check": {
+                "type": "launchd_process",
+                "interval_seconds": 30
+            },
+            "autostart": True
+        },
+        "llm_controller": {
+            "enabled": True,
+            "type": "script_managed",
+            "management_script": f"{home}/llms/controller.sh",
+            "log_dir": f"{home}/llms/logs",
+            "health_check": {
+                "type": "http",
+                "endpoint": "http://127.0.0.1:8090/status",
+                "interval_seconds": 30,
+                "timeout_ms": 5000,
+                "headers": {
+                    "X-API-Key": "choose-a-shared-key"
+                }
+            },
+            "autostart": True
+        }
+    }
+
+
 def default_config() -> Dict[str, Any]:
     return {
         "llama_server_path": DEFAULT_LLAMA_SERVER_PATH,
         "log_dir": str(logs_dir()),
         "timeout_ms": 2000,
         "models": [],
+        "infrastructure": default_infrastructure_config(),
+        "monitoring": {
+            "enabled": True,
+            "interval_seconds": 30,
+            "alert_on_failure": True
+        }
     }
 
 
@@ -47,6 +120,8 @@ def load_config() -> Dict[str, Any]:
     for k, v in default_config().items():
         cfg.setdefault(k, v)
     cfg.setdefault("models", [])
+    cfg.setdefault("infrastructure", default_infrastructure_config())
+    cfg.setdefault("monitoring", {"enabled": True, "interval_seconds": 30, "alert_on_failure": True})
     return cfg
 
 
@@ -135,3 +210,48 @@ def remove_model(cfg: Dict[str, Any], name: str) -> bool:
             del models[i]
             return True
     return False
+
+
+# Infrastructure component management functions
+
+def list_infrastructure_components(cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    List all infrastructure components from configuration.
+
+    Business Purpose: Provides access to infrastructure component definitions
+    for display, management, and health monitoring.
+
+    Args:
+        cfg: Full configuration dictionary
+
+    Returns:
+        Dictionary mapping component name to component configuration
+
+    Example:
+        components = list_infrastructure_components(config)
+        cloudflared = components.get("cloudflared")
+    """
+    return cfg.get("infrastructure", {})
+
+
+def get_infrastructure_component(cfg: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific infrastructure component configuration.
+
+    Business Purpose: Retrieves settings for a specific infrastructure
+    component to enable start/stop/health check operations.
+
+    Args:
+        cfg: Full configuration dictionary
+        name: Component name (e.g., "cloudflared", "llm_controller")
+
+    Returns:
+        Component configuration dictionary or None if not found
+
+    Example:
+        component = get_infrastructure_component(config, "cloudflared")
+        if component and component.get("enabled"):
+            # Start the component
+    """
+    infra = cfg.get("infrastructure", {})
+    return infra.get(name)
