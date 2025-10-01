@@ -34,7 +34,9 @@ def test_status_json_with_health_and_pid(tmp_path, monkeypatch, capsys):
     assert main(["status", "--json"]) == 0
     out = capsys.readouterr().out
     data = json.loads(out)
-    assert isinstance(data, list) and data and data[0]["name"] == "m1"
-    assert data[0]["up"] is True
-    assert data[0]["pid"] == 4242
-    assert data[0]["mode"] == "direct"
+    assert isinstance(data, dict) and "models" in data and data["models"]
+    models = data["models"]
+    assert models[0]["name"] == "m1"
+    assert models[0]["up"] is True
+    assert models[0]["pid"] == 4242
+    assert models[0]["mode"] == "direct"

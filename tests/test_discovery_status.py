@@ -28,6 +28,6 @@ def test_status_uses_process_discovery_when_no_pid(tmp_path, monkeypatch, capsys
 
     assert main(["status", "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert data[0]["pid"] == 1234
-    assert data[0]["mode"] == "direct"
+    assert data["models"][0]["pid"] == 1234
+    assert data["models"][0]["mode"] == "direct"
 

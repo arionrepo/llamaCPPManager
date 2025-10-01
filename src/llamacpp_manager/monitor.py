@@ -1,5 +1,5 @@
 """
-Advanced model monitoring and crash detection.
+Advanced model and infrastructure monitoring with crash detection and auto-restart.
 Improves on the original ~/llms/bin/llm_monitor functionality.
 """
 
@@ -12,25 +12,28 @@ import threading
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Any
 
-from .config import load_config
-from .health import check_endpoint
+from .config import load_config, list_infrastructure_components
+from .health import check_endpoint, check_infrastructure_component_health
 from .utils import logs_dir, read_pid, process_alive
 from .process import start_process
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart
+from . import infrastructure
 
 logger = logging.getLogger(__name__)
 
 
 class ModelMonitor:
-    """Enhanced model monitoring with crash detection and auto-restart."""
+    """Enhanced model and infrastructure monitoring with crash detection and auto-restart."""
 
     def __init__(self, check_interval: int = 10):
         self.check_interval = check_interval
         self.running = False
         self.tracked_models: Set[str] = set()
+        self.infrastructure_stats: Dict[str, Dict[str, Any]] = {}  # Track failures and restarts
         self.state_dir = Path.home() / ".llamacpp-manager" / "monitor-state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._load_tracked_models()
+        self._load_infrastructure_stats()
 
     def _load_tracked_models(self):
         """Load previously tracked models from state files."""
@@ -171,8 +174,119 @@ class ModelMonitor:
             logger.error(f"Failed to restart '{model_name}': {e}")
             return False
 
+    def _load_infrastructure_stats(self):
+        """Load infrastructure monitoring stats from state file."""
+        stats_file = self.state_dir / "infrastructure_stats.json"
+        if stats_file.exists():
+            try:
+                with open(stats_file, "r") as f:
+                    self.infrastructure_stats = json.load(f)
+                logger.info(f"Loaded infrastructure stats for {len(self.infrastructure_stats)} components")
+            except Exception as e:
+                logger.warning(f"Failed to load infrastructure stats: {e}")
+                self.infrastructure_stats = {}
+
+    def _save_infrastructure_stats(self):
+        """Save infrastructure monitoring stats to state file."""
+        stats_file = self.state_dir / "infrastructure_stats.json"
+        try:
+            with open(stats_file, "w") as f:
+                json.dump(self.infrastructure_stats, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save infrastructure stats: {e}")
+
+    def check_infrastructure_health(self, name: str, component: Dict[str, Any], config: Dict[str, Any]) -> bool:
+        """
+        Check infrastructure component health and restart if needed.
+
+        Returns True if restart was attempted.
+        """
+        # Initialize stats if not exists
+        if name not in self.infrastructure_stats:
+            self.infrastructure_stats[name] = {
+                "consecutive_failures": 0,
+                "total_restarts": 0,
+                "last_success_time": None,
+                "last_failure_time": None,
+                "last_restart_time": None
+            }
+
+        stats = self.infrastructure_stats[name]
+        restart_policy = component.get("restart_policy", {})
+
+        # Check health
+        health = check_infrastructure_component_health(component)
+
+        if health["healthy"]:
+            # Component healthy
+            if stats["consecutive_failures"] > 0:
+                logger.info(f"Infrastructure '{name}' recovered (was failing {stats['consecutive_failures']} times)")
+            stats["consecutive_failures"] = 0
+            stats["last_success_time"] = time.time()
+            self._save_infrastructure_stats()
+            return False
+
+        # Component unhealthy
+        stats["consecutive_failures"] += 1
+        stats["last_failure_time"] = time.time()
+
+        # Check if restart is enabled
+        if not restart_policy.get("enabled", True):
+            logger.debug(f"Infrastructure '{name}' unhealthy but restart disabled: {health['status']}")
+            self._save_infrastructure_stats()
+            return False
+
+        # Check failure threshold
+        failure_threshold = restart_policy.get("health_check_failures_threshold", 3)
+        if stats["consecutive_failures"] < failure_threshold:
+            logger.debug(f"Infrastructure '{name}' failing ({stats['consecutive_failures']}/{failure_threshold}): {health['status']}")
+            self._save_infrastructure_stats()
+            return False
+
+        # Check max retries
+        max_retries = restart_policy.get("max_retries", 3)
+        if stats["total_restarts"] >= max_retries:
+            logger.error(f"Infrastructure '{name}' FAILED - exhausted {max_retries} restart attempts")
+            self._save_infrastructure_stats()
+            return False
+
+        # Check backoff period
+        backoff_seconds = restart_policy.get("backoff_seconds", 10)
+        if stats["last_restart_time"]:
+            time_since_restart = time.time() - stats["last_restart_time"]
+            if time_since_restart < backoff_seconds:
+                remaining = int(backoff_seconds - time_since_restart)
+                logger.debug(f"Infrastructure '{name}' in backoff period ({remaining}s remaining)")
+                return False
+
+        # Attempt restart
+        logger.warning(f"Attempting restart of infrastructure '{name}' (attempt {stats['total_restarts'] + 1}/{max_retries})")
+
+        # Stop first
+        success, msg = infrastructure.stop_infrastructure_component(component)
+        if not success:
+            logger.warning(f"Stop '{name}' warning: {msg}")
+
+        # Brief delay
+        time.sleep(2)
+
+        # Start
+        success, msg = infrastructure.start_infrastructure_component(component)
+
+        stats["last_restart_time"] = time.time()
+        stats["total_restarts"] += 1
+
+        if success:
+            logger.info(f"Successfully restarted infrastructure '{name}'")
+            stats["consecutive_failures"] = 0
+        else:
+            logger.error(f"Failed to restart infrastructure '{name}': {msg}")
+
+        self._save_infrastructure_stats()
+        return True
+
     def monitor_loop(self):
-        """Main monitoring loop - checks all tracked models periodically."""
+        """Main monitoring loop - checks all tracked models and enabled infrastructure periodically."""
         logger.info(f"Starting monitor loop (check interval: {self.check_interval}s)")
 
         while self.running:
@@ -180,12 +294,22 @@ class ModelMonitor:
                 config = load_config()
                 restart_count = 0
 
+                # Check models
                 for model_name in list(self.tracked_models):
                     if self.check_model_health(model_name, config):
                         restart_count += 1
 
+                # Check infrastructure (only if monitoring enabled)
+                monitoring_config = config.get("monitoring", {})
+                if monitoring_config.get("enabled", True):
+                    components = list_infrastructure_components(config)
+                    for name, component in components.items():
+                        if component.get("enabled", True):
+                            if self.check_infrastructure_health(name, component, config):
+                                restart_count += 1
+
                 if restart_count > 0:
-                    logger.info(f"Monitor cycle complete - restarted {restart_count} model(s)")
+                    logger.info(f"Monitor cycle complete - restarted {restart_count} component(s)")
 
             except Exception as e:
                 logger.error(f"Monitor loop error: {e}")
@@ -221,9 +345,15 @@ class ModelMonitor:
 
     def get_monitoring_status(self) -> Dict[str, Any]:
         """Get current monitoring status."""
+        total_infrastructure_restarts = sum(s.get("total_restarts", 0) for s in self.infrastructure_stats.values())
+        total_infrastructure_failures = sum(s.get("consecutive_failures", 0) for s in self.infrastructure_stats.values())
+
         return {
             "running": self.running,
             "tracked_models": list(self.tracked_models),
+            "infrastructure_monitored": list(self.infrastructure_stats.keys()),
+            "infrastructure_total_restarts": total_infrastructure_restarts,
+            "infrastructure_total_failures": total_infrastructure_failures,
             "check_interval": self.check_interval,
             "state_dir": str(self.state_dir),
         }

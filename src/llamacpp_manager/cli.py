@@ -670,10 +670,22 @@ def cmd_restart(args: argparse.Namespace) -> int:
     return max(r1, r2)
 
 
-def _gather_status(cfg: Dict[str, Any]) -> list:
+def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Gather status for models and infrastructure components.
+
+    Business Purpose: Provides unified status view across all managed
+    components for operators to assess system health quickly.
+
+    Returns:
+        Dict with 'models' and 'infrastructure' keys containing status lists
+    """
     timeout_ms = int(cfg.get("timeout_ms", 2000))
     procs = find_llama_processes()
-    out = []
+    models_status = []
+    infrastructure_status = []
+
+    # Gather model status
     for m in cfg.get("models", []):
         name = m.get("name")
         host = m.get("host", "127.0.0.1")
@@ -717,27 +729,74 @@ def _gather_status(cfg: Dict[str, Any]) -> list:
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),  # Enhanced health state
         }
-        out.append(entry)
-    return out
+        models_status.append(entry)
+
+    # Gather infrastructure status
+    from .health import check_infrastructure_component_health
+    components = list_infrastructure_components(cfg)
+    for name, comp in components.items():
+        running, status_msg = infrastructure.get_infrastructure_status(comp)
+        health = check_infrastructure_component_health(comp)
+
+        entry = {
+            "name": name,
+            "type": comp.get("type", "unknown"),
+            "enabled": comp.get("enabled", True),
+            "running": running,
+            "healthy": health.get("healthy", False),
+            "status": status_msg,
+            "health_status": health.get("status", "unknown"),
+            "latency_ms": health.get("latency_ms", 0),
+            "details": health.get("details", {})
+        }
+        infrastructure_status.append(entry)
+
+    return {
+        "models": models_status,
+        "infrastructure": infrastructure_status
+    }
 
 
-def _print_table(rows: list) -> None:
-    headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms"]
-    print(" ".join(f"{h:>12}" for h in headers))
-    for r in rows:
-        vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms")]
-        print(" ".join(f"{str(v):>12}" for v in vals))
+def _print_table(status_data: Dict[str, Any]) -> None:
+    """
+    Print formatted status table for models and infrastructure.
+
+    Business Purpose: Provides human-readable status output for terminal use.
+    """
+    # Print infrastructure status
+    infra = status_data.get("infrastructure", [])
+    if infra:
+        print("\nInfrastructure Components:")
+        print("-" * 80)
+        for comp in infra:
+            indicator = "✓" if comp.get("healthy", False) else "✗"
+            enabled = "" if comp.get("enabled", True) else " (disabled)"
+            latency = comp.get("latency_ms", 0)
+            latency_str = f"{latency}ms" if latency > 0 else ""
+            print(f"  {indicator} {comp['name']}{enabled:15s} {comp.get('status', 'unknown'):30s} {latency_str}")
+        print()
+
+    # Print model status
+    models = status_data.get("models", [])
+    if models:
+        print("Models:")
+        print("-" * 80)
+        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms"]
+        print(" ".join(f"{h:>12}" for h in headers))
+        for r in models:
+            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms")]
+            print(" ".join(f"{str(v):>12}" for v in vals))
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config()
     import time
     while True:
-        rows = _gather_status(cfg)
+        status_data = _gather_status(cfg)
         if args.json:
-            print(to_json(rows))
+            print(to_json(status_data))
         else:
-            _print_table(rows)
+            _print_table(status_data)
         if not args.watch:
             break
         try:
