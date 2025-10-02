@@ -9,6 +9,9 @@ venv/
 # macOS
 .DS_Store
 
+# Swift build artifacts
+gui-macos/.build/
+
 # Logs
 logs/
 *.log
