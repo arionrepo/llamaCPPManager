@@ -14,8 +14,10 @@ See `docs/requirements.md` for the detailed requirements backlog.
 
 ## Quick Start (M1 - CLI + Config)
 
+### Installation
+
 - Install dependencies for development:
-  - Python 3.11+ and `pipx` recommended: `pipx install --suffix=@local .` (from repo root)
+  - Python 3.11+ and `pipx` recommended: `pipx install .` (from repo root)
   - Or use a venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -e .`
 
 - Initialize config and directories (default locations):
@@ -24,6 +26,29 @@ See `docs/requirements.md` for the detailed requirements backlog.
 - Use custom locations (kept outside any repo):
   - `llamacpp-manager --config-dir ~/Configs/llamacpp --log-dir ~/Logs/llamacpp init`
   - These flags work with all commands and keep proprietary paths out of the repo.
+
+### Updating
+
+To update both CLI and GUI from the repo:
+
+```bash
+./update.sh
+```
+
+This script:
+- Updates CLI via pipx (preserves your config)
+- Optionally rebuilds and installs GUI app
+- Provides instructions for restarting monitoring daemon
+
+Or update manually:
+```bash
+# CLI only
+pipx install --force .
+
+# GUI only (from gui-macos directory)
+cd gui-macos && ./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+```
 
 ## Usage Examples
 
@@ -156,10 +181,42 @@ The monitoring daemon runs in the background and automatically restarts tracked 
 
 ### MCP Server
 
-- Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality as tools:
-  - `llamacpp-mcp-server`
-  - Available tools: `list_models`, `start_model`, `stop_model`, `model_status`, `query_completion`, `query_chat`, `add_model`, `remove_model`
-  - Use with MCP clients like Claude Desktop or other MCP-enabled applications
+Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality to AI assistants:
+
+**Quick Start**:
+```bash
+# Start MCP server (stdio protocol)
+llamacpp-mcp-server
+```
+
+**Claude Desktop Configuration** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "llamacpp-manager": {
+      "command": "llamacpp-mcp-server"
+    }
+  }
+}
+```
+
+**Available MCP Tools** (9 total):
+- `list_models` - List all configured models
+- `list_available_models` - List running models only
+- `start_model` - Start a model server
+- `stop_model` - Stop a model server
+- `model_status` - Get detailed health status
+- `query_completion` - Get text completions from models
+- `query_chat` - Have conversations with models
+- `add_model` - Add new model configuration
+- `remove_model` - Remove model configuration
+
+**Example AI Interactions**:
+- "Start my phi3 model and ask it to explain quantum computing"
+- "Which of my models are currently running?"
+- "Add llama3 model from ~/llms/llama3.gguf on port 8084"
+
+**Documentation**: See [MCP Server API Guide](docs/mcp-server-api.md) for complete documentation with examples, workflows, and troubleshooting.
 
 ## Security Notes
 

@@ -26,16 +26,21 @@ Dynamic: requires-python
 Toolkit for managing local `llama-server` instances (from llama.cpp) on macOS.
 
 ## Project Goals
-- Provide a macOS-friendly launcher to start/stop/monitor multiple llama.cpp model services.
-- Offer simple visibility into model status, ports, and logs.
-- Package tooling so it can be launched from the Applications folder with an icon.
+- Provide a macOS-friendly launcher to start/stop/monitor multiple llama.cpp model services
+- Manage supporting infrastructure components (cloudflared tunnel, LLM controller)
+- Offer simple visibility into model and infrastructure status, ports, and logs
+- Automatic health monitoring and crash recovery with configurable retry policies
+- Package tooling so it can be launched from the Applications folder with an icon
+- Auto-start capabilities via launchd for persistent operation
 
 See `docs/requirements.md` for the detailed requirements backlog.
 
 ## Quick Start (M1 - CLI + Config)
 
+### Installation
+
 - Install dependencies for development:
-  - Python 3.11+ and `pipx` recommended: `pipx install --suffix=@local .` (from repo root)
+  - Python 3.11+ and `pipx` recommended: `pipx install .` (from repo root)
   - Or use a venv: `python3 -m venv .venv && . .venv/bin/activate && pip install -e .`
 
 - Initialize config and directories (default locations):
@@ -44,6 +49,29 @@ See `docs/requirements.md` for the detailed requirements backlog.
 - Use custom locations (kept outside any repo):
   - `llamacpp-manager --config-dir ~/Configs/llamacpp --log-dir ~/Logs/llamacpp init`
   - These flags work with all commands and keep proprietary paths out of the repo.
+
+### Updating
+
+To update both CLI and GUI from the repo:
+
+```bash
+./update.sh
+```
+
+This script:
+- Updates CLI via pipx (preserves your config)
+- Optionally rebuilds and installs GUI app
+- Provides instructions for restarting monitoring daemon
+
+Or update manually:
+```bash
+# CLI only
+pipx install --force .
+
+# GUI only (from gui-macos directory)
+cd gui-macos && ./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+```
 
 ## Usage Examples
 
@@ -116,12 +144,102 @@ Notes:
   - `llamacpp-manager query chat model-name --message "system:You are helpful" --message "user:Hello"`
   - `llamacpp-manager query chat model-name --message "user:Hello" --stream`
 
+### Infrastructure Management
+
+**⚠️ Platform: macOS only - Local components on the same machine**
+
+Manage supporting infrastructure components running on your Mac alongside your models.
+
+**Current Scope**: 2 specific local components:
+- `cloudflared` - Cloudflare tunnel (via launchd)
+- `llm_controller` - Local HTTP controller service (http://127.0.0.1:8090)
+
+**Limitations**: Not for remote infrastructure, multi-platform deployments, or cloud services. All components must run on the same macOS machine as llamaCPPManager.
+
+- List configured infrastructure components:
+  - `llamacpp-manager infra list`
+
+- View infrastructure status:
+  - `llamacpp-manager infra status`
+
+- Control individual components:
+  - `llamacpp-manager infra start cloudflared`
+  - `llamacpp-manager infra stop llm_controller`
+  - `llamacpp-manager infra restart cloudflared`
+
+- View component logs:
+  - `llamacpp-manager infra logs llm_controller`
+
+- View combined status (models + infrastructure):
+  - `llamacpp-manager status --json`
+
+Infrastructure components are configured in `config.yaml` under the `infrastructure` section. See `docs/infrastructure-implementation-summary.md` for complete details and limitations.
+
+### Health Monitoring & Auto-Restart
+
+Monitor models and infrastructure components with automatic restart on failure:
+
+- Track a model for auto-restart:
+  - `llamacpp-manager monitor track smollm3`
+
+- Stop tracking a model:
+  - `llamacpp-manager monitor untrack smollm3`
+
+- View monitoring status:
+  - `llamacpp-manager monitor status`
+  - `llamacpp-manager monitor status --detailed`
+
+- Start monitoring daemon:
+  - `llamacpp-manager monitor start`
+
+- Stop monitoring daemon:
+  - `llamacpp-manager monitor stop`
+
+- Install monitoring daemon as launchd agent (auto-start on boot):
+  - `llamacpp-manager monitor launchd install`
+  - `llamacpp-manager monitor launchd status`
+  - `llamacpp-manager monitor launchd uninstall`
+
+The monitoring daemon runs in the background and automatically restarts tracked models and enabled infrastructure components when they crash or become unhealthy. It uses exponential backoff with configurable retry limits.
+
 ### MCP Server
 
-- Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality as tools:
-  - `llamacpp-mcp-server`
-  - Available tools: `list_models`, `start_model`, `stop_model`, `model_status`, `query_completion`, `query_chat`, `add_model`, `remove_model`
-  - Use with MCP clients like Claude Desktop or other MCP-enabled applications
+Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality to AI assistants:
+
+**Quick Start**:
+```bash
+# Start MCP server (stdio protocol)
+llamacpp-mcp-server
+```
+
+**Claude Desktop Configuration** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "llamacpp-manager": {
+      "command": "llamacpp-mcp-server"
+    }
+  }
+}
+```
+
+**Available MCP Tools** (9 total):
+- `list_models` - List all configured models
+- `list_available_models` - List running models only
+- `start_model` - Start a model server
+- `stop_model` - Stop a model server
+- `model_status` - Get detailed health status
+- `query_completion` - Get text completions from models
+- `query_chat` - Have conversations with models
+- `add_model` - Add new model configuration
+- `remove_model` - Remove model configuration
+
+**Example AI Interactions**:
+- "Start my phi3 model and ask it to explain quantum computing"
+- "Which of my models are currently running?"
+- "Add llama3 model from ~/llms/llama3.gguf on port 8084"
+
+**Documentation**: See [MCP Server API Guide](docs/mcp-server-api.md) for complete documentation with examples, workflows, and troubleshooting.
 
 ## Security Notes
 
@@ -141,15 +259,53 @@ See `docs/testing.md` for details on test structure and conventions.
 
 ## GUI (SwiftUI Menu Bar)
 
+### Features
+
+The menu bar GUI provides a visual interface for managing both models and infrastructure:
+
+- **Infrastructure Section**: View and control infrastructure components (cloudflared, llm_controller)
+  - Health indicators (🟢 healthy, 🟠 unhealthy, 🔴 stopped, ⚫ disabled)
+  - Start/Stop/Restart/Logs buttons for each component
+  - Real-time status updates
+
+- **Models Section**: Manage llama.cpp model servers
+  - Health indicators and latency display
+  - Start/Stop/Restart/Chat/Monitor/Logs buttons
+  - Process status and HTTP health check results
+
+- **Global Actions**: Ensure Running, Refresh, Config, CLI access
+- **Auto-polling**: Status updates every 2 seconds
+
+### Building and Running
+
 - Location: `gui-macos/` (Swift Package with an executable target)
-- Build and run tests locally:
+
+- Build app bundle:
+  - `cd gui-macos && ./build_app.sh`
+  - Creates `build/llamaCPP Manager.app` and DMG
+
+- Install to Applications:
+  - `cp -R "build/llamaCPP Manager.app" /Applications/`
+
+- Install GUI auto-start (optional):
+  - `cd gui-macos && ./install_gui_launchagent.sh`
+  - Configures app to launch automatically on login
+
+- Run tests:
   - `make gui-test` (runs `swift test` in `gui-macos/`)
-- Run the GUI from Xcode:
-  - Open `gui-macos/Package.swift` in Xcode and run the `llamacpp-gui` scheme.
-  - The app appears in the menu bar as “llamaCPP”.
-- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it’s on your PATH or at one of:
+
+- Run from Xcode:
+  - Open `gui-macos/Package.swift` in Xcode
+  - Run the `llamacpp-gui` scheme
+  - The app appears in the menu bar as "🧠 llamaCPP"
+
+### Requirements
+
+- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it's on your PATH or at one of:
   - `/opt/homebrew/bin/llamacpp-manager`
   - `/usr/local/bin/llamacpp-manager`
+  - `~/.local/bin/llamacpp-manager`
+
 - To use a custom config/logs location set in the CLI, export:
   - `LLAMACPP_MANAGER_CONFIG_DIR=/path/to/config`
   - `LLAMACPP_MANAGER_LOG_DIR=/path/to/logs`

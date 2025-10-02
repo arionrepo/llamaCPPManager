@@ -12,8 +12,9 @@ A complete guide to managing llama.cpp models across different deployment scenar
 6. [Scenario 3: Kubernetes (Remote Clusters)](#scenario-3-kubernetes-remote-clusters)
 7. [Common Operations](#common-operations)
 8. [GUI Usage](#gui-usage)
-9. [Troubleshooting](#troubleshooting)
-10. [Advanced Configuration](#advanced-configuration)
+9. [MCP Server Integration](#mcp-server-integration)
+10. [Troubleshooting](#troubleshooting)
+11. [Advanced Configuration](#advanced-configuration)
 
 ## Overview
 
@@ -1085,6 +1086,45 @@ $ llamacpp-manager infra logs llm_controller
 [2025-10-02 10:15:31] Controller ready
 ```
 
+### Automatic Hung Process Handling
+
+**✨ New Feature**: Infrastructure commands automatically detect and clear hung processes.
+
+When you start or restart an infrastructure component, llamaCPPManager will:
+1. Check if the component's port is already in use
+2. Identify the PID of any process blocking the port
+3. Attempt graceful termination (SIGTERM)
+4. Force-kill (SIGKILL) if the process doesn't exit
+5. Then start the component normally
+
+**Example with hung process**:
+```bash
+$ llamacpp-manager infra start llm_controller
+Starting llm_controller...
+✓ llm_controller: started: PID 80668
+health: OK (cleared hung process on port 8090: killed hung process 73421)
+```
+
+**Benefits**:
+- ✅ No more "address already in use" errors
+- ✅ GUI start button works even with hung processes
+- ✅ Restart commands are more reliable
+- ✅ No manual `lsof` and `kill` commands needed
+
+**What triggers automatic cleanup**:
+- `llamacpp-manager infra start <component>`
+- `llamacpp-manager infra restart <component>`
+- GUI "Start" button for infrastructure components
+- GUI "Restart" button for infrastructure components
+
+**Manual force-stop**:
+If you need to force-stop without restarting, the stop command also has fallback logic:
+```bash
+# This will use the management script's stop command
+# If that times out or fails, it will force-kill the process on the port
+llamacpp-manager infra stop llm_controller
+```
+
 ---
 
 ## Health Monitoring & Auto-Restart
@@ -1298,6 +1338,197 @@ launchctl list | grep com.llamacpp.manager.gui
 launchctl unload ~/Library/LaunchAgents/com.llamacpp.manager.gui.plist
 rm ~/Library/LaunchAgents/com.llamacpp.manager.gui.plist
 ```
+
+---
+
+## MCP Server Integration
+
+llamaCPPManager includes a Model Context Protocol (MCP) server that exposes all functionality to AI assistants like Claude Desktop, Continue.dev, and other MCP-compatible clients.
+
+### What is MCP?
+
+The Model Context Protocol (MCP) is a standard protocol that allows AI assistants to interact with external tools and services. By running the llamaCPPManager MCP server, AI assistants can:
+
+- Start and stop your local LLM models
+- Query models for completions and chat
+- Manage model configurations
+- Check model health and status
+- All without you having to manually run CLI commands
+
+### Installation & Setup
+
+#### 1. Install llamaCPPManager
+
+The MCP server is included with llamaCPPManager:
+
+```bash
+# Install via pipx (recommended)
+pipx install llamacpp-manager
+
+# Verify MCP server is available
+which llamacpp-mcp-server
+```
+
+#### 2. Configure Your MCP Client
+
+**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "llamacpp-manager": {
+      "command": "llamacpp-mcp-server"
+    }
+  }
+}
+```
+
+**For Continue.dev** (`.continuerc.json`):
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "llamacpp-manager",
+      "command": "llamacpp-mcp-server"
+    }
+  ]
+}
+```
+
+#### 3. Restart Your AI Assistant
+
+After configuring, restart Claude Desktop or Continue.dev to load the MCP server.
+
+### Available MCP Tools
+
+The MCP server provides 9 tools:
+
+| Tool | Purpose | Example Use |
+|------|---------|-------------|
+| `list_models` | List all configured models | "Show me all my models" |
+| `list_available_models` | List running models | "Which models are running?" |
+| `start_model` | Start a model server | "Start the phi3 model" |
+| `stop_model` | Stop a model server | "Stop the llama3 model" |
+| `model_status` | Get detailed status | "What's the status of phi3?" |
+| `query_completion` | Get text completion | "Ask phi3: explain quantum computing" |
+| `query_chat` | Chat with model | "Have a conversation with smollm3" |
+| `add_model` | Add new model config | "Add llama3 at port 8084" |
+| `remove_model` | Remove model config | "Remove the mistral model" |
+
+### Example AI Assistant Interactions
+
+Once configured, you can interact with llamaCPPManager through natural language:
+
+**Example 1: Start and Query a Model**
+```
+You: "Start my phi3 model and ask it to explain machine learning in simple terms"
+
+Claude: [Calls start_model tool, then query_completion tool]
+"I've started phi3 and here's what it says: Machine learning is..."
+```
+
+**Example 2: Check Model Status**
+```
+You: "Which of my models are currently running?"
+
+Claude: [Calls list_available_models tool]
+"You have 2 models running: phi3 on port 8081 and smollm3 on port 8082"
+```
+
+**Example 3: Add New Model**
+```
+You: "Add a new model called llama3 using the file at ~/llms/llama3.gguf on port 8084"
+
+Claude: [Calls add_model tool]
+"I've added llama3 to your configuration at 127.0.0.1:8084"
+```
+
+### Testing the MCP Server
+
+**Using MCP Inspector** (web-based testing tool):
+
+```bash
+# Install MCP Inspector
+npm install -g @modelcontextprotocol/inspector
+
+# Run inspector with llamacpp-manager
+mcp-inspector llamacpp-mcp-server
+```
+
+This opens a web UI where you can test all MCP tools interactively.
+
+**Checking Logs**:
+
+```bash
+# Claude Desktop MCP logs
+tail -f ~/Library/Logs/Claude/mcp-server-llamacpp-manager.log
+```
+
+### Common MCP Workflows
+
+**Workflow 1: Daily Model Management**
+```
+1. "Which models are running?" → Check status
+2. "Stop smollm3" → Free up resources
+3. "Start phi3" → Switch to different model
+4. "Ask phi3: summarize this text..." → Use the model
+```
+
+**Workflow 2: Model Setup**
+```
+1. "Add qwen model from ~/llms/qwen.gguf on port 8085"
+2. "Start qwen"
+3. "What's the status of qwen?"
+4. "Chat with qwen about Python programming"
+```
+
+**Workflow 3: Troubleshooting**
+```
+1. "Show all configured models"
+2. "What's the detailed status of mistral?"
+3. "Restart mistral"
+4. "Check if mistral is responding"
+```
+
+### Advantages of MCP Integration
+
+✅ **Natural Language Control**: Manage models through conversation, not commands
+✅ **Context Aware**: AI assistant can check status before attempting operations
+✅ **Error Handling**: AI can interpret errors and suggest fixes
+✅ **Multi-Step Workflows**: AI can execute complex workflows (add, start, test, query)
+✅ **Learning**: AI learns your model names, ports, and preferences over time
+
+### Troubleshooting MCP
+
+**MCP Server Not Appearing in Claude**:
+```bash
+# 1. Verify command exists
+which llamacpp-mcp-server
+
+# 2. Test manually
+llamacpp-mcp-server
+# (Should start and wait for input - press Ctrl+C to exit)
+
+# 3. Check config path
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+# 4. Restart Claude completely (Quit and reopen)
+```
+
+**Tool Calls Failing**:
+```bash
+# Verify CLI works
+llamacpp-manager status
+
+# Check config exists
+ls -la ~/Library/Application\ Support/llamaCPPManager/config.yaml
+
+# Test a model manually
+llamacpp-manager start phi3
+```
+
+**See Also**: [Complete MCP Server API Documentation](mcp-server-api.md)
 
 ---
 

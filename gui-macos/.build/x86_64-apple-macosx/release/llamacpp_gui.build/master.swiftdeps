@@ -1,6 +1,6 @@
 version: "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)"
 options: "d3f8c5c7e2257968a963dc8d8cd493d16ed015fb27de8a7eb40fc2017836f1ce"
-build_start_time: [1758658038, 532342000]
-build_end_time: [1758658042, 500089000]
+build_start_time: [1759418626, 21679000]
+build_end_time: [1759418629, 722817000]
 inputs:
-  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Sources/App.swift": [1758658026, 502911123]
+  "/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/Sources/App.swift": [1759418612, 906277482]

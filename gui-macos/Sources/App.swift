@@ -39,6 +39,11 @@ struct LlamaCPPManagerApp: App {
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
+                                    if let uptime = infra.uptime, !uptime.isEmpty {
+                                        Text("up \(uptime)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                             .padding(.horizontal, 8)
@@ -91,6 +96,11 @@ struct LlamaCPPManagerApp: App {
                                         .font(.caption)
                                     if let ms = row.latency_ms, ms > 0 {
                                         Text("\(ms) ms")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    if let uptime = row.uptime, !uptime.isEmpty {
+                                        Text("up \(uptime)")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -152,6 +162,7 @@ struct StatusRow: Codable {
     let mode: String?
     let log_path: String?
     let health_state: String?
+    let uptime: String?
 }
 
 struct InfrastructureRow: Codable {
@@ -164,9 +175,10 @@ struct InfrastructureRow: Codable {
     let health_status: String
     let latency_ms: Int
     let details: [String: AnyCodable]?
+    let uptime: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, type, enabled, running, healthy, status, health_status, latency_ms, details
+        case name, type, enabled, running, healthy, status, health_status, latency_ms, details, uptime
     }
 }
 
@@ -245,7 +257,7 @@ final class StatusViewModel: ObservableObject {
     func ensureRunning() { Task { _ = try? await service.run(["ensure-running"]) ; refresh() } }
 
     func tailLogs(name: String) {
-        // Open in Console or tail -F in Terminal
+        // Open log file with system default app (Console.app on macOS)
         guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
         let url = URL(fileURLWithPath: path)
         NSWorkspace.shared.open(url)
@@ -275,14 +287,24 @@ final class StatusViewModel: ObservableObject {
     }
 
     func infraLogs(name: String) {
-        Task {
-            do {
-                let logs = try await service.infrastructureLogs(name)
-                showLogsWindow(title: "\(name) Logs", content: logs)
-            } catch {
-                // Handle error
-            }
+        // Open infrastructure log file with system default app (Console.app on macOS)
+        // Infrastructure logs are in ~/llms/logs/
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let logDir = homeDir.appendingPathComponent("llms/logs")
+
+        // Determine log filename based on component
+        // cloudflared writes to stderr, most others to stdout
+        let filename: String
+        if name == "cloudflared" {
+            filename = "cloudflared.err.log"  // cloudflared uses stderr
+        } else if name.contains("controller") {
+            filename = "controller.out.log"
+        } else {
+            filename = "\(name).out.log"
         }
+
+        let logURL = logDir.appendingPathComponent(filename)
+        NSWorkspace.shared.open(logURL)
     }
 
     func healthColorInfra(for row: InfrastructureRow) -> Color {
@@ -500,7 +522,12 @@ final class StatusViewModel: ObservableObject {
 
 final class CLIService {
     // Configure preferred executable lookup or rely on PATH
-    private let executableNames = ["llamacpp-manager", "/usr/local/bin/llamacpp-manager", "/opt/homebrew/bin/llamacpp-manager"]
+    private let executableNames = [
+        "\(NSHomeDirectory())/.local/bin/llamacpp-manager",
+        "/usr/local/bin/llamacpp-manager",
+        "/opt/homebrew/bin/llamacpp-manager",
+        "llamacpp-manager"
+    ]
 
     func execURL() -> URL? {
         for name in executableNames {

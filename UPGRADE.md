@@ -2,6 +2,50 @@
 
 Guide for upgrading llamaCPPManager safely while preserving your configuration.
 
+## Quick Upgrade (Recommended)
+
+From the repo root, run:
+
+```bash
+./update.sh
+```
+
+This interactive script will:
+1. Update CLI via pipx (your config is preserved)
+2. Ask if you want to rebuild and install the GUI
+3. Ask if you want to launch the GUI
+4. Show post-upgrade instructions (like restarting monitoring daemon)
+
+## Manual Upgrade
+
+### CLI Only
+
+```bash
+# If installed via pipx (recommended)
+pipx install --force .
+
+# Or if using venv
+cd /path/to/llamaCPPManager
+source .venv/bin/activate
+pip install -e .
+```
+
+### GUI Only
+
+```bash
+cd gui-macos
+./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+```
+
+### Both CLI + GUI
+
+```bash
+pipx install --force .
+cd gui-macos && ./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+```
+
 ## Configuration Preservation
 
 **✅ Your model configuration is always preserved during upgrades.**
@@ -10,7 +54,7 @@ llamaCPPManager stores configuration separately from the code:
 - **Config Location**: `~/Library/Application Support/llamaCPPManager/config.yaml`
 - **Install Location**: `~/.local/pipx/venvs/llamacpp-manager/` (isolated)
 
-When you run `pipx install -e .` or `pipx reinstall`, it **only updates the code**, never touches your config files.
+When you run `pipx install --force .` or `./update.sh`, it **only updates the code**, never touches your config files.
 
 ## What Changed in Infrastructure Update
 

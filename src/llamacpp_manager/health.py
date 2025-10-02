@@ -210,6 +210,8 @@ def check_infrastructure_component_health(component: Dict[str, Any]) -> Dict[str
             return {"healthy": False, "status": "no launchd_label configured", "latency_ms": 0, "details": {}}
 
         try:
+            import re
+            import os
             result = subprocess.run(
                 ["launchctl", "list", label],
                 capture_output=True,
@@ -218,20 +220,30 @@ def check_infrastructure_component_health(component: Dict[str, Any]) -> Dict[str
             )
 
             if result.returncode == 0:
-                # Parse PID from output
+                # Parse PID from plist-style output
+                # Format: '"PID" = 84184;'
                 output = result.stdout.strip()
-                lines = output.split("\n")
-                for line in lines:
-                    parts = line.split()
-                    if len(parts) >= 1 and parts[0].isdigit():
-                        pid = int(parts[0])
+                pid_match = re.search(r'"PID"\s*=\s*(\d+);', output)
+                if pid_match:
+                    pid = int(pid_match.group(1))
+                    # Verify process is actually running
+                    try:
+                        os.kill(pid, 0)  # Check if PID exists
                         return {
                             "healthy": True,
                             "status": "running",
                             "latency_ms": 0,
                             "details": {"pid": pid, "launchd_label": label}
                         }
-                # Loaded but no PID
+                    except ProcessLookupError:
+                        return {
+                            "healthy": False,
+                            "status": "loaded but not running",
+                            "latency_ms": 0,
+                            "details": {"launchd_label": label}
+                        }
+
+                # No PID means not running
                 return {
                     "healthy": False,
                     "status": "loaded but not running",

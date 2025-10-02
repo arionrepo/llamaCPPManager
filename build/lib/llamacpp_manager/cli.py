@@ -14,6 +14,8 @@ from .config import (
     remove_model,
     save_config,
     update_model,
+    list_infrastructure_components,
+    get_infrastructure_component,
 )
 from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive, port_in_use
 from .process import start_process, stop_process, build_argv
@@ -21,6 +23,7 @@ from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 from .discovery import find_llama_processes
 from .query import query_model_completion, query_model_chat, list_available_models, ModelQueryError
+from . import infrastructure
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -168,33 +171,233 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_infra(args: argparse.Namespace) -> int:
+    """
+    Handle infrastructure component management commands.
+
+    Business Purpose: Provides unified control over infrastructure components
+    (cloudflared tunnel and LLM controller) through wrapping existing management scripts.
+    """
+    cfg = load_config()
+    sub = args.subcommand
+
+    if sub == "list":
+        components = list_infrastructure_components(cfg)
+        if args.json:
+            print(to_json(components))
+        else:
+            print("Infrastructure Components:")
+            for name, comp in components.items():
+                enabled = "enabled" if comp.get("enabled", True) else "disabled"
+                comp_type = comp.get("type", "unknown")
+                print(f"  {name} ({comp_type}) - {enabled}")
+                if comp_type == "script_managed":
+                    script = comp.get("management_script", "N/A")
+                    print(f"    Management script: {script}")
+                elif comp_type == "launchd_managed":
+                    label = comp.get("launchd_label", "N/A")
+                    installer = comp.get("installer_script", "N/A")
+                    print(f"    Launchd label: {label}")
+                    print(f"    Installer script: {installer}")
+        return 0
+
+    if sub == "start":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items() if comp.get("enabled", True)]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Starting {name}...")
+            success, msg = infrastructure.start_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: {msg}")
+            else:
+                print(f"  ✗ {name}: {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "stop":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items()]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Stopping {name}...")
+            success, msg = infrastructure.stop_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: {msg}")
+            else:
+                print(f"  ✗ {name}: {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "restart":
+        target = args.target
+        components = list_infrastructure_components(cfg)
+
+        if target == "all":
+            targets = [(name, comp) for name, comp in components.items() if comp.get("enabled", True)]
+        else:
+            comp = get_infrastructure_component(cfg, target)
+            if not comp:
+                print(f"error: infrastructure component '{target}' not found", file=sys.stderr)
+                return 2
+            targets = [(target, comp)]
+
+        rc = 0
+        for name, comp in targets:
+            print(f"Restarting {name}...")
+            # Stop first
+            success, msg = infrastructure.stop_infrastructure_component(comp)
+            if not success:
+                print(f"  Warning during stop: {msg}", file=sys.stderr)
+
+            # Brief delay
+            import time
+            time.sleep(2)
+
+            # Start
+            success, msg = infrastructure.start_infrastructure_component(comp)
+            if success:
+                print(f"  ✓ {name}: restarted - {msg}")
+            else:
+                print(f"  ✗ {name}: failed to restart - {msg}", file=sys.stderr)
+                rc = max(rc, 2)
+        return rc
+
+    if sub == "status":
+        components = list_infrastructure_components(cfg)
+        statuses = []
+
+        for name, comp in components.items():
+            running, status_msg = infrastructure.get_infrastructure_status(comp)
+            statuses.append({
+                "name": name,
+                "type": comp.get("type", "unknown"),
+                "enabled": comp.get("enabled", True),
+                "running": running,
+                "status": status_msg
+            })
+
+        if args.json:
+            print(to_json({"infrastructure": statuses}))
+        else:
+            print("Infrastructure Component Status:")
+            for s in statuses:
+                indicator = "✓" if s["running"] else "✗"
+                enabled_str = "" if s["enabled"] else " (disabled)"
+                print(f"  {indicator} {s['name']}{enabled_str}: {s['status']}")
+        return 0
+
+    if sub == "logs":
+        component_name = args.component
+        comp = get_infrastructure_component(cfg, component_name)
+        if not comp:
+            print(f"error: infrastructure component '{component_name}' not found", file=sys.stderr)
+            return 2
+
+        log_type = "err" if args.stderr else "out"
+        log_path = infrastructure.get_log_path(comp, log_type)
+
+        if not log_path:
+            print(f"error: no log directory configured for {component_name}", file=sys.stderr)
+            return 2
+
+        if not Path(log_path).exists():
+            print(f"warning: log file not found: {log_path}", file=sys.stderr)
+            return 1
+
+        if args.tail:
+            # Stream logs
+            try:
+                import subprocess
+                subprocess.run(["tail", "-f", log_path])
+            except KeyboardInterrupt:
+                print("\nStopped tailing logs")
+            return 0
+        else:
+            # Show last 50 lines
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["tail", "-n", "50", log_path],
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+                return 0
+            except Exception as e:
+                print(f"error: failed to read logs: {e}", file=sys.stderr)
+                return 2
+
+    print("unknown infra subcommand", file=sys.stderr)
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="llamacpp-manager", description="Manage llama.cpp llama-server instances on macOS")
+    p = argparse.ArgumentParser(
+        prog="llamacpp-manager",
+        description="""Manage llama.cpp llama-server instances on macOS
+
+Examples:
+  # Quick Start
+  llamacpp-manager init                                    # Initialize config
+  llamacpp-manager config add mymodel ~/models/model.gguf --port 8081  # Add model
+  llamacpp-manager start mymodel                          # Start model
+  llamacpp-manager status                                 # Check status
+
+  # Query running models
+  llamacpp-manager query complete mymodel "Write a poem about AI"
+  llamacpp-manager query chat mymodel --message "user:Hello there!"
+
+  # Browse to http://127.0.0.1:8081 to use web interface
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--version", action="version", version=f"llamacpp-manager {__version__}")
     p.add_argument("--config-dir", help="Override configuration directory (e.g., ~/my-llama-config)")
     p.add_argument("--log-dir", help="Override logs directory (e.g., ~/my-llama-logs)")
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(dest="command", required=True, help="Available commands")
 
     # init
-    sp_init = sub.add_parser("init", help="Create default config and directories")
+    sp_init = sub.add_parser("init", help="🚀 Create default config and directories (run this first)")
     sp_init.set_defaults(func=cmd_init)
 
     # config group
-    sp_cfg = sub.add_parser("config", help="Manage model configuration")
-    cfg_sub = sp_cfg.add_subparsers(dest="subcommand", required=True)
+    sp_cfg = sub.add_parser("config", help="⚙️  Manage model configuration")
+    cfg_sub = sp_cfg.add_subparsers(dest="subcommand", required=True, help="Configuration commands")
 
-    sp_cfg_list = cfg_sub.add_parser("list", help="List config and models")
+    sp_cfg_list = cfg_sub.add_parser("list", help="📋 List configured models and settings")
     sp_cfg_list.add_argument("--json", action="store_true", help="Output as JSON")
     sp_cfg_list.set_defaults(func=cmd_config)
 
-    sp_cfg_add = cfg_sub.add_parser("add", help="Add a new model entry")
-    sp_cfg_add.add_argument("name")
-    sp_cfg_add.add_argument("model_path")
-    sp_cfg_add.add_argument("--host", default="127.0.0.1")
-    sp_cfg_add.add_argument("--port", type=int, required=True)
-    sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as a single string")
-    sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables KEY=VALUE ...")
-    sp_cfg_add.add_argument("--autostart", action="store_true", help="Mark model for autostart (used by launchd mode)")
+    sp_cfg_add = cfg_sub.add_parser("add",
+        help="➕ Add a model (example: config add phi3 ~/models/phi3.gguf --port 8081)")
+    sp_cfg_add.add_argument("name", help="Model name (used for start/stop commands)")
+    sp_cfg_add.add_argument("model_path", help="Path to .gguf model file")
+    sp_cfg_add.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
+    sp_cfg_add.add_argument("--port", type=int, required=True, help="Port number (required, e.g., 8081)")
+    sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
+    sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
+    sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
     sp_cfg_add.set_defaults(func=cmd_config)
 
     sp_cfg_upd = cfg_sub.add_parser("update", help="Update an existing model entry")
@@ -219,31 +422,61 @@ def build_parser() -> argparse.ArgumentParser:
     sp_cfg_mig.add_argument("--force", action="store_true", help="Backup and overwrite destination if it exists")
     sp_cfg_mig.set_defaults(func=cmd_config)
 
+    # infra group - infrastructure management
+    sp_infra = sub.add_parser("infra", help="🏗️  Manage infrastructure components (cloudflared, controller)")
+    infra_sub = sp_infra.add_subparsers(dest="subcommand", required=True, help="Infrastructure commands")
+
+    sp_infra_list = infra_sub.add_parser("list", help="📋 List configured infrastructure components")
+    sp_infra_list.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_infra_list.set_defaults(func=cmd_infra)
+
+    sp_infra_start = infra_sub.add_parser("start", help="▶️  Start infrastructure component(s)")
+    sp_infra_start.add_argument("target", help="Component name (cloudflared, llm_controller) or 'all'")
+    sp_infra_start.set_defaults(func=cmd_infra)
+
+    sp_infra_stop = infra_sub.add_parser("stop", help="⏹️  Stop infrastructure component(s)")
+    sp_infra_stop.add_argument("target", help="Component name or 'all'")
+    sp_infra_stop.set_defaults(func=cmd_infra)
+
+    sp_infra_restart = infra_sub.add_parser("restart", help="🔄 Restart infrastructure component(s)")
+    sp_infra_restart.add_argument("target", help="Component name or 'all'")
+    sp_infra_restart.set_defaults(func=cmd_infra)
+
+    sp_infra_status = infra_sub.add_parser("status", help="📊 Show infrastructure component status")
+    sp_infra_status.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_infra_status.set_defaults(func=cmd_infra)
+
+    sp_infra_logs = infra_sub.add_parser("logs", help="📜 View logs for infrastructure component")
+    sp_infra_logs.add_argument("component", help="Component name (cloudflared, llm_controller)")
+    sp_infra_logs.add_argument("--tail", action="store_true", help="Follow log output (like tail -f)")
+    sp_infra_logs.add_argument("--stderr", action="store_true", help="Show stderr instead of stdout")
+    sp_infra_logs.set_defaults(func=cmd_infra)
+
     # start/stop/restart commands
-    sp_start = sub.add_parser("start", help="Start a model or all models")
-    sp_start.add_argument("target", help="Model name or 'all'")
-    sp_start.add_argument("--dry-run", action="store_true", help="Print the command without executing")
-    sp_start.add_argument("--launchd", action="store_true", help="Use launchd to start instead of direct process")
-    sp_start.add_argument("--allow-remote", action="store_true", help="Allow non-local host binds (0.0.0.0 or external IP)")
+    sp_start = sub.add_parser("start", help="▶️  Start model(s) - makes them available at http://localhost:PORT")
+    sp_start.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_start.add_argument("--dry-run", action="store_true", help="Show command that would run without executing")
+    sp_start.add_argument("--launchd", action="store_true", help="Use macOS launchd for background service")
+    sp_start.add_argument("--allow-remote", action="store_true", help="Allow external IP binds (security risk)")
     sp_start.set_defaults(func=cmd_start)
 
-    sp_stop = sub.add_parser("stop", help="Stop a model or all models")
-    sp_stop.add_argument("target", help="Model name or 'all'")
-    sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd agent instead of PID stop")
+    sp_stop = sub.add_parser("stop", help="⏹️  Stop running model(s)")
+    sp_stop.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd service instead of direct process")
     sp_stop.set_defaults(func=cmd_stop)
 
-    sp_restart = sub.add_parser("restart", help="Restart a model or all models")
-    sp_restart.add_argument("target", help="Model name or 'all'")
-    sp_restart.add_argument("--dry-run", action="store_true")
-    sp_restart.add_argument("--launchd", action="store_true")
-    sp_restart.add_argument("--allow-remote", action="store_true")
+    sp_restart = sub.add_parser("restart", help="🔄 Restart model(s) (stop + start)")
+    sp_restart.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
+    sp_restart.add_argument("--dry-run", action="store_true", help="Show commands without executing")
+    sp_restart.add_argument("--launchd", action="store_true", help="Use launchd for restart")
+    sp_restart.add_argument("--allow-remote", action="store_true", help="Allow external IP binds")
     sp_restart.set_defaults(func=cmd_restart)
 
     # status
-    sp_status = sub.add_parser("status", help="Show model status and health")
-    sp_status.add_argument("--json", action="store_true", help="Output JSON array")
-    sp_status.add_argument("--watch", action="store_true", help="Refresh repeatedly")
-    sp_status.add_argument("--interval", type=float, default=2.0, help="Watch refresh interval seconds")
+    sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
+    sp_status.add_argument("--json", action="store_true", help="Output as JSON for scripting")
+    sp_status.add_argument("--watch", action="store_true", help="Live refresh (press Ctrl+C to exit)")
+    sp_status.add_argument("--interval", type=float, default=2.0, help="Refresh interval in seconds")
     sp_status.set_defaults(func=cmd_status)
 
     # launchd
@@ -263,29 +496,58 @@ def build_parser() -> argparse.ArgumentParser:
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
     sp_ens.set_defaults(func=cmd_ensure_running)
 
-    # query commands
-    sp_query = sub.add_parser("query", help="Query models for completions and chat")
-    query_sub = sp_query.add_subparsers(dest="subcommand", required=True)
+    # monitor commands (enhanced crash monitoring)
+    sp_mon = sub.add_parser("monitor", help="🔍 Advanced model monitoring and crash detection")
+    mon_sub = sp_mon.add_subparsers(dest="subcommand", required=True, help="Monitor commands")
 
-    sp_query_complete = query_sub.add_parser("complete", help="Get text completion from a model")
-    sp_query_complete.add_argument("model_name", help="Name of the model to query")
-    sp_query_complete.add_argument("prompt", help="Prompt text for completion")
-    sp_query_complete.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
-    sp_query_complete.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
-    sp_query_complete.add_argument("--stream", action="store_true", help="Stream the response")
-    sp_query_complete.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_mon_track = mon_sub.add_parser("track", help="📌 Track model for auto-restart monitoring")
+    sp_mon_track.add_argument("model_name", help="Name of model to track")
+    sp_mon_track.set_defaults(func=cmd_monitor)
+
+    sp_mon_untrack = mon_sub.add_parser("untrack", help="📌 Stop tracking model")
+    sp_mon_untrack.add_argument("model_name", help="Name of model to untrack")
+    sp_mon_untrack.set_defaults(func=cmd_monitor)
+
+    sp_mon_status = mon_sub.add_parser("status", help="📊 Show monitoring status and tracked models")
+    sp_mon_status.add_argument("--detailed", action="store_true", help="Show detailed health for each tracked model")
+    sp_mon_status.set_defaults(func=cmd_monitor)
+
+    sp_mon_start = mon_sub.add_parser("start", help="🚀 Start monitoring daemon (background)")
+    sp_mon_start.set_defaults(func=cmd_monitor)
+
+    sp_mon_stop = mon_sub.add_parser("stop", help="⏹️ Stop monitoring daemon")
+    sp_mon_stop.set_defaults(func=cmd_monitor)
+
+    sp_mon_launchd = mon_sub.add_parser("launchd", help="🚀 Install/uninstall monitoring daemon as launchd agent")
+    sp_mon_launchd.add_argument("action", choices=["install", "uninstall", "status"], help="Action to perform")
+    sp_mon_launchd.set_defaults(func=cmd_monitor)
+
+    # query commands
+    sp_query = sub.add_parser("query", help="💬 Query running models for AI responses")
+    query_sub = sp_query.add_subparsers(dest="subcommand", required=True, help="Query commands")
+
+    sp_query_complete = query_sub.add_parser("complete",
+        help="🤖 Get text completion (example: query complete phi3 'Write a story about')")
+    sp_query_complete.add_argument("model_name", help="Name of running model (e.g., phi3)")
+    sp_query_complete.add_argument("prompt", help="Text prompt to complete")
+    sp_query_complete.add_argument("--max-tokens", type=int, default=512, help="Max response length (default: 512)")
+    sp_query_complete.add_argument("--temperature", type=float, default=0.7, help="Creativity level 0.0-2.0 (default: 0.7)")
+    sp_query_complete.add_argument("--stream", action="store_true", help="Stream response word-by-word")
+    sp_query_complete.add_argument("--timeout", type=float, default=30.0, help="Request timeout seconds")
     sp_query_complete.set_defaults(func=cmd_query)
 
-    sp_query_chat = query_sub.add_parser("chat", help="Chat with a model using conversation format")
-    sp_query_chat.add_argument("model_name", help="Name of the model to query")
-    sp_query_chat.add_argument("--message", "-m", action="append", help="Add message in format 'role:content' (e.g., 'user:Hello')")
-    sp_query_chat.add_argument("--max-tokens", type=int, default=512, help="Maximum tokens to generate")
-    sp_query_chat.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
-    sp_query_chat.add_argument("--stream", action="store_true", help="Stream the response")
-    sp_query_chat.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
+    sp_query_chat = query_sub.add_parser("chat",
+        help="💬 Chat conversation (example: query chat phi3 -m 'user:Hello!' -m 'assistant:Hi there!' -m 'user:How are you?')")
+    sp_query_chat.add_argument("model_name", help="Name of running model (e.g., phi3)")
+    sp_query_chat.add_argument("--message", "-m", action="append",
+        help="Add message: 'user:Hello' or 'system:You are helpful' or 'assistant:Hi!'")
+    sp_query_chat.add_argument("--max-tokens", type=int, default=512, help="Max response length")
+    sp_query_chat.add_argument("--temperature", type=float, default=0.7, help="Creativity level 0.0-2.0")
+    sp_query_chat.add_argument("--stream", action="store_true", help="Stream response")
+    sp_query_chat.add_argument("--timeout", type=float, default=30.0, help="Request timeout seconds")
     sp_query_chat.set_defaults(func=cmd_query)
 
-    sp_query_list = query_sub.add_parser("list", help="List available models")
+    sp_query_list = query_sub.add_parser("list", help="📋 List currently running models")
     sp_query_list.set_defaults(func=cmd_query)
 
     return p
@@ -412,10 +674,22 @@ def cmd_restart(args: argparse.Namespace) -> int:
     return max(r1, r2)
 
 
-def _gather_status(cfg: Dict[str, Any]) -> list:
+def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Gather status for models and infrastructure components.
+
+    Business Purpose: Provides unified status view across all managed
+    components for operators to assess system health quickly.
+
+    Returns:
+        Dict with 'models' and 'infrastructure' keys containing status lists
+    """
     timeout_ms = int(cfg.get("timeout_ms", 2000))
     procs = find_llama_processes()
-    out = []
+    models_status = []
+    infrastructure_status = []
+
+    # Gather model status
     for m in cfg.get("models", []):
         name = m.get("name")
         host = m.get("host", "127.0.0.1")
@@ -446,6 +720,11 @@ def _gather_status(cfg: Dict[str, Any]) -> list:
                 pid = found.get("pid")
                 mode = "direct"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
+
+        # Get uptime if process is running
+        from .infrastructure import get_process_uptime
+        uptime = get_process_uptime(pid) if pid else None
+
         entry = {
             "name": name,
             "pid": pid,
@@ -457,28 +736,91 @@ def _gather_status(cfg: Dict[str, Any]) -> list:
             "version": health.get("version"),
             "mode": mode,
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
+            "health_state": health.get("health_state", "down"),  # Enhanced health state
+            "uptime": uptime,
         }
-        out.append(entry)
-    return out
+        models_status.append(entry)
+
+    # Gather infrastructure status
+    from .health import check_infrastructure_component_health
+    components = list_infrastructure_components(cfg)
+    for name, comp in components.items():
+        running, status_msg = infrastructure.get_infrastructure_status(comp)
+        health = check_infrastructure_component_health(comp)
+
+        # Get uptime from PID in health details or parse from status message
+        pid = health.get("details", {}).get("pid")
+        if not pid:
+            # Try to parse PID from status message like "running: PID 12345"
+            import re
+            pid_match = re.search(r'PID\s+(\d+)', status_msg)
+            if pid_match:
+                pid = int(pid_match.group(1))
+
+        uptime = get_process_uptime(pid) if pid else None
+
+        entry = {
+            "name": name,
+            "type": comp.get("type", "unknown"),
+            "enabled": comp.get("enabled", True),
+            "running": running,
+            "healthy": health.get("healthy", False),
+            "status": status_msg,
+            "health_status": health.get("status", "unknown"),
+            "latency_ms": health.get("latency_ms", 0),
+            "details": health.get("details", {}),
+            "uptime": uptime,
+        }
+        infrastructure_status.append(entry)
+
+    return {
+        "models": models_status,
+        "infrastructure": infrastructure_status
+    }
 
 
-def _print_table(rows: list) -> None:
-    headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms"]
-    print(" ".join(f"{h:>12}" for h in headers))
-    for r in rows:
-        vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms")]
-        print(" ".join(f"{str(v):>12}" for v in vals))
+def _print_table(status_data: Dict[str, Any]) -> None:
+    """
+    Print formatted status table for models and infrastructure.
+
+    Business Purpose: Provides human-readable status output for terminal use.
+    """
+    # Print infrastructure status
+    infra = status_data.get("infrastructure", [])
+    if infra:
+        print("\nInfrastructure Components:")
+        print("-" * 80)
+        for comp in infra:
+            indicator = "✓" if comp.get("healthy", False) else "✗"
+            enabled = "" if comp.get("enabled", True) else " (disabled)"
+            latency = comp.get("latency_ms", 0)
+            latency_str = f"{latency}ms" if latency > 0 else ""
+            uptime = comp.get("uptime", "")
+            uptime_str = f" (up {uptime})" if uptime else ""
+            print(f"  {indicator} {comp['name']}{enabled:15s} {comp.get('status', 'unknown'):30s} {latency_str}{uptime_str}")
+        print()
+
+    # Print model status
+    models = status_data.get("models", [])
+    if models:
+        print("Models:")
+        print("-" * 80)
+        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms", "uptime"]
+        print(" ".join(f"{h:>12}" for h in headers))
+        for r in models:
+            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms"), r.get("uptime", "")]
+            print(" ".join(f"{str(v):>12}" for v in vals))
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config()
     import time
     while True:
-        rows = _gather_status(cfg)
+        status_data = _gather_status(cfg)
         if args.json:
-            print(to_json(rows))
+            print(to_json(status_data))
         else:
-            _print_table(rows)
+            _print_table(status_data)
         if not args.watch:
             break
         try:
@@ -578,6 +920,239 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
             started += 1
     print(f"ensure-running: started {started} model(s)")
     return 0
+
+
+def cmd_monitor(args: argparse.Namespace) -> int:
+    from .monitor import get_monitor
+    monitor = get_monitor()
+    sub = args.subcommand
+
+    if sub == "track":
+        try:
+            # Verify model exists in config
+            cfg = load_config()
+            models = cfg.get("models", [])
+            if not any(m.get("name") == args.model_name for m in models):
+                print(f"error: model '{args.model_name}' not found in configuration", file=sys.stderr)
+                print("Available models:", ", ".join(m.get("name", "") for m in models), file=sys.stderr)
+                return 2
+
+            monitor.track_model(args.model_name)
+            print(f"Now tracking '{args.model_name}' for auto-restart")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "untrack":
+        try:
+            monitor.untrack_model(args.model_name)
+            print(f"Stopped tracking '{args.model_name}'")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "status":
+        try:
+            status = monitor.get_monitoring_status()
+            print(f"Monitor Status: {'RUNNING' if status['running'] else 'STOPPED'}")
+            print(f"Check Interval: {status['check_interval']}s")
+            print(f"State Directory: {status['state_dir']}")
+            print()
+
+            tracked = status["tracked_models"]
+            if not tracked:
+                print("No models currently tracked for auto-restart")
+                return 0
+
+            print("Tracked Models:")
+            if not args.detailed:
+                for model in tracked:
+                    print(f"  - {model}")
+            else:
+                cfg = load_config()
+                print(f"{'Model':<12} {'Health':<10} {'Process':<10} {'Port':<6} {'Latency':<8} {'Status'}")
+                print("-" * 65)
+
+                for model in tracked:
+                    model_status = monitor.get_model_status(model, cfg)
+                    health = model_status.get("health_state", "unknown")
+                    process = model_status.get("process_state", "unknown")
+                    port = model_status.get("port", "?")
+                    latency = model_status.get("latency_ms", 0)
+                    http_status = model_status.get("http_status", "")
+
+                    status_str = f"HTTP {http_status}" if http_status else ""
+                    print(f"{model:<12} {health:<10} {process:<10} {port:<6} {latency:<8} {status_str}")
+
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "start":
+        try:
+            monitor.start_monitoring()
+            print("Model monitoring daemon started")
+            print("Use 'llamacpp-manager monitor status' to check status")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "stop":
+        try:
+            monitor.stop_monitoring()
+            print("Model monitoring daemon stopped")
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "launchd":
+        action = args.action
+        label = "com.llamacpp.manager.monitor"
+        plist_file = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+
+        if action == "install":
+            try:
+                # Get the path to the llamacpp-manager executable
+                import shutil
+                exec_path = shutil.which("llamacpp-manager")
+                if not exec_path:
+                    print("error: llamacpp-manager executable not found in PATH", file=sys.stderr)
+                    return 2
+
+                # Create plist content
+                plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{exec_path}</string>
+        <string>monitor</string>
+        <string>start</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{logs_dir()}/monitor-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>{logs_dir()}/monitor-daemon-error.log</string>
+    <key>WorkingDirectory</key>
+    <string>{Path.home()}</string>
+</dict>
+</plist>"""
+
+                # Ensure LaunchAgents directory exists
+                plist_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Write plist file
+                plist_file.write_text(plist_content)
+                print(f"✓ Created launchd plist: {plist_file}")
+
+                # Load the agent
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "load", str(plist_file)],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    print(f"✓ Monitoring daemon installed and loaded")
+                    print(f"  Label: {label}")
+                    print(f"  The daemon will start automatically on boot")
+                    print(f"  Logs: {logs_dir()}/monitor-daemon.log")
+                    return 0
+                else:
+                    print(f"warning: launchctl load returned {result.returncode}", file=sys.stderr)
+                    if result.stderr:
+                        print(f"  {result.stderr.strip()}", file=sys.stderr)
+                    print(f"  Plist created at: {plist_file}")
+                    return 1
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+
+        elif action == "uninstall":
+            try:
+                if not plist_file.exists():
+                    print(f"Monitoring daemon is not installed (plist not found: {plist_file})")
+                    return 0
+
+                # Unload the agent
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "unload", str(plist_file)],
+                    capture_output=True,
+                    text=True
+                )
+
+                # Remove plist file
+                plist_file.unlink()
+                print(f"✓ Monitoring daemon uninstalled")
+                print(f"  Removed: {plist_file}")
+
+                if result.returncode != 0 and result.stderr:
+                    print(f"note: {result.stderr.strip()}")
+
+                return 0
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+
+        elif action == "status":
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "list", label],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    print(f"✓ Monitoring daemon is loaded")
+                    print(f"  Label: {label}")
+                    print(f"  Plist: {plist_file}")
+                    if plist_file.exists():
+                        print(f"  Status: installed and loaded")
+                    else:
+                        print(f"  Status: loaded but plist missing")
+
+                    # Parse PID from output
+                    for line in result.stdout.split('\n'):
+                        parts = line.split()
+                        if len(parts) >= 1 and parts[0].isdigit():
+                            print(f"  PID: {parts[0]}")
+                            break
+                else:
+                    print(f"✗ Monitoring daemon is not loaded")
+                    if plist_file.exists():
+                        print(f"  Plist exists but agent is not loaded: {plist_file}")
+                        print(f"  Run 'llamacpp-manager monitor launchd install' to load it")
+                    else:
+                        print(f"  Not installed (plist not found: {plist_file})")
+
+                return 0
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+
+    print("unknown monitor subcommand", file=sys.stderr)
+    return 2
 
 
 def cmd_query(args: argparse.Namespace) -> int:

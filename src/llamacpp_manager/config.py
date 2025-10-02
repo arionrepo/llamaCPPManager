@@ -225,13 +225,20 @@ def list_infrastructure_components(cfg: Dict[str, Any]) -> Dict[str, Dict[str, A
         cfg: Full configuration dictionary
 
     Returns:
-        Dictionary mapping component name to component configuration
+        Dictionary mapping component name to component configuration (with 'name' field added)
 
     Example:
         components = list_infrastructure_components(config)
         cloudflared = components.get("cloudflared")
     """
-    return cfg.get("infrastructure", {})
+    infra = cfg.get("infrastructure", {})
+    # Add the name field to each component
+    result = {}
+    for name, comp in infra.items():
+        comp_with_name = dict(comp)  # Make a copy
+        comp_with_name["name"] = name
+        result[name] = comp_with_name
+    return result
 
 
 def get_infrastructure_component(cfg: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
@@ -246,7 +253,7 @@ def get_infrastructure_component(cfg: Dict[str, Any], name: str) -> Optional[Dic
         name: Component name (e.g., "cloudflared", "llm_controller")
 
     Returns:
-        Component configuration dictionary or None if not found
+        Component configuration dictionary with 'name' field added, or None if not found
 
     Example:
         component = get_infrastructure_component(config, "cloudflared")
@@ -254,4 +261,9 @@ def get_infrastructure_component(cfg: Dict[str, Any], name: str) -> Optional[Dic
             # Start the component
     """
     infra = cfg.get("infrastructure", {})
-    return infra.get(name)
+    comp = infra.get(name)
+    if comp:
+        # Add the name to the component dict so functions can use it
+        comp = dict(comp)  # Make a copy to avoid modifying original
+        comp["name"] = name
+    return comp

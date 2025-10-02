@@ -720,6 +720,11 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 pid = found.get("pid")
                 mode = "direct"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
+
+        # Get uptime if process is running
+        from .infrastructure import get_process_uptime
+        uptime = get_process_uptime(pid) if pid else None
+
         entry = {
             "name": name,
             "pid": pid,
@@ -732,6 +737,7 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "mode": mode,
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),  # Enhanced health state
+            "uptime": uptime,
         }
         models_status.append(entry)
 
@@ -742,6 +748,17 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         running, status_msg = infrastructure.get_infrastructure_status(comp)
         health = check_infrastructure_component_health(comp)
 
+        # Get uptime from PID in health details or parse from status message
+        pid = health.get("details", {}).get("pid")
+        if not pid:
+            # Try to parse PID from status message like "running: PID 12345"
+            import re
+            pid_match = re.search(r'PID\s+(\d+)', status_msg)
+            if pid_match:
+                pid = int(pid_match.group(1))
+
+        uptime = get_process_uptime(pid) if pid else None
+
         entry = {
             "name": name,
             "type": comp.get("type", "unknown"),
@@ -751,7 +768,8 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "status": status_msg,
             "health_status": health.get("status", "unknown"),
             "latency_ms": health.get("latency_ms", 0),
-            "details": health.get("details", {})
+            "details": health.get("details", {}),
+            "uptime": uptime,
         }
         infrastructure_status.append(entry)
 
@@ -777,7 +795,9 @@ def _print_table(status_data: Dict[str, Any]) -> None:
             enabled = "" if comp.get("enabled", True) else " (disabled)"
             latency = comp.get("latency_ms", 0)
             latency_str = f"{latency}ms" if latency > 0 else ""
-            print(f"  {indicator} {comp['name']}{enabled:15s} {comp.get('status', 'unknown'):30s} {latency_str}")
+            uptime = comp.get("uptime", "")
+            uptime_str = f" (up {uptime})" if uptime else ""
+            print(f"  {indicator} {comp['name']}{enabled:15s} {comp.get('status', 'unknown'):30s} {latency_str}{uptime_str}")
         print()
 
     # Print model status
@@ -785,10 +805,10 @@ def _print_table(status_data: Dict[str, Any]) -> None:
     if models:
         print("Models:")
         print("-" * 80)
-        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms"]
+        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms", "uptime"]
         print(" ".join(f"{h:>12}" for h in headers))
         for r in models:
-            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms")]
+            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms"), r.get("uptime", "")]
             print(" ".join(f"{str(v):>12}" for v in vals))
 
 
