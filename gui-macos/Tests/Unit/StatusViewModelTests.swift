@@ -118,9 +118,9 @@ final class StatusViewModelTests: XCTestCase {
     }
 
     func testStatusRowEquality() throws {
-        let row1 = StatusRow(name: "test", pid: 1234, host: "127.0.0.1", port: 8080, up: true, latency_ms: 15, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/test.log")
-        let row2 = StatusRow(name: "test", pid: 1234, host: "127.0.0.1", port: 8080, up: true, latency_ms: 15, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/test.log")
-        let row3 = StatusRow(name: "test", pid: nil, host: "127.0.0.1", port: 8080, up: false, latency_ms: nil, http_status: nil, version: nil, mode: "bare-metal", log_path: nil)
+        let row1 = StatusRow(name: "test", pid: 1234, host: "127.0.0.1", port: 8080, up: true, latency_ms: 15, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/test.log", health_state: "ok")
+        let row2 = StatusRow(name: "test", pid: 1234, host: "127.0.0.1", port: 8080, up: true, latency_ms: 15, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/test.log", health_state: "ok")
+        let row3 = StatusRow(name: "test", pid: nil, host: "127.0.0.1", port: 8080, up: false, latency_ms: nil, http_status: nil, version: nil, mode: "bare-metal", log_path: nil, health_state: "down")
 
         // Note: StatusRow needs to conform to Equatable for this to work
         // If not implemented, this test documents expected behavior
@@ -129,8 +129,8 @@ final class StatusViewModelTests: XCTestCase {
     }
 
     func testStatusRowDisplayProperties() throws {
-        let runningModel = StatusRow(name: "fast-model", pid: 5678, host: "127.0.0.1", port: 8081, up: true, latency_ms: 12, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/fast.log")
-        let stoppedModel = StatusRow(name: "slow-model", pid: nil, host: "127.0.0.1", port: 8082, up: false, latency_ms: nil, http_status: nil, version: nil, mode: "bare-metal", log_path: nil)
+        let runningModel = StatusRow(name: "fast-model", pid: 5678, host: "127.0.0.1", port: 8081, up: true, latency_ms: 12, http_status: 200, version: "1.0", mode: "bare-metal", log_path: "/tmp/fast.log", health_state: "ok")
+        let stoppedModel = StatusRow(name: "slow-model", pid: nil, host: "127.0.0.1", port: 8082, up: false, latency_ms: nil, http_status: nil, version: nil, mode: "bare-metal", log_path: nil, health_state: "down")
 
         // Test display logic
         XCTAssertTrue(runningModel.up)

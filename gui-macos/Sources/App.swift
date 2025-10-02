@@ -8,8 +8,65 @@ struct LlamaCPPManagerApp: App {
     var body: some Scene {
         MenuBarExtra("llamaCPP", systemImage: "brain.head.profile") {
             VStack(alignment: .leading, spacing: 6) {
+                // MARK: - Infrastructure Section
+                if !vm.infrastructureRows.isEmpty {
+                    Text("Infrastructure")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+
+                    ForEach(vm.infrastructureRows, id: \.name) { infra in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Circle()
+                                    .fill(vm.healthColorInfra(for: infra))
+                                    .frame(width: 10, height: 10)
+
+                                VStack(alignment: .leading) {
+                                    Text(infra.name)
+                                        .font(.headline)
+                                    Text(vm.healthStatusInfra(for: infra))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                VStack(alignment: .trailing) {
+                                    Text(infra.type)
+                                        .font(.caption)
+                                    if infra.latency_ms > 0 {
+                                        Text("\(infra.latency_ms) ms")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+
+                            HStack {
+                                Button("Start") { vm.startInfra(name: infra.name) }
+                                    .disabled(infra.running)
+                                Button("Stop") { vm.stopInfra(name: infra.name) }
+                                    .disabled(!infra.running)
+                                Button("Restart") { vm.restartInfra(name: infra.name) }
+                                Button("Logs") { vm.infraLogs(name: infra.name) }
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .padding(.leading, 18)
+                        }
+                        Divider()
+                    }
+                }
+
+                // MARK: - Models Section
+                Text("Models")
+                    .font(.headline)
+                    .padding(.horizontal, 8)
+
                 if vm.rows.isEmpty {
                     Text("No models configured")
+                        .padding(.horizontal, 8)
                 } else {
                     ForEach(vm.rows, id: \.name) { row in
                         VStack(alignment: .leading, spacing: 4) {
@@ -97,8 +154,65 @@ struct StatusRow: Codable {
     let health_state: String?
 }
 
+struct InfrastructureRow: Codable {
+    let name: String
+    let type: String
+    let enabled: Bool
+    let running: Bool
+    let healthy: Bool
+    let status: String
+    let health_status: String
+    let latency_ms: Int
+    let details: [String: AnyCodable]?
+
+    enum CodingKeys: String, CodingKey {
+        case name, type, enabled, running, healthy, status, health_status, latency_ms, details
+    }
+}
+
+// Helper for decoding arbitrary JSON
+struct AnyCodable: Codable {
+    let value: Any
+
+    init(_ value: Any) {
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let string = try? container.decode(String.self) {
+            value = string
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else {
+            value = NSNull()
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let int = value as? Int {
+            try container.encode(int)
+        } else if let string = value as? String {
+            try container.encode(string)
+        } else if let bool = value as? Bool {
+            try container.encode(bool)
+        } else {
+            try container.encodeNil()
+        }
+    }
+}
+
+struct StatusResponse: Codable {
+    let models: [StatusRow]
+    let infrastructure: [InfrastructureRow]
+}
+
 final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
+    @Published var infrastructureRows: [InfrastructureRow] = []
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
@@ -116,7 +230,9 @@ final class StatusViewModel: ObservableObject {
     func refresh() {
         Task { @MainActor in
             do {
-                self.rows = try await service.fetchStatus()
+                let response = try await service.fetchStatus()
+                self.rows = response.models
+                self.infrastructureRows = response.infrastructure
             } catch {
                 // Keep prior rows; optionally surface an error row
             }
@@ -133,6 +249,76 @@ final class StatusViewModel: ObservableObject {
         guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
         let url = URL(fileURLWithPath: path)
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Infrastructure Control Methods
+
+    func startInfra(name: String) {
+        Task {
+            try? await service.startInfrastructure(name)
+            refresh()
+        }
+    }
+
+    func stopInfra(name: String) {
+        Task {
+            try? await service.stopInfrastructure(name)
+            refresh()
+        }
+    }
+
+    func restartInfra(name: String) {
+        Task {
+            try? await service.restartInfrastructure(name)
+            refresh()
+        }
+    }
+
+    func infraLogs(name: String) {
+        Task {
+            do {
+                let logs = try await service.infrastructureLogs(name)
+                showLogsWindow(title: "\(name) Logs", content: logs)
+            } catch {
+                // Handle error
+            }
+        }
+    }
+
+    func healthColorInfra(for row: InfrastructureRow) -> Color {
+        if !row.enabled { return .gray }
+        if !row.running { return .red }
+        if !row.healthy { return .orange }
+        return .green
+    }
+
+    func healthStatusInfra(for row: InfrastructureRow) -> String {
+        if !row.enabled { return "disabled" }
+        if !row.running { return "stopped" }
+        if !row.healthy { return "unhealthy" }
+        return row.health_status
+    }
+
+    private func showLogsWindow(title: String, content: String) {
+        let textView = NSTextView()
+        textView.string = content
+        textView.isEditable = false
+        textView.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = title
+        window.contentView = scrollView
+        window.center()
+        window.makeKeyAndOrderFront(nil)
     }
 
     func openChat(name: String) {
@@ -331,10 +517,30 @@ final class CLIService {
         return nil
     }
 
-    func fetchStatus() async throws -> [StatusRow] {
+    func fetchStatus() async throws -> StatusResponse {
         let data = try await runAndCapture(["status", "--json"]).data(using: .utf8) ?? Data()
-        let rows = try JSONDecoder().decode([StatusRow].self, from: data)
-        return rows
+        let response = try JSONDecoder().decode(StatusResponse.self, from: data)
+        return response
+    }
+
+    func fetchInfrastructureList() async throws -> String {
+        return try await runAndCapture(["infra", "list"])
+    }
+
+    func startInfrastructure(_ name: String) async throws {
+        _ = try await run(["infra", "start", name])
+    }
+
+    func stopInfrastructure(_ name: String) async throws {
+        _ = try await run(["infra", "stop", name])
+    }
+
+    func restartInfrastructure(_ name: String) async throws {
+        _ = try await run(["infra", "restart", name])
+    }
+
+    func infrastructureLogs(_ name: String) async throws -> String {
+        return try await runAndCapture(["infra", "logs", name])
     }
 
     func run(_ args: [String]) async throws -> Int32 {

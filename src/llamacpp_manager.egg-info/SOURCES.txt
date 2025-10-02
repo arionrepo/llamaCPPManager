@@ -6,6 +6,7 @@ src/llamacpp_manager/cli.py
 src/llamacpp_manager/config.py
 src/llamacpp_manager/discovery.py
 src/llamacpp_manager/health.py
+src/llamacpp_manager/infrastructure.py
 src/llamacpp_manager/launchd.py
 src/llamacpp_manager/logs.py
 src/llamacpp_manager/mcp_server.py
@@ -29,6 +30,7 @@ tests/test_discovery_parse.py
 tests/test_discovery_status.py
 tests/test_ensure_running.py
 tests/test_health.py
+tests/test_infrastructure.py
 tests/test_launchd.py
 tests/test_launchd_install_uninstall.py
 tests/test_logs.py
