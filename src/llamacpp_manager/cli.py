@@ -518,6 +518,10 @@ Examples:
     sp_mon_stop = mon_sub.add_parser("stop", help="⏹️ Stop monitoring daemon")
     sp_mon_stop.set_defaults(func=cmd_monitor)
 
+    sp_mon_launchd = mon_sub.add_parser("launchd", help="🚀 Install/uninstall monitoring daemon as launchd agent")
+    sp_mon_launchd.add_argument("action", choices=["install", "uninstall", "status"], help="Action to perform")
+    sp_mon_launchd.set_defaults(func=cmd_monitor)
+
     # query commands
     sp_query = sub.add_parser("query", help="💬 Query running models for AI responses")
     query_sub = sp_query.add_subparsers(dest="subcommand", required=True, help="Query commands")
@@ -985,6 +989,147 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+
+    if sub == "launchd":
+        action = args.action
+        label = "com.llamacpp.manager.monitor"
+        plist_file = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+
+        if action == "install":
+            try:
+                # Get the path to the llamacpp-manager executable
+                import shutil
+                exec_path = shutil.which("llamacpp-manager")
+                if not exec_path:
+                    print("error: llamacpp-manager executable not found in PATH", file=sys.stderr)
+                    return 2
+
+                # Create plist content
+                plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{exec_path}</string>
+        <string>monitor</string>
+        <string>start</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{logs_dir()}/monitor-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>{logs_dir()}/monitor-daemon-error.log</string>
+    <key>WorkingDirectory</key>
+    <string>{Path.home()}</string>
+</dict>
+</plist>"""
+
+                # Ensure LaunchAgents directory exists
+                plist_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Write plist file
+                plist_file.write_text(plist_content)
+                print(f"✓ Created launchd plist: {plist_file}")
+
+                # Load the agent
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "load", str(plist_file)],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    print(f"✓ Monitoring daemon installed and loaded")
+                    print(f"  Label: {label}")
+                    print(f"  The daemon will start automatically on boot")
+                    print(f"  Logs: {logs_dir()}/monitor-daemon.log")
+                    return 0
+                else:
+                    print(f"warning: launchctl load returned {result.returncode}", file=sys.stderr)
+                    if result.stderr:
+                        print(f"  {result.stderr.strip()}", file=sys.stderr)
+                    print(f"  Plist created at: {plist_file}")
+                    return 1
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+
+        elif action == "uninstall":
+            try:
+                if not plist_file.exists():
+                    print(f"Monitoring daemon is not installed (plist not found: {plist_file})")
+                    return 0
+
+                # Unload the agent
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "unload", str(plist_file)],
+                    capture_output=True,
+                    text=True
+                )
+
+                # Remove plist file
+                plist_file.unlink()
+                print(f"✓ Monitoring daemon uninstalled")
+                print(f"  Removed: {plist_file}")
+
+                if result.returncode != 0 and result.stderr:
+                    print(f"note: {result.stderr.strip()}")
+
+                return 0
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+
+        elif action == "status":
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["launchctl", "list", label],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    print(f"✓ Monitoring daemon is loaded")
+                    print(f"  Label: {label}")
+                    print(f"  Plist: {plist_file}")
+                    if plist_file.exists():
+                        print(f"  Status: installed and loaded")
+                    else:
+                        print(f"  Status: loaded but plist missing")
+
+                    # Parse PID from output
+                    for line in result.stdout.split('\n'):
+                        parts = line.split()
+                        if len(parts) >= 1 and parts[0].isdigit():
+                            print(f"  PID: {parts[0]}")
+                            break
+                else:
+                    print(f"✗ Monitoring daemon is not loaded")
+                    if plist_file.exists():
+                        print(f"  Plist exists but agent is not loaded: {plist_file}")
+                        print(f"  Run 'llamacpp-manager monitor launchd install' to load it")
+                    else:
+                        print(f"  Not installed (plist not found: {plist_file})")
+
+                return 0
+
+            except Exception as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
 
     print("unknown monitor subcommand", file=sys.stderr)
     return 2
