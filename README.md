@@ -98,7 +98,15 @@ Notes:
 
 ### Infrastructure Management
 
-Manage supporting infrastructure components (cloudflared tunnel, LLM controller) alongside your models:
+**⚠️ Platform: macOS only - Local components on the same machine**
+
+Manage supporting infrastructure components running on your Mac alongside your models.
+
+**Current Scope**: 2 specific local components:
+- `cloudflared` - Cloudflare tunnel (via launchd)
+- `llm_controller` - Local HTTP controller service (http://127.0.0.1:8090)
+
+**Limitations**: Not for remote infrastructure, multi-platform deployments, or cloud services. All components must run on the same macOS machine as llamaCPPManager.
 
 - List configured infrastructure components:
   - `llamacpp-manager infra list`
@@ -117,7 +125,7 @@ Manage supporting infrastructure components (cloudflared tunnel, LLM controller)
 - View combined status (models + infrastructure):
   - `llamacpp-manager status --json`
 
-Infrastructure components are configured in `config.yaml` under the `infrastructure` section. See `docs/design-infrastructure-management.md` for details.
+Infrastructure components are configured in `config.yaml` under the `infrastructure` section. See `docs/infrastructure-implementation-summary.md` for complete details and limitations.
 
 ### Health Monitoring & Auto-Restart
 

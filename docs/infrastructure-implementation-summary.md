@@ -72,11 +72,68 @@ Successfully implemented infrastructure management capabilities for llamaCPPMana
 
 **Commit**: [b37fdc5](../../../commit/b37fdc5)
 
+## Scope and Limitations
+
+### Current Implementation Scope
+
+**Platform**: macOS only (tested on Apple Silicon)
+**Infrastructure Components**: 2 specific components on local machine
+**Deployment**: Single-machine, local development environment
+
+### Supported Infrastructure Components
+
+The current implementation manages **only these two specific infrastructure components** running on the **same macOS machine** as llamaCPPManager:
+
+1. **cloudflared tunnel** - Cloudflare tunnel running locally via launchd
+2. **LLM controller** - Local HTTP controller service at `http://127.0.0.1:8090`
+
+### Important Limitations
+
+⚠️ **Not Currently Supported:**
+- Remote infrastructure management (components on other machines)
+- Multi-platform infrastructure (Linux, Windows servers)
+- Container-based infrastructure components
+- Kubernetes-based infrastructure
+- Dynamic infrastructure discovery
+- Cloud provider integrations (AWS, GCP, Azure)
+- Network infrastructure (routers, switches, load balancers)
+- Database servers or other backend services
+
+⚠️**Local Only:**
+- All infrastructure components must run on the **same macOS machine** as llamaCPPManager
+- All management scripts must be accessible via local file paths
+- All health check endpoints must be accessible via localhost/127.0.0.1
+
+⚠️ **Hard-Coded Configuration:**
+- Component types are fixed (launchd_managed, script_managed)
+- Component names are specific (cloudflared, llm_controller)
+- No plugin system for adding new component types
+
+### What This Implementation Provides
+
+✅ **Local Infrastructure Management**: Manage local supporting services on your Mac
+✅ **Unified Interface**: Single CLI/GUI for models + local infrastructure
+✅ **Health Monitoring**: Automatic health checks for local components
+✅ **Auto-Restart**: Crash recovery for local services
+✅ **Auto-Start**: Boot/login integration via launchd
+
+### Future Expansion Possibilities
+
+The wrapper pattern used in this implementation could be extended to support:
+- Additional local service types
+- Remote infrastructure (SSH-based management)
+- Docker containers on local machine
+- Custom component type plugins
+
+However, these are **not currently implemented**.
+
 ## Architecture
 
 ### Infrastructure Component Types
 
 #### 1. Cloudflared Tunnel (launchd_managed)
+- **Platform**: macOS only
+- **Location**: Same machine as llamaCPPManager
 - **Management**: Via installer script at `~/llms/install_cloudflared_launchagent.sh`
 - **Launchd Label**: `llms.tunnel`
 - **Config**: `~/.cloudflared/config.yml`
@@ -84,6 +141,8 @@ Successfully implemented infrastructure management capabilities for llamaCPPMana
 - **Health Check**: launchd process check (no HTTP endpoint)
 
 #### 2. LLM Controller (script_managed)
+- **Platform**: macOS only
+- **Location**: Same machine as llamaCPPManager (localhost)
 - **Management**: Via management script at `~/llms/controller.sh`
 - **Commands**: `start`, `stop`, `status`, `logs`, `restart`
 - **Endpoint**: `http://127.0.0.1:8090/status`
