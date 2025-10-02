@@ -3,9 +3,12 @@
 Toolkit for managing local `llama-server` instances (from llama.cpp) on macOS.
 
 ## Project Goals
-- Provide a macOS-friendly launcher to start/stop/monitor multiple llama.cpp model services.
-- Offer simple visibility into model status, ports, and logs.
-- Package tooling so it can be launched from the Applications folder with an icon.
+- Provide a macOS-friendly launcher to start/stop/monitor multiple llama.cpp model services
+- Manage supporting infrastructure components (cloudflared tunnel, LLM controller)
+- Offer simple visibility into model and infrastructure status, ports, and logs
+- Automatic health monitoring and crash recovery with configurable retry policies
+- Package tooling so it can be launched from the Applications folder with an icon
+- Auto-start capabilities via launchd for persistent operation
 
 See `docs/requirements.md` for the detailed requirements backlog.
 
@@ -93,6 +96,56 @@ Notes:
   - `llamacpp-manager query chat model-name --message "system:You are helpful" --message "user:Hello"`
   - `llamacpp-manager query chat model-name --message "user:Hello" --stream`
 
+### Infrastructure Management
+
+Manage supporting infrastructure components (cloudflared tunnel, LLM controller) alongside your models:
+
+- List configured infrastructure components:
+  - `llamacpp-manager infra list`
+
+- View infrastructure status:
+  - `llamacpp-manager infra status`
+
+- Control individual components:
+  - `llamacpp-manager infra start cloudflared`
+  - `llamacpp-manager infra stop llm_controller`
+  - `llamacpp-manager infra restart cloudflared`
+
+- View component logs:
+  - `llamacpp-manager infra logs llm_controller`
+
+- View combined status (models + infrastructure):
+  - `llamacpp-manager status --json`
+
+Infrastructure components are configured in `config.yaml` under the `infrastructure` section. See `docs/design-infrastructure-management.md` for details.
+
+### Health Monitoring & Auto-Restart
+
+Monitor models and infrastructure components with automatic restart on failure:
+
+- Track a model for auto-restart:
+  - `llamacpp-manager monitor track smollm3`
+
+- Stop tracking a model:
+  - `llamacpp-manager monitor untrack smollm3`
+
+- View monitoring status:
+  - `llamacpp-manager monitor status`
+  - `llamacpp-manager monitor status --detailed`
+
+- Start monitoring daemon:
+  - `llamacpp-manager monitor start`
+
+- Stop monitoring daemon:
+  - `llamacpp-manager monitor stop`
+
+- Install monitoring daemon as launchd agent (auto-start on boot):
+  - `llamacpp-manager monitor launchd install`
+  - `llamacpp-manager monitor launchd status`
+  - `llamacpp-manager monitor launchd uninstall`
+
+The monitoring daemon runs in the background and automatically restarts tracked models and enabled infrastructure components when they crash or become unhealthy. It uses exponential backoff with configurable retry limits.
+
 ### MCP Server
 
 - Run as an MCP (Model Context Protocol) server to expose llamaCPPManager functionality as tools:
@@ -118,15 +171,53 @@ See `docs/testing.md` for details on test structure and conventions.
 
 ## GUI (SwiftUI Menu Bar)
 
+### Features
+
+The menu bar GUI provides a visual interface for managing both models and infrastructure:
+
+- **Infrastructure Section**: View and control infrastructure components (cloudflared, llm_controller)
+  - Health indicators (🟢 healthy, 🟠 unhealthy, 🔴 stopped, ⚫ disabled)
+  - Start/Stop/Restart/Logs buttons for each component
+  - Real-time status updates
+
+- **Models Section**: Manage llama.cpp model servers
+  - Health indicators and latency display
+  - Start/Stop/Restart/Chat/Monitor/Logs buttons
+  - Process status and HTTP health check results
+
+- **Global Actions**: Ensure Running, Refresh, Config, CLI access
+- **Auto-polling**: Status updates every 2 seconds
+
+### Building and Running
+
 - Location: `gui-macos/` (Swift Package with an executable target)
-- Build and run tests locally:
+
+- Build app bundle:
+  - `cd gui-macos && ./build_app.sh`
+  - Creates `build/llamaCPP Manager.app` and DMG
+
+- Install to Applications:
+  - `cp -R "build/llamaCPP Manager.app" /Applications/`
+
+- Install GUI auto-start (optional):
+  - `cd gui-macos && ./install_gui_launchagent.sh`
+  - Configures app to launch automatically on login
+
+- Run tests:
   - `make gui-test` (runs `swift test` in `gui-macos/`)
-- Run the GUI from Xcode:
-  - Open `gui-macos/Package.swift` in Xcode and run the `llamacpp-gui` scheme.
-  - The app appears in the menu bar as “llamaCPP”.
-- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it’s on your PATH or at one of:
+
+- Run from Xcode:
+  - Open `gui-macos/Package.swift` in Xcode
+  - Run the `llamacpp-gui` scheme
+  - The app appears in the menu bar as "🧠 llamaCPP"
+
+### Requirements
+
+- The GUI calls the CLI `llamacpp-manager` under the hood. Ensure it's on your PATH or at one of:
   - `/opt/homebrew/bin/llamacpp-manager`
   - `/usr/local/bin/llamacpp-manager`
+  - `~/.local/bin/llamacpp-manager`
+
 - To use a custom config/logs location set in the CLI, export:
   - `LLAMACPP_MANAGER_CONFIG_DIR=/path/to/config`
   - `LLAMACPP_MANAGER_LOG_DIR=/path/to/logs`
