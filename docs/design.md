@@ -1,7 +1,7 @@
 # llamaCPPManager — Design
 
 ## Overview
-A macOS‑friendly toolkit to configure, launch, and monitor multiple llama.cpp `llama-server` instances across different deployment scenarios: bare-metal (macOS M4 Max), containerized (macOS Docker/Colima), and Kubernetes (remote Ubuntu OpenStack clusters). Provides unified CLI interface, clear status, logs, optional autostart, and native menu bar GUI.
+A macOS‑friendly toolkit to configure, launch, and monitor multiple llama.cpp `llama-server` instances and supporting infrastructure components across different deployment scenarios: bare-metal (macOS M4 Max), containerized (macOS Docker/Colima), and Kubernetes (remote Ubuntu OpenStack clusters). Provides unified CLI interface, health monitoring with auto-restart, infrastructure management, clear status, logs, optional autostart, and native menu bar GUI.
 
 ## Architecture
 
@@ -18,6 +18,8 @@ graph TD
     CLI --> LD[launchd.py]
     CLI --> CONT[container.py]
     CLI --> K8S[kubernetes.py]
+    CLI --> INFRA[infrastructure.py]
+    CLI --> MON[monitor.py]
   end
 
   GUI -->|exec and parse JSON| CLI

@@ -225,6 +225,35 @@ pipx install --suffix=@local .
 
 ```bash
 llamacpp-manager --help
+llamacpp-manager --version
+```
+
+### Post-Installation Setup
+
+#### Optional: Install Monitoring Daemon (Recommended)
+
+The monitoring daemon provides automatic health checks and crash recovery for models and infrastructure:
+
+```bash
+# Install monitoring daemon as launchd agent (auto-starts on boot)
+llamacpp-manager monitor launchd install
+
+# Verify installation
+llamacpp-manager monitor launchd status
+```
+
+#### Optional: Install GUI Auto-Start
+
+Configure the menu bar app to launch automatically on login:
+
+```bash
+# Build and install GUI app first
+cd gui-macos
+./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+
+# Install GUI auto-start
+./install_gui_launchagent.sh
 ```
 
 ## Deployment Scenarios
@@ -934,6 +963,265 @@ llamacpp-manager query chat MODEL_NAME --message "user:Count to 10" --stream
 
 ---
 
+## Infrastructure Management
+
+llamaCPP Manager can also manage supporting infrastructure components like cloudflared tunnel and LLM controller alongside your models.
+
+### Infrastructure Architecture
+
+```mermaid
+graph TB
+    subgraph "llamaCPP Manager System"
+        A[CLI/GUI] --> B[Infrastructure Manager]
+        A --> C[Health Monitor]
+        A --> D[Config Manager]
+
+        B --> E[cloudflared Tunnel<br/>launchd-managed]
+        B --> F[LLM Controller<br/>script-managed]
+
+        C --> G[HTTP Health Checks<br/>with X-API-Key]
+        C --> H[launchd Process Checks]
+
+        D --> I[config.yaml<br/>infrastructure section]
+
+        E --> J[~/llms/install_cloudflared_launchagent.sh]
+        F --> K[~/llms/controller.sh]
+
+        G --> F
+        H --> E
+    end
+
+    subgraph "Auto-Restart"
+        L[Monitoring Daemon] --> C
+        L --> M[Exponential Backoff<br/>Retry Limits]
+        M --> B
+    end
+```
+
+### Infrastructure Components
+
+Infrastructure components are defined in `~/.config/llamacpp/config.yaml`:
+
+```yaml
+infrastructure:
+  cloudflared:
+    enabled: true
+    type: launchd_managed
+    launchd_label: llms.tunnel
+    installer_script: ~/llms/install_cloudflared_launchagent.sh
+    health_check:
+      type: launchd_process
+      label: llms.tunnel
+
+  llm_controller:
+    enabled: true
+    type: script_managed
+    management_script: ~/llms/controller.sh
+    health_check:
+      type: http
+      endpoint: http://127.0.0.1:8090/status
+      headers:
+        X-API-Key: your-api-key
+      expected_status: 200
+      timeout: 5.0
+    auto_restart:
+      enabled: true
+      max_retries: 3
+      backoff_multiplier: 2.0
+      failure_threshold: 3
+```
+
+### Infrastructure Commands
+
+```bash
+# List configured infrastructure components
+llamacpp-manager infra list
+
+# View infrastructure status
+llamacpp-manager infra status
+
+# Control individual components
+llamacpp-manager infra start cloudflared
+llamacpp-manager infra start llm_controller
+llamacpp-manager infra stop cloudflared
+llamacpp-manager infra stop llm_controller
+llamacpp-manager infra restart llm_controller
+
+# View component logs
+llamacpp-manager infra logs llm_controller
+llamacpp-manager infra logs cloudflared
+
+# View combined status (models + infrastructure)
+llamacpp-manager status --json
+```
+
+### Example Infrastructure Operations
+
+```bash
+# Check what infrastructure is configured
+$ llamacpp-manager infra list
+Infrastructure Components:
+  cloudflared (launchd_managed) - enabled
+    Launchd label: llms.tunnel
+    Installer script: ~/llms/install_cloudflared_launchagent.sh
+  llm_controller (script_managed) - enabled
+    Management script: ~/llms/controller.sh
+
+# Check infrastructure status
+$ llamacpp-manager infra status
+Infrastructure Component Status:
+  ✓ cloudflared: running (PID 1234)
+  ✓ llm_controller: ok (200 OK, 5ms)
+
+# Start a stopped component
+$ llamacpp-manager infra start llm_controller
+Starting llm_controller...
+✓ llm_controller started successfully
+
+# View component logs
+$ llamacpp-manager infra logs llm_controller
+[2025-10-02 10:15:30] Controller starting...
+[2025-10-02 10:15:31] Health endpoint listening on :8090
+[2025-10-02 10:15:31] Controller ready
+```
+
+---
+
+## Health Monitoring & Auto-Restart
+
+llamaCPP Manager includes a monitoring daemon that continuously checks the health of models and infrastructure components, automatically restarting them if they crash or become unhealthy.
+
+### Monitoring Architecture
+
+```mermaid
+graph TB
+    subgraph "Monitoring Daemon"
+        A[ModelMonitor] --> B[Health Check Loop<br/>Every 10s]
+        B --> C[Check Models]
+        B --> D[Check Infrastructure]
+
+        C --> E[HTTP Health Checks]
+        C --> F[Process Checks]
+
+        D --> G[HTTP Health Checks<br/>with Auth]
+        D --> H[launchd Process Checks]
+
+        E --> I{Healthy?}
+        F --> I
+        G --> I
+        H --> I
+
+        I -->|Yes| J[Reset Failure Count]
+        I -->|No| K[Increment Failure Count]
+
+        K --> L{Threshold<br/>Reached?}
+        L -->|Yes| M[Auto-Restart Component]
+        L -->|No| J
+
+        M --> N[Exponential Backoff]
+        N --> O{Max Retries<br/>Exceeded?}
+        O -->|No| P[Restart & Wait]
+        O -->|Yes| Q[Alert & Stop Retrying]
+    end
+
+    subgraph "State Persistence"
+        R[~/.llamacpp-manager/monitor-state/]
+        A --> R
+        R --> S[model_stats.json]
+        R --> T[infrastructure_stats.json]
+    end
+```
+
+### Monitoring Commands
+
+```bash
+# Track a model for auto-restart
+llamacpp-manager monitor track smollm3
+
+# Stop tracking a model
+llamacpp-manager monitor untrack smollm3
+
+# View monitoring status
+llamacpp-manager monitor status
+
+# View detailed monitoring status
+llamacpp-manager monitor status --detailed
+
+# Manually start monitoring daemon
+llamacpp-manager monitor start
+
+# Stop monitoring daemon
+llamacpp-manager monitor stop
+```
+
+### Installing Monitoring Daemon (Auto-Start on Boot)
+
+```bash
+# Install monitoring daemon as launchd agent
+llamacpp-manager monitor launchd install
+
+# Check if monitoring daemon is installed
+llamacpp-manager monitor launchd status
+
+# Uninstall monitoring daemon
+llamacpp-manager monitor launchd uninstall
+```
+
+### Monitoring Configuration
+
+The monitoring daemon uses the following default settings (configurable per component):
+
+- **Check Interval**: 10 seconds
+- **Failure Threshold**: 3 consecutive failures before restart
+- **Max Retries**: 3 restart attempts
+- **Backoff Multiplier**: 2.0 (wait time doubles each retry)
+- **Initial Backoff**: 1 second
+
+### Example Monitoring Workflow
+
+```bash
+# Install and start monitoring daemon
+$ llamacpp-manager monitor launchd install
+✓ Created launchd plist: ~/Library/LaunchAgents/com.llamacpp.manager.monitor.plist
+✓ Monitoring daemon installed and loaded
+  Label: com.llamacpp.manager.monitor
+  The daemon will start automatically on boot
+  Logs: ~/Library/Logs/llamaCPPManager/monitor-daemon.log
+
+# Check status
+$ llamacpp-manager monitor launchd status
+✓ Monitoring daemon is loaded
+  Label: com.llamacpp.manager.monitor
+  Plist: ~/Library/LaunchAgents/com.llamacpp.manager.monitor.plist
+  Status: installed and loaded
+  PID: 5678
+
+# Track models for auto-restart
+$ llamacpp-manager monitor track smollm3
+Now tracking 'smollm3' for auto-restart
+
+$ llamacpp-manager monitor track mistral
+Now tracking 'mistral' for auto-restart
+
+# View monitoring status
+$ llamacpp-manager monitor status --detailed
+Monitor Status: RUNNING
+Check Interval: 10s
+State Directory: ~/.llamacpp-manager/monitor-state
+
+Tracked Models:
+Model        Health     Process    Port   Latency  Status
+----------------------------------------------------------
+smollm3      ok         running    8081   5        HTTP 200
+mistral      ok         running    8082   8        HTTP 200
+
+Infrastructure:
+cloudflared   healthy    running    -      0        loaded
+llm_controller ok         running    8090   12       HTTP 200
+```
+
+---
+
 ## GUI Usage
 
 ### Installation and Setup
@@ -958,11 +1246,58 @@ llamacpp-manager query chat MODEL_NAME --message "user:Count to 10" --stream
 
 ### GUI Features
 
-- **Model List**: View all configured models with status indicators
-- **Start/Stop**: Click to start/stop individual models
-- **Status Indicators**: 🟢 Running, 🔴 Stopped, ⚠️ Issues
-- **Quick Actions**: Right-click for more options
-- **Preferences**: Configure paths and refresh intervals
+The macOS menu bar GUI provides a comprehensive interface for managing both models and infrastructure:
+
+**Infrastructure Section**:
+- View cloudflared tunnel and LLM controller status
+- Health indicators: 🟢 Healthy, 🟠 Unhealthy, 🔴 Stopped, ⚫ Disabled
+- Control buttons: Start, Stop, Restart, Logs for each component
+- Real-time status updates showing latency and health status
+
+**Models Section**:
+- View all configured models with detailed status
+- Health indicators showing HTTP response and process state
+- Control buttons: Start, Stop, Restart, Chat, Monitor, Logs
+- Latency display (milliseconds)
+- Port and host information
+
+**Global Actions**:
+- **Ensure Running**: Start all models with autostart=true
+- **Refresh**: Manually refresh all status
+- **Open Config**: Open config directory in Finder
+- **Open CLI**: Launch Terminal with llamacpp-manager
+- **Auto-polling**: Status updates every 2 seconds
+
+### Building and Installing GUI
+
+```bash
+# Build app bundle (from gui-macos directory)
+cd gui-macos
+./build_app.sh
+
+# Install to Applications folder
+cp -R "build/llamaCPP Manager.app" /Applications/
+
+# Optional: Install GUI auto-start (launches on login)
+./install_gui_launchagent.sh
+```
+
+### GUI Auto-Start Configuration
+
+The GUI can be configured to launch automatically when you log in:
+
+```bash
+# Install GUI as launchd agent
+cd gui-macos
+./install_gui_launchagent.sh
+
+# Verify installation
+launchctl list | grep com.llamacpp.manager.gui
+
+# Uninstall GUI auto-start
+launchctl unload ~/Library/LaunchAgents/com.llamacpp.manager.gui.plist
+rm ~/Library/LaunchAgents/com.llamacpp.manager.gui.plist
+```
 
 ---
 
