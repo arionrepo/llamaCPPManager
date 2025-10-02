@@ -27,7 +27,7 @@ pipx ensurepath
 ## Step 2: Install llamaCPPManager CLI
 
 ```bash
-# Clone the repository
+# Clone the repository (if not already done)
 cd ~/LocalProjects/GitHubProjectsDocuments/llamaCPPManager
 
 # Install with pipx (recommended - isolated environment)
@@ -36,6 +36,8 @@ pipx install -e .
 # Verify installation
 llamacpp-manager --version
 ```
+
+**📌 Important**: Your configuration is stored separately at `~/Library/Application Support/llamaCPPManager/config.yaml`. Reinstalling or upgrading the CLI **never deletes your model configurations**. See [UPGRADE.md](UPGRADE.md) for details.
 
 ## Step 3: Initialize Configuration
 
