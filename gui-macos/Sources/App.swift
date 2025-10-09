@@ -134,6 +134,35 @@ struct LlamaCPPManagerApp: App {
                 }
                 Button("Ensure Running") { vm.ensureRunning() }
                 Divider()
+
+                // MARK: - Logging Section
+                if let logging = vm.loggingConfig {
+                    HStack {
+                        Text("Logging")
+                            .font(.headline)
+                        Spacer()
+                        Text(logging.enabled ? "ON" : "OFF")
+                            .font(.caption)
+                            .foregroundColor(logging.enabled ? .green : .red)
+                    }
+                    .padding(.horizontal, 8)
+
+                    HStack {
+                        Button(logging.enabled ? "Disable Logs" : "Enable Logs") {
+                            vm.toggleLogging()
+                        }
+                        Button(logging.timestamps ? "Timestamps: ON" : "Timestamps: OFF") {
+                            vm.toggleTimestamps()
+                        }
+                        .foregroundColor(logging.timestamps ? .green : .secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+
+                    Divider()
+                }
+
                 Button("Refresh") { vm.refresh() }
                 Button("Open Config") { vm.openConfig() }
                 Button("Open CLI") { vm.openCLI() }
@@ -217,14 +246,23 @@ struct AnyCodable: Codable {
     }
 }
 
+struct LoggingConfig: Codable {
+    let enabled: Bool
+    let max_bytes: Int
+    let backups: Int
+    let timestamps: Bool
+}
+
 struct StatusResponse: Codable {
     let models: [StatusRow]
     let infrastructure: [InfrastructureRow]
+    let logging: LoggingConfig
 }
 
 final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
     @Published var infrastructureRows: [InfrastructureRow] = []
+    @Published var loggingConfig: LoggingConfig?
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
@@ -245,9 +283,34 @@ final class StatusViewModel: ObservableObject {
                 let response = try await service.fetchStatus()
                 self.rows = response.models
                 self.infrastructureRows = response.infrastructure
+                self.loggingConfig = response.logging
             } catch {
                 // Keep prior rows; optionally surface an error row
             }
+        }
+    }
+
+    // MARK: - Logging Control Methods
+
+    func toggleLogging() {
+        Task {
+            if loggingConfig?.enabled == true {
+                _ = try? await service.run(["logging", "disable"])
+            } else {
+                _ = try? await service.run(["logging", "enable"])
+            }
+            refresh()
+        }
+    }
+
+    func toggleTimestamps() {
+        Task {
+            if loggingConfig?.timestamps == true {
+                _ = try? await service.run(["logging", "timestamps", "off"])
+            } else {
+                _ = try? await service.run(["logging", "timestamps", "on"])
+            }
+            refresh()
         }
     }
 

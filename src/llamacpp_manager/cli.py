@@ -1016,9 +1016,18 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         }
         infrastructure_status.append(entry)
 
+    # Add global logging configuration to status
+    logging_config = cfg.get("logging", {
+        "enabled": True,
+        "max_bytes": 10 * 1024 * 1024,
+        "backups": 5,
+        "timestamps": True
+    })
+
     return {
         "models": models_status,
-        "infrastructure": infrastructure_status
+        "infrastructure": infrastructure_status,
+        "logging": logging_config
     }
 
 
