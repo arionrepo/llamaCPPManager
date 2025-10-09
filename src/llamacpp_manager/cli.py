@@ -647,6 +647,9 @@ def cmd_start(args: argparse.Namespace) -> int:
             args=list(m.get("args", []) or []),
             env=dict(m.get("env", {}) or {}),
             autostart=bool(m.get("autostart", False)),
+            deployment_type=m.get("deployment_type", "native"),
+            group=m.get("group"),
+            metadata=m.get("metadata"),
             logging=m.get("logging"),
         )
         # Warn/refuse remote binds unless explicitly allowed

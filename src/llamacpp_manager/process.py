@@ -59,15 +59,50 @@ def start_process(
         log_path = log_dir / f"{spec.name}.log"
         rotate_file(log_path, max_bytes=max_bytes, backups=backups)
 
-        # Choose log writer based on timestamp setting
         if timestamps:
-            stdout_log = open_timestamped_log(log_path, "stdout")
-            stderr_log = open_timestamped_log(log_path, "stderr")
+            # For timestamp logging, we need a persistent helper process
+            # since daemon threads die when the CLI exits.
+            # Use a wrapper script approach instead.
+            import tempfile
+            import shlex
+
+            # Create a wrapper script that adds timestamps
+            wrapper_script = tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, dir='/tmp')
+            wrapper_path = wrapper_script.name
+
+            # Build the wrapper script content
+            quoted_argv = ' '.join(shlex.quote(arg) for arg in argv)
+            script_content = f'''#!/bin/bash
+# Timestamp logger wrapper for {spec.name}
+exec {quoted_argv} 2>&1 | while IFS= read -r line; do
+    # macOS date doesn't support milliseconds, so just use seconds precision
+    printf "[%s] [combined] %s\\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$line"
+done >> {shlex.quote(str(log_path))}
+'''
+            wrapper_script.write(script_content)
+            wrapper_script.close()
+
+            # Make wrapper executable
+            os.chmod(wrapper_path, 0o755)
+
+            # Start the wrapper script
+            proc = Popen(['/bin/bash', wrapper_path], env=env)
+
+            # Clean up wrapper script after a delay (it will keep running)
+            import threading
+            def cleanup_wrapper():
+                import time
+                time.sleep(5)
+                try:
+                    os.unlink(wrapper_path)
+                except:
+                    pass
+            threading.Thread(target=cleanup_wrapper, daemon=True).start()
         else:
+            # No timestamps - direct file logging
             stdout_log = open_log_append(log_path)
             stderr_log = stdout_log  # Share same file
-
-        proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env)
+            proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env)
     else:
         # Logging disabled - discard output
         import subprocess
