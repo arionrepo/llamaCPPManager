@@ -21,6 +21,9 @@ class ModelSpec:
     args: Optional[List[str]] = None
     env: Optional[Dict[str, str]] = None
     autostart: bool = False
+    deployment_type: str = "native"  # "native" or "container"
+    group: Optional[str] = None  # Model group name for mutual exclusion
+    metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -29,6 +32,11 @@ class ModelSpec:
             d["args"] = []
         if d.get("env") is None:
             d["env"] = {}
+        if d.get("metadata") is None:
+            d["metadata"] = {}
+        # Don't include group if None
+        if d.get("group") is None:
+            del d["group"]
         return d
 
 
@@ -102,6 +110,7 @@ def default_config() -> Dict[str, Any]:
         "log_dir": str(logs_dir()),
         "timeout_ms": 2000,
         "models": [],
+        "model_groups": {},  # Optional model groups with mutual exclusion
         "infrastructure": default_infrastructure_config(),
         "monitoring": {
             "enabled": True,
@@ -120,6 +129,7 @@ def load_config() -> Dict[str, Any]:
     for k, v in default_config().items():
         cfg.setdefault(k, v)
     cfg.setdefault("models", [])
+    cfg.setdefault("model_groups", {})
     cfg.setdefault("infrastructure", default_infrastructure_config())
     cfg.setdefault("monitoring", {"enabled": True, "interval_seconds": 30, "alert_on_failure": True})
     return cfg
@@ -267,3 +277,77 @@ def get_infrastructure_component(cfg: Dict[str, Any], name: str) -> Optional[Dic
         comp = dict(comp)  # Make a copy to avoid modifying original
         comp["name"] = name
     return comp
+
+
+# Model group management functions
+
+def list_model_groups(cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    List all model groups from configuration.
+
+    Business Purpose: Provides access to model group definitions
+    for enforcing mutual exclusion and resource management.
+
+    Args:
+        cfg: Full configuration dictionary
+
+    Returns:
+        Dictionary mapping group name to group configuration
+
+    Example:
+        groups = list_model_groups(config)
+        coding_group = groups.get("coding-models")
+        if coding_group.get("exclusive"):
+            # Only one model can run at a time
+    """
+    return cfg.get("model_groups", {})
+
+
+def get_model_group(cfg: Dict[str, Any], group_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific model group configuration.
+
+    Business Purpose: Retrieves settings for a model group to enable
+    exclusive launching and resource management.
+
+    Args:
+        cfg: Full configuration dictionary
+        group_name: Group name (e.g., "coding-models")
+
+    Returns:
+        Group configuration dictionary or None if not found
+
+    Example:
+        group = get_model_group(config, "coding-models")
+        if group and group.get("exclusive"):
+            members = group.get("members", [])
+            # Stop other members before starting new one
+    """
+    return cfg.get("model_groups", {}).get(group_name)
+
+
+def get_model_group_for_model(cfg: Dict[str, Any], model_name: str) -> Optional[str]:
+    """
+    Find which group a model belongs to.
+
+    Business Purpose: Identifies the exclusive group membership of a model
+    to enable automatic stopping of sibling models.
+
+    Args:
+        cfg: Full configuration dictionary
+        model_name: Name of model to check
+
+    Returns:
+        Group name if model is in a group, None otherwise
+
+    Example:
+        group_name = get_model_group_for_model(config, "qwen-coder-32b")
+        if group_name:
+            group = get_model_group(config, group_name)
+            if group.get("exclusive"):
+                # Stop siblings before starting this model
+    """
+    model = get_model(cfg, model_name)
+    if model:
+        return model.get("group")
+    return None

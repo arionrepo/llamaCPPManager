@@ -1,7 +1,13 @@
 # llamaCPPManager — Design
 
 ## Overview
-A macOS‑friendly toolkit to configure, launch, and monitor multiple llama.cpp `llama-server` instances and supporting infrastructure components across different deployment scenarios: bare-metal (macOS M4 Max), containerized (macOS Docker/Colima), and Kubernetes (remote Ubuntu OpenStack clusters). Provides unified CLI interface, health monitoring with auto-restart, infrastructure management, clear status, logs, optional autostart, and native menu bar GUI.
+A macOS‑friendly toolkit to configure, launch, and monitor multiple llama.cpp `llama-server` instances and supporting infrastructure components. Supports **flexible deployment** with native (bare-metal) as default and optional containerized deployment. Provides unified model management with exclusive model groups for resource-constrained scenarios, health monitoring with auto-restart, infrastructure management, clear status, logs, optional autostart, MCP server integration, and native menu bar GUI.
+
+## Deployment Philosophy
+- **Native-first**: All models work without containers (direct `llama-server` processes)
+- **Containers optional**: Enable container deployment per-model when isolation is needed
+- **On-demand by default**: Models start when requested, not automatically
+- **Flexible groups**: Define exclusive groups for large models that shouldn't run concurrently
 
 ## Architecture
 
@@ -137,70 +143,122 @@ sequenceDiagram
 ## Data Model (Config)
 
 - Location: `~/Library/Application Support/llamaCPPManager/config.yaml`
-- Schema (with deployment scenarios):
+- Schema (with unified deployment):
   - `llama_server_path` (string; default `/opt/homebrew/bin/llama-server`)
   - `log_dir` (string; default `~/Library/Logs/llamaCPPManager`)
   - `timeout_ms` (int; default 2000)
+  - `model_groups{}` (optional; defines exclusive groups):
+    - `exclusive` (bool; only one model in group at a time)
+    - `auto_stop_minutes` (int; inactivity timeout)
+    - `members[]` (list of model names)
   - `models[]`:
     - `name` (unique)
     - `model_path` (GGUF file path)
-    - `deployment_scenario` (enum: `bare-metal` | `container` | `kubernetes`)
-    - `host` (default `127.0.0.1` for local scenarios)
-    - `port` (unique per scenario)
-    - `args[]` (additional flags, e.g., `-c`, `8192`, `-ngl`, `9999`)
+    - `deployment_type` (enum: `native` | `container`; default `native`)
+    - `host` (default `127.0.0.1`)
+    - `port` (unique)
+    - `group` (optional; name of model group)
+    - `args[]` (additional flags, e.g., `--ctx-size`, `32768`)
     - `env{}` (optional)
-    - `autostart` (bool)
-    - `container{}` (container-specific config, if scenario = container)
-    - `kubernetes{}` (K8s-specific config, if scenario = kubernetes)
+    - `autostart` (bool; default false)
+    - `metadata{}` (optional; size_gb, ram_gb, use_case)
+    - `container{}` (container-specific config, only if deployment_type = container)
+  - `infrastructure{}` (infrastructure components):
+    - Component-specific settings for cloudflared, llm_controller, etc.
+  - `monitoring{}` (health monitoring configuration)
+  - `container_settings{}` (optional; only if using containers)
 
 Example:
 ```yaml
 llama_server_path: /opt/homebrew/bin/llama-server
 log_dir: /Users/you/Library/Logs/llamaCPPManager
 timeout_ms: 2000
+
+# Model groups with mutual exclusion
+model_groups:
+  coding-models:
+    exclusive: true  # Only one can run at a time
+    auto_stop_minutes: 120
+    members:
+      - qwen-coder-32b
+      - qwen-coder-14b
+      - deepseek-coder-lite
+
+# Infrastructure components
+infrastructure:
+  cloudflared:
+    enabled: true
+    type: launchd_managed
+    launchd_label: llms.tunnel
+    autostart: true
+  llm_controller:
+    enabled: true
+    type: script_managed
+    management_script: ~/llms/controller.sh
+    autostart: true
+
 models:
-  # Bare-metal on macOS M4 Max
-  - name: smollm3-dev
-    model_path: /Users/you/llms/smollm3/SmolLM3-Q8_0.gguf
-    deployment_scenario: bare-metal
+  # Small models - native deployment, on-demand
+  - name: phi3
+    model_path: /Users/you/llms/phi3/Phi-3-mini-4k-instruct-fp16.gguf
+    deployment_type: native  # Explicit but defaults to native
     host: 127.0.0.1
     port: 8081
-    args: ["-c","8192","-ngl","9999","-t","12","--parallel","4","--cont-batching"]
-    autostart: true
-
-  # Container on macOS M4 Max
-  - name: mistral7b-test
-    model_path: /Users/you/llms/mistral/mistral-7b-q8_0.gguf
-    deployment_scenario: container
-    port: 8082
-    container:
-      memory: "4g"
-      cpus: "2.0"
     autostart: false
+    args: []
+    env: {}
 
-  # Kubernetes on remote Ubuntu OpenStack
-  - name: llama2-prod
-    model_path: /shared/models/llama2/llama-2-13b-q4_0.gguf
-    deployment_scenario: kubernetes
-    kubernetes:
-      context: "openstack-prod"
-      namespace: "llamacpp-models"
-      replicas: { min: 2, max: 10 }
-      resources:
-        limits: { memory: "8Gi", cpu: "4" }
-    autostart: true
+  # Large coding model - native, exclusive group
+  - name: qwen-coder-32b
+    model_path: /Users/you/llms/qwen-coder-32b/qwen2.5-coder-32b-instruct-q8_0.gguf
+    deployment_type: native
+    host: 127.0.0.1
+    port: 8090
+    group: coding-models  # Part of exclusive group
+    autostart: false
+    args: ["--ctx-size", "32768"]
+    metadata:
+      size_gb: 35
+      ram_gb: 40
+      use_case: "Complex refactoring, architecture design"
+
+  # Optional: Container deployment example
+  - name: experimental-model
+    model_path: /Users/you/llms/experimental/model.gguf
+    deployment_type: container  # Opt-in to containers
+    port: 8095
+    autostart: false
+    container:
+      memory: "8g"
+      cpus: "4.0"
 ```
 
 ## CLI Surface
 
+### Core Commands
 - `init` – create config and dirs
 - `config add|remove|update|list` – manage model entries with validation
-- `start <name|all>` – direct or `--launchd`; `--dry-run`
-- `stop <name|all>` – direct or `--launchd`
+- `start <name|all>` – start model using configured deployment type; `--native` or `--container` to override
+- `stop <name|all>` – stop model (auto-detects deployment type)
 - `restart <name|all>`
-- `status [--json] [--watch]`
+- `status [--json] [--watch]` – shows deployment type, group membership, uptime
 - `logs <name|all> [--tail]`
 - `launchd install|uninstall <name|all>`
+
+### Unified Model Manager Commands
+- `launch <name>` – launch model, auto-stopping siblings in exclusive group
+- `models list [--native|--container]` – list models by deployment type
+- `models download <name>` – download model from Hugging Face
+- `active-models` – show currently running models with deployment info
+
+### Infrastructure Commands (Existing)
+- `infra status` – infrastructure component status
+- `infra start|stop|restart <name>` – control infrastructure components
+- `infra logs <name>` – view infrastructure logs
+
+### MCP Server Commands
+- `mcp-server` – start MCP server for AI assistant integration
+- `mcp-colima-server` – start Colima-specific MCP server (optional)
 
 ## GUI (SwiftUI Menu Bar)
 

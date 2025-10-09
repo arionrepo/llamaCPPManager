@@ -195,6 +195,45 @@ Acceptance Criteria
 - WHEN I run `status` THEN the system SHALL detect and report on bare-metal, container, and Kubernetes-deployed models
 - WHEN using persistent volumes THEN the system SHALL manage model file storage via PVC for efficient sharing across pods
 
+Requirement 17: Unified Model Management
+Phase: MVP-ModelManager
+
+User Story: As a user managing multiple models, I want a unified interface that works for both native and containerized deployments so that I can choose the best deployment method for each use case.
+
+Acceptance Criteria
+- WHEN I configure a model THEN the system SHALL support deployment_type: native or container
+- WHEN I start a model THEN the system SHALL use the configured deployment type transparently
+- WHEN I define model groups THEN the system SHALL support mutual exclusion (only one model in group runs at a time)
+- WHEN switching between models in an exclusive group THEN the system SHALL automatically stop the previous model
+- WHEN a model is in a group THEN the system SHALL display group membership in status output
+- WHEN models have no autostart THEN the system SHALL support on-demand launching for all models
+
+Requirement 18: Large Coding Model Support
+Phase: MVP-CodingModels
+
+User Story: As a developer, I want to run large coding models (Qwen Coder, DeepSeek Coder) on-demand so that I can use them for complex code generation without keeping them running constantly.
+
+Acceptance Criteria
+- WHEN I download a coding model THEN the system SHALL support downloading from Hugging Face with progress tracking
+- WHEN I launch a coding model THEN the system SHALL start it natively with appropriate resource allocation
+- WHEN a coding model is idle THEN the system SHALL optionally auto-stop it after configurable timeout
+- WHEN I query via MCP THEN the system SHALL support launching coding models on-demand from AI assistants
+- WHEN multiple coding models exist THEN the system SHALL enforce mutual exclusion to prevent memory exhaustion
+- WHEN I check status THEN the system SHALL show model size, RAM requirements, and use case metadata
+
+Requirement 19: Flexible Deployment Architecture
+Phase: MVP-ModelManager
+
+User Story: As a user with different needs, I want models to work natively by default with optional container support so that I get the best performance while maintaining deployment flexibility.
+
+Acceptance Criteria
+- WHEN no deployment_type is specified THEN the system SHALL default to native deployment
+- WHEN containers are not available THEN the system SHALL still work with native deployment
+- WHEN I migrate a model to containers THEN the system SHALL support changing deployment_type without data loss
+- WHEN using native deployment THEN the system SHALL provide equivalent CLI/GUI/MCP interfaces as containerized
+- WHEN both native and containerized models exist THEN the system SHALL manage them uniformly
+- WHEN deployment_type changes THEN the system SHALL validate resources and provide clear migration guidance
+
 ## 5. Stretch Goals (Optional)
 - macOS menu bar advanced features (quick prompts, Raycast integration)
 - Prometheus endpoint exposing metrics

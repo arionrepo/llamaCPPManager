@@ -472,6 +472,13 @@ Examples:
     sp_restart.add_argument("--allow-remote", action="store_true", help="Allow external IP binds")
     sp_restart.set_defaults(func=cmd_restart)
 
+    # launch (unified model manager with exclusive groups)
+    sp_launch = sub.add_parser("launch", help="🚀 Launch model (auto-stops siblings in exclusive groups)")
+    sp_launch.add_argument("model_name", help="Model name to launch")
+    sp_launch.add_argument("--native", dest="deployment", action="store_const", const="native", help="Force native deployment")
+    sp_launch.add_argument("--container", dest="deployment", action="store_const", const="container", help="Force container deployment")
+    sp_launch.set_defaults(func=cmd_launch)
+
     # status
     sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
     sp_status.add_argument("--json", action="store_true", help="Output as JSON for scripting")
@@ -672,6 +679,43 @@ def cmd_restart(args: argparse.Namespace) -> int:
         return 0
     r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False, launchd=getattr(args, "launchd", False), allow_remote=getattr(args, "allow_remote", False)))
     return max(r1, r2)
+
+
+def cmd_launch(args: argparse.Namespace) -> int:
+    """
+    Launch a model using unified model manager.
+
+    Automatically stops sibling models in exclusive groups.
+    Supports both native and container deployment types.
+    """
+    from .model_manager import ModelManager, DeploymentType
+
+    try:
+        manager = ModelManager()
+        model_name = args.model_name
+
+        # Determine deployment type
+        force_deployment = None
+        if args.deployment:
+            try:
+                force_deployment = DeploymentType(args.deployment)
+            except ValueError:
+                print(f"error: invalid deployment type '{args.deployment}'", file=sys.stderr)
+                return 2
+
+        # Launch the model
+        success, message = manager.start_model(model_name, force_deployment=force_deployment)
+
+        if success:
+            print(f"✓ Launched {model_name}: {message}")
+            return 0
+        else:
+            print(f"✗ Failed to launch {model_name}: {message}", file=sys.stderr)
+            return 2
+
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
 
 def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
