@@ -479,6 +479,24 @@ Examples:
     sp_launch.add_argument("--container", dest="deployment", action="store_const", const="container", help="Force container deployment")
     sp_launch.set_defaults(func=cmd_launch)
 
+    # models group (download and manage model files)
+    sp_models = sub.add_parser("models", help="📦 Download and manage model files")
+    models_sub = sp_models.add_subparsers(dest="subcommand", required=True, help="Model management commands")
+
+    sp_models_list = models_sub.add_parser("list", help="📋 List downloaded models")
+    sp_models_list.add_argument("--available", action="store_true", help="Show available pre-configured models")
+    sp_models_list.set_defaults(func=cmd_models)
+
+    sp_models_download = models_sub.add_parser("download", help="⬇️  Download model from Hugging Face")
+    sp_models_download.add_argument("model_name", help="Model name (e.g., qwen-coder-32b, qwen-coder-14b, deepseek-coder-lite)")
+    sp_models_download.add_argument("--repo", help="Override Hugging Face repo ID")
+    sp_models_download.add_argument("--filename", help="Override filename in repo")
+    sp_models_download.set_defaults(func=cmd_models)
+
+    sp_models_info = models_sub.add_parser("info", help="ℹ️  Show information about a model")
+    sp_models_info.add_argument("model_name", help="Model name")
+    sp_models_info.set_defaults(func=cmd_models)
+
     # status
     sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
     sp_status.add_argument("--json", action="store_true", help="Output as JSON for scripting")
@@ -716,6 +734,162 @@ def cmd_launch(args: argparse.Namespace) -> int:
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+
+
+def cmd_models(args: argparse.Namespace) -> int:
+    """
+    Manage model downloads and information.
+
+    Supports listing, downloading, and getting info about models.
+    """
+    from .models.downloader import (
+        ModelDownloader,
+        list_available_coding_models,
+        get_coding_model_info
+    )
+
+    sub = args.subcommand
+
+    if sub == "list":
+        try:
+            if args.available:
+                # Show available pre-configured models
+                print("Available Coding Models:")
+                print()
+                models = list_available_coding_models()
+                for name, info in models.items():
+                    print(f"  {name}")
+                    print(f"    Description: {info['description']}")
+                    print(f"    Size: ~{info['size_gb']} GB")
+                    print(f"    RAM needed: ~{info['ram_gb']} GB")
+                    print(f"    Use case: {info['use_case']}")
+                    print()
+                print(f"Download with: llamacpp-manager models download <name>")
+            else:
+                # Show downloaded models
+                downloader = ModelDownloader()
+                models = downloader.list_downloaded_models()
+
+                if not models:
+                    print("No models downloaded yet")
+                    print()
+                    print("See available models with: llamacpp-manager models list --available")
+                    return 0
+
+                print("Downloaded Models:")
+                print()
+                for name, info in models.items():
+                    print(f"  {name}")
+                    print(f"    Path: {info['path']}")
+                    print(f"    Size: {info['size_gb']:.2f} GB")
+                    print()
+
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "download":
+        try:
+            model_name = args.model_name
+            downloader = ModelDownloader()
+
+            # Check if this is a pre-configured model
+            model_info = get_coding_model_info(model_name)
+
+            if model_info:
+                # Use pre-configured settings
+                repo_id = args.repo or model_info["repo_id"]
+                filename = args.filename or model_info["filename"]
+
+                print(f"Downloading: {model_info['description']}")
+                print(f"Estimated size: ~{model_info['size_gb']} GB")
+                print(f"RAM needed: ~{model_info['ram_gb']} GB")
+                print()
+
+            elif args.repo and args.filename:
+                # Custom model with explicit repo and filename
+                repo_id = args.repo
+                filename = args.filename
+
+            else:
+                print(f"error: unknown model '{model_name}'", file=sys.stderr)
+                print()
+                print("Available models:")
+                for name in list_available_coding_models().keys():
+                    print(f"  - {name}")
+                print()
+                print("Or specify --repo and --filename for custom models")
+                return 2
+
+            # Download the model
+            model_path = downloader.download_gguf(repo_id, filename, model_name)
+
+            print()
+            print(f"✓ Model downloaded successfully!")
+            print(f"  Path: {model_path}")
+            print()
+            print("Add to config with:")
+            print(f"  llamacpp-manager config add {model_name} {model_path} --port <PORT>")
+
+            return 0
+
+        except ImportError as e:
+            print(f"error: {e}", file=sys.stderr)
+            print()
+            print("Install huggingface_hub with:")
+            print("  pip install huggingface_hub")
+            return 2
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "info":
+        try:
+            model_name = args.model_name
+
+            # Check downloaded models first
+            downloader = ModelDownloader()
+            downloaded = downloader.get_model_info(model_name)
+
+            if downloaded:
+                print(f"Downloaded Model: {model_name}")
+                print(f"  Path: {downloaded['path']}")
+                print(f"  Size: {downloaded['size_gb']:.2f} GB")
+                print(f"  Filename: {downloaded['filename']}")
+                print()
+
+            # Check pre-configured info
+            model_info = get_coding_model_info(model_name)
+            if model_info:
+                print(f"Pre-configured Model: {model_name}")
+                print(f"  Description: {model_info['description']}")
+                print(f"  Repository: {model_info['repo_id']}")
+                print(f"  Filename: {model_info['filename']}")
+                print(f"  Size: ~{model_info['size_gb']} GB")
+                print(f"  RAM needed: ~{model_info['ram_gb']} GB")
+                print(f"  Use case: {model_info['use_case']}")
+                print()
+
+                if not downloaded:
+                    print("Download with:")
+                    print(f"  llamacpp-manager models download {model_name}")
+
+            if not downloaded and not model_info:
+                print(f"Model '{model_name}' not found")
+                print()
+                print("See available models with:")
+                print("  llamacpp-manager models list --available")
+                return 1
+
+            return 0
+
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    print("unknown models subcommand", file=sys.stderr)
+    return 2
 
 
 def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
