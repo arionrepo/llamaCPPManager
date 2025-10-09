@@ -598,6 +598,15 @@ Examples:
     sp_logging_set.add_argument("--backups", type=int, help="Number of backup files to keep")
     sp_logging_set.set_defaults(func=cmd_logging)
 
+    # logs command - view/filter logs
+    sp_logs = sub.add_parser("logs", help="📜 View and filter model logs")
+    sp_logs.add_argument("model_name", help="Model name to view logs for")
+    sp_logs.add_argument("--filter", choices=["all", "info", "error"], default="all",
+                         help="Filter by log level (all=both, info=stdout only, error=stderr only)")
+    sp_logs.add_argument("--tail", type=int, metavar="N", help="Show last N lines (default: 50)")
+    sp_logs.add_argument("--follow", "-f", action="store_true", help="Follow log output (like tail -f)")
+    sp_logs.set_defaults(func=cmd_logs)
+
     return p
 
 
@@ -1593,6 +1602,117 @@ def cmd_logging(args: argparse.Namespace) -> int:
 
     print("unknown logging subcommand", file=sys.stderr)
     return 2
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    """
+    View and filter model logs with color coding.
+
+    Business Purpose: Allows operators to quickly view logs and identify
+    errors without opening external log viewers.
+    """
+    cfg = load_config()
+    model_name = args.model_name
+
+    # Verify model exists
+    model = None
+    for m in cfg.get("models", []):
+        if m.get("name") == model_name:
+            model = m
+            break
+
+    if not model:
+        print(f"error: model '{model_name}' not found", file=sys.stderr)
+        return 2
+
+    # Get log file path
+    log_dir = Path(cfg.get("log_dir"))
+    log_path = log_dir / f"{model_name}.log"
+
+    if not log_path.exists():
+        print(f"error: log file not found: {log_path}", file=sys.stderr)
+        return 2
+
+    # ANSI color codes
+    RED = '\033[91m'      # Bright red for errors
+    GREEN = '\033[92m'    # Green for info
+    YELLOW = '\033[93m'   # Yellow for timestamps
+    RESET = '\033[0m'     # Reset color
+
+    def colorize_line(line: str) -> str:
+        """Add color codes to log line based on level."""
+        if '[ERROR]' in line:
+            # Highlight ERROR tag in red
+            line = line.replace('[ERROR]', f'{RED}[ERROR]{RESET}')
+            # Make entire line slightly red-tinted
+            return f'{RED}{line}{RESET}'
+        elif '[INFO]' in line:
+            # Highlight INFO tag in green
+            line = line.replace('[INFO]', f'{GREEN}[INFO]{RESET}')
+            return line
+        return line
+
+    def filter_line(line: str, filter_type: str) -> bool:
+        """Return True if line should be shown based on filter."""
+        if filter_type == "all":
+            return True
+        elif filter_type == "error":
+            return '[ERROR]' in line
+        elif filter_type == "info":
+            return '[INFO]' in line
+        return True
+
+    # Follow mode (like tail -f)
+    if args.follow:
+        import time
+        try:
+            with log_path.open("r") as f:
+                # Seek to end minus some lines
+                tail_lines = args.tail or 10
+                f.seek(0, 2)  # Seek to end
+                file_size = f.tell()
+
+                # Estimate: go back ~100 bytes per line
+                seek_pos = max(0, file_size - (tail_lines * 100))
+                f.seek(seek_pos)
+                f.readline()  # Skip partial line
+
+                # Print initial tail
+                for line in f:
+                    line = line.rstrip('\n')
+                    if filter_line(line, args.filter):
+                        print(colorize_line(line))
+
+                # Follow new lines
+                while True:
+                    line = f.readline()
+                    if line:
+                        line = line.rstrip('\n')
+                        if filter_line(line, args.filter):
+                            print(colorize_line(line))
+                    else:
+                        time.sleep(0.1)
+        except KeyboardInterrupt:
+            return 0
+
+    # Regular tail mode
+    else:
+        tail_count = args.tail or 50
+
+        # Read last N lines
+        with log_path.open("r") as f:
+            lines = f.readlines()
+
+        # Get last N lines
+        lines_to_show = lines[-tail_count:] if len(lines) > tail_count else lines
+
+        # Filter and colorize
+        for line in lines_to_show:
+            line = line.rstrip('\n')
+            if filter_line(line, args.filter):
+                print(colorize_line(line))
+
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

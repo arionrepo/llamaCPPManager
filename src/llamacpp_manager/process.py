@@ -74,9 +74,15 @@ def start_process(
             quoted_argv = ' '.join(shlex.quote(arg) for arg in argv)
             script_content = f'''#!/bin/bash
 # Timestamp logger wrapper for {spec.name}
+# Intelligently tag lines as INFO or ERROR based on content
+
 exec {quoted_argv} 2>&1 | while IFS= read -r line; do
-    # macOS date doesn't support milliseconds, so just use seconds precision
-    printf "[%s] [combined] %s\\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$line"
+    # Detect error patterns (case-insensitive)
+    if echo "$line" | grep -iE "(error|fail|fatal|exception|crash|abort)" > /dev/null; then
+        printf "[%s] [ERROR] %s\\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$line"
+    else
+        printf "[%s] [INFO] %s\\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$line"
+    fi
 done >> {shlex.quote(str(log_path))}
 '''
             wrapper_script.write(script_content)
