@@ -575,6 +575,29 @@ Examples:
     sp_query_list = query_sub.add_parser("list", help="📋 List currently running models")
     sp_query_list.set_defaults(func=cmd_query)
 
+    # logging group
+    sp_logging = sub.add_parser("logging", help="📝 Manage logging configuration")
+    logging_sub = sp_logging.add_subparsers(dest="subcommand", required=True, help="Logging commands")
+
+    sp_logging_status = logging_sub.add_parser("status", help="📊 Show current logging configuration")
+    sp_logging_status.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_logging_status.set_defaults(func=cmd_logging)
+
+    sp_logging_enable = logging_sub.add_parser("enable", help="✅ Enable logging globally")
+    sp_logging_enable.set_defaults(func=cmd_logging)
+
+    sp_logging_disable = logging_sub.add_parser("disable", help="🚫 Disable logging globally")
+    sp_logging_disable.set_defaults(func=cmd_logging)
+
+    sp_logging_timestamps = logging_sub.add_parser("timestamps", help="⏰ Toggle timestamps on/off")
+    sp_logging_timestamps.add_argument("value", choices=["on", "off"], help="Enable or disable timestamps")
+    sp_logging_timestamps.set_defaults(func=cmd_logging)
+
+    sp_logging_set = logging_sub.add_parser("set", help="⚙️  Configure logging parameters")
+    sp_logging_set.add_argument("--max-bytes", type=int, help="Max log file size in bytes")
+    sp_logging_set.add_argument("--backups", type=int, help="Number of backup files to keep")
+    sp_logging_set.set_defaults(func=cmd_logging)
+
     return p
 
 
@@ -1473,6 +1496,90 @@ def cmd_query(args: argparse.Namespace) -> int:
             return 2
 
     print("unknown query subcommand", file=sys.stderr)
+    return 2
+
+
+def cmd_logging(args: argparse.Namespace) -> int:
+    """
+    Manage logging configuration.
+
+    Business Purpose: Allows users to control logging behavior globally
+    and view current logging settings.
+    """
+    cfg = load_config()
+    sub = args.subcommand
+
+    if sub == "status":
+        logging_config = cfg.get("logging", {})
+
+        if args.json:
+            print(to_json(logging_config))
+            return 0
+
+        enabled = logging_config.get("enabled", True)
+        max_bytes = logging_config.get("max_bytes", 10 * 1024 * 1024)
+        backups = logging_config.get("backups", 5)
+        timestamps = logging_config.get("timestamps", True)
+
+        print("Logging Configuration:")
+        print(f"  Enabled: {enabled}")
+        print(f"  Timestamps: {timestamps}")
+        print(f"  Max file size: {max_bytes:,} bytes ({max_bytes / (1024*1024):.1f} MB)")
+        print(f"  Backup files: {backups}")
+        print(f"\nLog directory: {cfg.get('log_dir')}")
+        return 0
+
+    elif sub == "enable":
+        if "logging" not in cfg:
+            cfg["logging"] = {}
+        cfg["logging"]["enabled"] = True
+        save_config(cfg)
+        print("✓ Logging enabled globally")
+        print("  Note: Restart running models for changes to take effect")
+        return 0
+
+    elif sub == "disable":
+        if "logging" not in cfg:
+            cfg["logging"] = {}
+        cfg["logging"]["enabled"] = False
+        save_config(cfg)
+        print("✓ Logging disabled globally")
+        print("  Note: Restart running models for changes to take effect")
+        return 0
+
+    elif sub == "timestamps":
+        if "logging" not in cfg:
+            cfg["logging"] = {}
+        cfg["logging"]["timestamps"] = (args.value == "on")
+        save_config(cfg)
+        print(f"✓ Timestamps {'enabled' if args.value == 'on' else 'disabled'}")
+        print("  Note: Restart running models for changes to take effect")
+        return 0
+
+    elif sub == "set":
+        if "logging" not in cfg:
+            cfg["logging"] = {}
+
+        changed = False
+        if args.max_bytes is not None:
+            cfg["logging"]["max_bytes"] = args.max_bytes
+            changed = True
+            print(f"✓ Max file size set to {args.max_bytes:,} bytes ({args.max_bytes / (1024*1024):.1f} MB)")
+
+        if args.backups is not None:
+            cfg["logging"]["backups"] = args.backups
+            changed = True
+            print(f"✓ Backup file count set to {args.backups}")
+
+        if changed:
+            save_config(cfg)
+            print("  Note: Restart running models for changes to take effect")
+            return 0
+        else:
+            print("error: no parameters specified", file=sys.stderr)
+            return 2
+
+    print("unknown logging subcommand", file=sys.stderr)
     return 2
 
 
