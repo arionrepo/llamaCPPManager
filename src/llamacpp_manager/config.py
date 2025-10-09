@@ -24,6 +24,7 @@ class ModelSpec:
     deployment_type: str = "native"  # "native" or "container"
     group: Optional[str] = None  # Model group name for mutual exclusion
     metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
+    logging: Optional[Dict[str, Any]] = None  # enabled, max_bytes, backups
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -116,6 +117,12 @@ def default_config() -> Dict[str, Any]:
             "enabled": True,
             "interval_seconds": 30,
             "alert_on_failure": True
+        },
+        "logging": {
+            "enabled": True,  # Global logging toggle
+            "max_bytes": 10 * 1024 * 1024,  # 10MB per log file
+            "backups": 5,  # Keep 5 rotated backups
+            "timestamps": True  # Add timestamps to log entries
         }
     }
 
@@ -132,6 +139,7 @@ def load_config() -> Dict[str, Any]:
     cfg.setdefault("model_groups", {})
     cfg.setdefault("infrastructure", default_infrastructure_config())
     cfg.setdefault("monitoring", {"enabled": True, "interval_seconds": 30, "alert_on_failure": True})
+    cfg.setdefault("logging", {"enabled": True, "max_bytes": 10 * 1024 * 1024, "backups": 5, "timestamps": True})
     return cfg
 
 

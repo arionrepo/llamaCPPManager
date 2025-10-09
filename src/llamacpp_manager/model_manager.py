@@ -175,6 +175,7 @@ class ModelManager:
         """
         llama_path = self.config.get("llama_server_path")
         log_dir = Path(self.config.get("log_dir"))
+        logging_config = self.config.get("logging", {})
 
         # Create ModelSpec from config
         spec = ModelSpec(
@@ -187,7 +188,8 @@ class ModelManager:
             autostart=bool(model_config.get("autostart", False)),
             deployment_type=model_config.get("deployment_type", "native"),
             group=model_config.get("group"),
-            metadata=model_config.get("metadata")
+            metadata=model_config.get("metadata"),
+            logging=model_config.get("logging")
         )
 
         # Check port availability
@@ -195,8 +197,8 @@ class ModelManager:
             return False, f"port {spec.port} on {spec.host} is already in use"
 
         try:
-            # Start the process
-            pid = start_process(llama_path, spec, log_dir)
+            # Start the process with logging configuration
+            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
             write_pid(spec.name, pid)
             return True, f"started pid={pid} port={spec.port}"
         except Exception as e:

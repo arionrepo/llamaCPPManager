@@ -146,13 +146,15 @@ class ModelMonitor:
                 args=list(model_config.get("args", []) or []),
                 env=dict(model_config.get("env", {}) or {}),
                 autostart=bool(model_config.get("autostart", False)),
+                logging=model_config.get("logging"),
             )
 
             # Start the process
             llama_path = config.get("llama_server_path")
             log_dir = Path(config.get("log_dir"))
+            logging_config = config.get("logging", {})
 
-            pid = start_process(llama_path, spec, log_dir)
+            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
 
             from .utils import write_pid
             write_pid(spec.name, pid)

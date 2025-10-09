@@ -17,9 +17,36 @@ def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
     return argv
 
 
-def start_process(llama_server_path: str, spec: ModelSpec, log_dir: Path, extra_env: Optional[dict] = None) -> int:
-    log_path = log_dir / f"{spec.name}.log"
-    rotate_file(log_path)
+def start_process(
+    llama_server_path: str,
+    spec: ModelSpec,
+    log_dir: Path,
+    extra_env: Optional[dict] = None,
+    logging_config: Optional[dict] = None
+) -> int:
+    """
+    Start llama-server process with optional logging.
+
+    Args:
+        llama_server_path: Path to llama-server executable
+        spec: Model specification
+        log_dir: Directory for log files
+        extra_env: Additional environment variables
+        logging_config: Logging configuration (enabled, max_bytes, backups, timestamps)
+
+    Returns:
+        Process ID of started process
+    """
+    # Get logging settings (model-level overrides global)
+    log_config = logging_config or {}
+    model_log_config = spec.logging or {}
+
+    # Determine if logging is enabled
+    enabled = model_log_config.get("enabled", log_config.get("enabled", True))
+    timestamps = model_log_config.get("timestamps", log_config.get("timestamps", True))
+    max_bytes = model_log_config.get("max_bytes", log_config.get("max_bytes", 10 * 1024 * 1024))
+    backups = model_log_config.get("backups", log_config.get("backups", 5))
+
     env = os.environ.copy()
     if spec.env:
         env.update(spec.env)
@@ -27,12 +54,25 @@ def start_process(llama_server_path: str, spec: ModelSpec, log_dir: Path, extra_
         env.update(extra_env)
     argv = build_argv(llama_server_path, spec)
 
-    # Open timestamped logs for stdout and stderr
-    # Note: We can't use 'with' statement because we need the process to continue after return
-    stdout_log = open_timestamped_log(log_path, "stdout")
-    stderr_log = open_timestamped_log(log_path, "stderr")
+    # Configure logging based on settings
+    if enabled:
+        log_path = log_dir / f"{spec.name}.log"
+        rotate_file(log_path, max_bytes=max_bytes, backups=backups)
 
-    proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env)
+        # Choose log writer based on timestamp setting
+        if timestamps:
+            stdout_log = open_timestamped_log(log_path, "stdout")
+            stderr_log = open_timestamped_log(log_path, "stderr")
+        else:
+            stdout_log = open_log_append(log_path)
+            stderr_log = stdout_log  # Share same file
+
+        proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env)
+    else:
+        # Logging disabled - discard output
+        import subprocess
+        proc = Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+
     return proc.pid
 
 

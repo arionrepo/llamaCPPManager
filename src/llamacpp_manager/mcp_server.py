@@ -238,10 +238,12 @@ async def handle_start_model(input_data: StartModelInput) -> List[TextContent]:
             args=list(model_info.get("args", []) or []),
             env=dict(model_info.get("env", {}) or {}),
             autostart=bool(model_info.get("autostart", False)),
+            logging=model_info.get("logging"),
         )
 
         llama_path = cfg.get("llama_server_path")
         log_dir = Path(cfg.get("log_dir"))
+        logging_config = cfg.get("logging", {})
 
         if input_data.mode == "launchd":
             # Start via launchd
@@ -257,7 +259,7 @@ async def handle_start_model(input_data: StartModelInput) -> List[TextContent]:
             result = f"Started {spec.name} via launchd on {spec.host}:{spec.port}"
         else:
             # Direct start
-            pid = start_process(llama_path, spec, log_dir)
+            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
             write_pid(spec.name, pid)
             result = f"Started {spec.name} directly with PID {pid} on {spec.host}:{spec.port}"
 

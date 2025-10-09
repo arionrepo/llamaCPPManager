@@ -606,6 +606,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     cfg = load_config()
     llama_path = cfg.get("llama_server_path")
     log_dir = Path(cfg.get("log_dir"))
+    logging_config = cfg.get("logging", {})
     # Validate llama-server binary unless overridden for tests
     if not os.environ.get("LLAMACPP_MANAGER_SKIP_BIN_CHECK"):
         lp = Path(llama_path).expanduser()
@@ -623,6 +624,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             args=list(m.get("args", []) or []),
             env=dict(m.get("env", {}) or {}),
             autostart=bool(m.get("autostart", False)),
+            logging=m.get("logging"),
         )
         # Warn/refuse remote binds unless explicitly allowed
         if spec.host not in ("127.0.0.1", "localhost", "::1") and not getattr(args, "allow_remote", False):
@@ -650,7 +652,7 @@ def cmd_start(args: argparse.Namespace) -> int:
                 print(f"error: port {spec.port} on {spec.host} is already in use; cannot start {spec.name}", file=sys.stderr)
                 rc = 2
                 continue
-            pid = start_process(llama_path, spec, log_dir)
+            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
             write_pid(spec.name, pid)
             print(f"started {spec.name} pid={pid} port={spec.port}")
     return rc
@@ -1132,7 +1134,7 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
             print(f"launchd started {spec.name} on {host}:{port}")
             started += 1
         else:
-            pid = start_process(llama_path, spec, log_dir)
+            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
             write_pid(spec.name, pid)
             print(f"started {spec.name} pid={pid} port={spec.port}")
             started += 1
