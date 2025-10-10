@@ -132,7 +132,12 @@ struct LlamaCPPManagerApp: App {
                         Divider()
                     }
                 }
-                Button("Ensure Running") { vm.ensureRunning() }
+                HStack {
+                    Button("Ensure Running") { vm.ensureRunning() }
+                    Button("Stop All Models") { vm.stopAllModels() }
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
                 Divider()
 
                 // MARK: - Logging Section
@@ -318,6 +323,13 @@ final class StatusViewModel: ObservableObject {
     func stop(name: String) { Task { _ = try? await service.run(["stop", name]) ; refresh() } }
     func restart(name: String) { Task { _ = try? await service.run(["restart", name]) ; refresh() } }
     func ensureRunning() { Task { _ = try? await service.run(["ensure-running"]) ; refresh() } }
+
+    func stopAllModels() {
+        Task {
+            _ = try? await service.run(["stop", "all"])
+            refresh()
+        }
+    }
 
     func tailLogs(name: String) {
         // Open log file with system default app (Console.app on macOS)
@@ -518,40 +530,362 @@ final class StatusViewModel: ObservableObject {
     }
 
     func openHelp() {
-        // Open help documentation
-        let helpText = """
-        llamaCPP Manager - Quick Help
+        // Open comprehensive help documentation in a separate window
+        let helpContent = loadUserManual()
 
-        🧠 GUI Controls:
-        • Red Circle = Model stopped
-        • Green Circle = Model running
-        • Start/Stop = Control individual models
-        • Chat = Open chat window (when model running)
-        • Tail Logs = View model logs
-        • Refresh = Update status
+        let textView = NSTextView()
+        textView.string = helpContent
+        textView.isEditable = false
+        textView.font = NSFont.systemFont(ofSize: 13)
+        textView.textContainerInset = NSSize(width: 20, height: 20)
 
-        📋 Model Management:
-        • Open Config = Add models manually
-        • Open CLI = Access full command line
-        • Ensure Running = Start configured models
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
 
-        💡 Quick Start:
-        1. Add models via 'Open Config' or 'Open CLI'
-        2. Click 'Start' to run a model
-        3. Click 'Chat' to open chat window
-        4. Visit http://127.0.0.1:[port] in browser
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "llamaCPP Manager - User Manual"
+        window.contentView = scrollView
+        window.center()
+        window.makeKeyAndOrderFront(nil)
 
-        🔧 CLI Commands:
-        llamacpp-manager config add [name] [path] --port [port]
-        llamacpp-manager start [name]
+        // Keep window reference to prevent deallocation
+        window.isReleasedWhenClosed = false
+    }
+
+    private func loadUserManual() -> String {
+        // Try to load user-manual.md from bundle or fall back to basic help
+        if let bundleURL = Bundle.main.url(forResource: "user-manual", withExtension: "md"),
+           let content = try? String(contentsOf: bundleURL, encoding: .utf8) {
+            return content
+        }
+
+        // Fallback to comprehensive built-in help
+        return """
+        # llamaCPP Manager - User Manual
+
+        A complete guide to managing llama.cpp models on macOS.
+
+        ## Quick Start
+
+        ### 1. GUI Controls
+
+        **Status Indicators:**
+        • 🟢 Green Circle = Model running and healthy
+        • 🔴 Red Circle = Model stopped
+        • 🟠 Orange Circle = Model starting or unhealthy
+        • ⚫ Gray Circle = Model disabled
+
+        **Model Controls:**
+        • **Start** - Start a stopped model
+        • **Stop** - Stop a running model
+        • **Restart** - Restart a model (stop + start)
+        • **Chat** - Open chat window (only when model is running)
+        • **Monitor** - Enable/disable auto-restart monitoring
+        • **Logs** - View model logs in Console.app
+
+        **Global Actions:**
+        • **Ensure Running** - Start all models with autostart=true
+        • **Stop All Models** - Stop all currently running models
+        • **Refresh** - Manually refresh status
+        • **Open Config** - Open configuration directory in Finder
+        • **Open CLI** - Launch Terminal with llamacpp-manager CLI
+
+        ### 2. Model Management
+
+        **Adding Models:**
+        1. Click "Open CLI" to access the command line
+        2. Run: `llamacpp-manager config add MODEL_NAME /path/to/model.gguf --port PORT`
+        3. Refresh the GUI to see the new model
+
+        **Example:**
+        ```bash
+        llamacpp-manager config add phi3 ~/llms/phi3/model.gguf --port 8081
+        ```
+
+        **Starting Models:**
+        1. Find your model in the Models list
+        2. Click "Start" button
+        3. Wait for green indicator
+        4. Click "Chat" to interact or visit http://127.0.0.1:[PORT] in browser
+
+        ### 3. Model Downloader
+
+        **Downloading Pre-Configured Models:**
+
+        The CLI includes a curated library of agentic and coding models optimized for different use cases.
+
+        **List Available Models:**
+        ```bash
+        llamacpp-manager models list --available
+        ```
+
+        **Download a Model:**
+        ```bash
+        llamacpp-manager models download qwen-coder-7b
+        ```
+
+        **Available Agentic Models:**
+        • **qwen-coder-7b** (8GB) - Best for tool calling and structured JSON outputs
+        • **hermes-3-llama-8b** (9GB) - Multi-agent systems and autonomous workflows
+        • **llama-3.1-8b** (9GB) - Strong instruction following for compliance queries
+        • **qwen-2.5-14b** (16GB) - Balanced reasoning for document analysis
+
+        **Model Information:**
+        ```bash
+        llamacpp-manager models info qwen-coder-7b
+        ```
+
+        ### 4. Model Groups
+
+        Models can be organized into groups with mutual exclusion to prevent resource exhaustion.
+
+        **Exclusive Groups:**
+        When models belong to an exclusive group, starting one model automatically stops other models in the same group.
+
+        **Example Configuration:**
+        ```yaml
+        model_groups:
+          agentic-models:
+            exclusive: true
+            auto_stop_minutes: 60
+            members:
+              - qwen-coder-7b
+              - hermes-3-llama-8b
+              - llama-3.1-8b
+        ```
+
+        **Using Groups:**
+        ```bash
+        # Launch model (auto-stops siblings in exclusive group)
+        llamacpp-manager launch qwen-coder-7b
+        ```
+
+        ### 5. Infrastructure Management
+
+        The GUI also manages supporting infrastructure components like cloudflared tunnel and LLM controller.
+
+        **Infrastructure Controls:**
+        • **Start** - Start an infrastructure component
+        • **Stop** - Stop an infrastructure component
+        • **Restart** - Restart an infrastructure component
+        • **Logs** - View infrastructure logs
+
+        **Status Indicators:**
+        • 🟢 Healthy - Component running and responding
+        • 🟠 Unhealthy - Component running but not responding
+        • 🔴 Stopped - Component not running
+        • ⚫ Disabled - Component disabled in configuration
+
+        ### 6. Monitoring & Auto-Restart
+
+        The Monitor button enables automatic crash detection and restart for models.
+
+        **Enable Monitoring:**
+        1. Click "Monitor" button next to a model
+        2. Button turns orange when monitoring is enabled
+        3. Model will auto-restart if it crashes
+
+        **Monitor Daemon:**
+        For persistent monitoring across system reboots, install the monitoring daemon:
+        ```bash
+        llamacpp-manager monitor launchd install
+        ```
+
+        ### 7. CLI Commands
+
+        **Core Commands:**
+        ```bash
+        # Initialize configuration
+        llamacpp-manager init
+
+        # Add a model
+        llamacpp-manager config add MODEL_NAME /path/to/model.gguf --port PORT
+
+        # Start/stop models
+        llamacpp-manager start MODEL_NAME
+        llamacpp-manager stop MODEL_NAME
+        llamacpp-manager stop all  # Stop all models
+
+        # Check status
         llamacpp-manager status
+        llamacpp-manager status --json  # Machine-readable format
+
+        # Query models
+        llamacpp-manager query complete MODEL_NAME "Your prompt here"
+        llamacpp-manager query chat MODEL_NAME --message "user:Hello!"
+        ```
+
+        **Model Downloader Commands:**
+        ```bash
+        # List available models
+        llamacpp-manager models list --available
+
+        # Download model
+        llamacpp-manager models download qwen-coder-7b
+
+        # Get model info
+        llamacpp-manager models info qwen-coder-7b
+        ```
+
+        **Infrastructure Commands:**
+        ```bash
+        # View infrastructure status
+        llamacpp-manager infra status
+
+        # Control infrastructure
+        llamacpp-manager infra start cloudflared
+        llamacpp-manager infra stop llm_controller
+        llamacpp-manager infra restart llm_controller
+
+        # View logs
+        llamacpp-manager infra logs llm_controller
+        ```
+
+        ### 8. Configuration Files
+
+        **Config Location:**
+        `~/Library/Application Support/llamaCPPManager/config.yaml`
+
+        **Log Location:**
+        `~/Library/Logs/llamaCPPManager/`
+
+        **Edit Configuration:**
+        1. Click "Open Config" in GUI
+        2. Edit `config.yaml` in your preferred editor
+        3. Click "Refresh" in GUI to reload
+
+        ### 9. Troubleshooting
+
+        **Model Won't Start:**
+        1. Check logs by clicking "Logs" button
+        2. Verify model file exists at configured path
+        3. Check port is not already in use
+        4. Try running: `llamacpp-manager status` in terminal
+
+        **GUI Not Updating:**
+        1. Click "Refresh" button
+        2. Check that llamacpp-manager CLI is in PATH
+        3. Run `which llamacpp-manager` in terminal
+
+        **Port Already in Use:**
+        ```bash
+        # Find what's using the port
+        lsof -i :8081
+
+        # Change model port in config
+        llamacpp-manager config update MODEL_NAME --port 8082
+        ```
+
+        **Model Not Responding:**
+        1. Check model is running (green indicator)
+        2. Click "Restart" to restart the model
+        3. Enable "Monitor" for auto-restart on crashes
+        4. Check logs for errors
+
+        ### 10. Advanced Features
+
+        **launchd Integration:**
+        Make models start automatically on boot:
+        ```bash
+        # Install launchd agent
+        llamacpp-manager launchd install MODEL_NAME
+
+        # Check status
+        llamacpp-manager launchd status MODEL_NAME
+
+        # Uninstall
+        llamacpp-manager launchd uninstall MODEL_NAME
+        ```
+
+        **Monitoring Daemon:**
+        Install persistent monitoring across reboots:
+        ```bash
+        llamacpp-manager monitor launchd install
+        llamacpp-manager monitor launchd status
+        ```
+
+        **Logging Control:**
+        The GUI includes logging controls to enable/disable model logging and timestamps.
+
+        **MCP Server Integration:**
+        llamaCPPManager includes Model Context Protocol (MCP) server for AI assistant integration:
+        ```bash
+        # Available in Claude Desktop, Continue.dev, etc.
+        # See user manual for full MCP setup instructions
+        ```
+
+        ### 11. Keyboard Shortcuts
+
+        **In Chat Window:**
+        • **Return** - Send message
+        • **Cmd+W** - Close window
+
+        ### 12. Tips & Best Practices
+
+        **Resource Management:**
+        • Use model groups for large models to prevent memory exhaustion
+        • Enable auto_stop_minutes for models you use occasionally
+        • Monitor system resources with Activity Monitor
+
+        **Performance:**
+        • Apple Silicon (M1/M2/M3/M4): Use -ngl 9999 to offload to GPU
+        • Adjust context size (-c flag) based on your needs
+        • Use smaller quantized models (Q4, Q5) for faster inference
+
+        **Organization:**
+        • Keep models in ~/llms/ directory
+        • Use descriptive model names
+        • Group related models together
+
+        **Backups:**
+        • Configuration: `~/Library/Application Support/llamaCPPManager/config.yaml`
+        • Back up before making major changes
+
+        ### 13. Getting Help
+
+        **Documentation:**
+        • Run `llamacpp-manager --help` for CLI help
+        • Check GitHub issues for known problems
+        • Read comprehensive user manual (this document)
+
+        **CLI Help:**
+        ```bash
         llamacpp-manager --help
+        llamacpp-manager COMMAND --help  # Help for specific command
+        ```
 
-        📖 Full Documentation:
-        Run 'Open CLI' and type: llamacpp-manager --help
+        **Support:**
+        • GitHub: https://github.com/your-username/llamacpp-manager
+        • Issues: Report bugs and request features
+
+        ### 14. What's New
+
+        **Latest Features:**
+        • ✅ Model groups with exclusive access
+        • ✅ Model downloader with Hugging Face integration
+        • ✅ Agentic models (qwen-coder-7b, hermes-3-llama-8b, llama-3.1-8b)
+        • ✅ Enhanced infrastructure management
+        • ✅ Uptime tracking for models and infrastructure
+        • ✅ Logging control UI
+        • ✅ Stop All Models button
+
+        ---
+
+        **Version:** 1.0.0
+        **Updated:** 2025-10-10
+
+        For complete documentation, run:
+        ```bash
+        llamacpp-manager --help
+        ```
         """
-
-        showAlert(title: "llamaCPP Manager Help", message: helpText)
     }
 
     func openAbout() {
