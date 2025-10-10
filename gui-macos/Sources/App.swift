@@ -134,8 +134,10 @@ struct LlamaCPPManagerApp: App {
                 }
                 HStack {
                     Button("Ensure Running") { vm.ensureRunning() }
+                        .help("Start all models with autostart=true")
                     Button("Stop All Models") { vm.stopAllModels() }
                         .foregroundColor(.red)
+                        .help("Stop all running models (infrastructure components continue running)")
                 }
                 .buttonStyle(.borderless)
                 Divider()
@@ -168,6 +170,8 @@ struct LlamaCPPManagerApp: App {
                     Divider()
                 }
 
+                Button("Download Models") { vm.openModelDownloader() }
+                Divider()
                 Button("Refresh") { vm.refresh() }
                 Button("Open Config") { vm.openConfig() }
                 Button("Open CLI") { vm.openCLI() }
@@ -273,6 +277,7 @@ final class StatusViewModel: ObservableObject {
     private var chatWindows: [String: NSWindow] = [:]
     private var windowDelegates: [String: ChatWindowDelegate] = [:]
     private var monitoredModels: Set<String> = []
+    private var modelDownloaderWindow: NSWindow?
 
     func startPolling(interval: TimeInterval = 2.0) {
         timer?.invalidate()
@@ -457,6 +462,40 @@ final class StatusViewModel: ObservableObject {
     func openConfig() {
         // Open config dir in Finder
         if let dir = service.configDirURL() { NSWorkspace.shared.activateFileViewerSelecting([dir]) }
+    }
+
+    func openModelDownloader() {
+        // Check if model downloader window already exists
+        if let existingWindow = modelDownloaderWindow {
+            existingWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        // Create model downloader view
+        let downloaderViewModel = DownloadViewModel(cliService: service)
+        let downloaderView = ModelDownloaderView(viewModel: downloaderViewModel)
+        let hostingController = NSHostingController(rootView: downloaderView)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 750, height: 650),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        window.title = "Model Downloader"
+        window.contentViewController = hostingController
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+
+        // Store window reference
+        modelDownloaderWindow = window
+
+        // Set up window delegate to clean up when closed
+        let delegate = ModelDownloaderWindowDelegate { [weak self] in
+            self?.modelDownloaderWindow = nil
+        }
+        window.delegate = delegate
     }
 
     // MARK: - Enhanced Health Status Methods
@@ -1227,6 +1266,19 @@ struct ChatMessageView: View {
 }
 
 class ChatWindowDelegate: NSObject, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        super.init()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
+    }
+}
+
+class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
 
     init(onClose: @escaping () -> Void) {
