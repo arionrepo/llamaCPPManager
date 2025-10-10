@@ -233,6 +233,79 @@ models:
       cpus: "4.0"
 ```
 
+## Model Downloader
+
+The model downloader provides seamless integration with Hugging Face Hub to download GGUF models directly from the CLI. It includes a curated library of agentic and coding models optimized for specific use cases.
+
+### Architecture
+
+```python
+# Model library structure (src/llamacpp_manager/models/downloader.py)
+CODING_MODELS = {
+    "model-name": {
+        "repo_id": "HuggingFace/Repo-Name",
+        "filename": "model-file.gguf",
+        "description": "Human-readable description",
+        "size_gb": 8,
+        "ram_gb": 12,
+        "use_case": "Specific use case description"
+    }
+}
+```
+
+### Download Flow
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant CLI as llamacpp-manager CLI
+  participant DL as downloader.py
+  participant HF as Hugging Face Hub
+  participant FS as Local Storage
+
+  U->>CLI: models download qwen-coder-7b
+  CLI->>DL: get_model_info("qwen-coder-7b")
+  DL-->>CLI: {repo_id, filename, metadata}
+  CLI->>HF: hf_hub_download(repo_id, filename)
+  HF-->>FS: download to ~/llms/qwen-coder-7b/
+  FS-->>CLI: local_path
+  CLI-->>U: ✓ Downloaded to ~/llms/qwen-coder-7b/qwen2.5-coder-7b-instruct-q8_0.gguf
+```
+
+### Curated Model Library
+
+The downloader includes agentic AI models optimized for compliance, tool calling, and autonomous workflows:
+
+**Agentic & Tool-Calling Models:**
+- **qwen-coder-7b** (8GB): Best for tool calling and structured JSON outputs
+- **hermes-3-llama-8b** (9GB): Specifically trained for multi-agent systems and autonomous workflows
+- **llama-3.1-8b** (9GB): Strong instruction following for compliance queries and report generation
+- **qwen-2.5-14b** (16GB): Balanced reasoning and speed for document analysis and evidence mapping
+
+**Traditional Coding Models:**
+- **qwen-coder-32b** (35GB): Complex refactoring and architecture design
+- **deepseek-coder-6.7b** (7GB): Fast code completion and explanation
+- **deepseek-coder-33b** (35GB): Advanced code generation and debugging
+
+Each model includes metadata:
+- **size_gb**: Model file size for storage planning
+- **ram_gb**: Estimated RAM requirement when running
+- **use_case**: Specific workflows where the model excels
+- **description**: Human-readable summary of capabilities
+
+### Storage Organization
+
+Models download to `~/llms/<model-name>/` with automatic directory creation:
+```
+~/llms/
+├── qwen-coder-7b/
+│   └── qwen2.5-coder-7b-instruct-q8_0.gguf
+├── hermes-3-llama-8b/
+│   └── Hermes-3-Llama-3.1-8B.Q8_0.gguf
+└── llama-3.1-8b/
+    └── Meta-Llama-3.1-8B-Instruct-Q8_0.gguf
+```
+
 ## CLI Surface
 
 ### Core Commands
@@ -247,8 +320,9 @@ models:
 
 ### Unified Model Manager Commands
 - `launch <name>` – launch model, auto-stopping siblings in exclusive group
-- `models list [--native|--container]` – list models by deployment type
-- `models download <name>` – download model from Hugging Face
+- `models list [--available]` – list configured models or available downloads
+- `models download <name>` – download model from Hugging Face Hub
+- `models info <name>` – show model metadata (size, RAM, use case)
 - `active-models` – show currently running models with deployment info
 
 ### Infrastructure Commands (Existing)

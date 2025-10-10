@@ -918,6 +918,142 @@ llamacpp-manager config remove MODEL_NAME
 llamacpp-manager config update MODEL_NAME --autostart true --port 8090
 ```
 
+### Model Downloader
+
+The model downloader provides a curated library of agentic and coding models that can be downloaded directly from Hugging Face Hub.
+
+#### Prerequisites
+
+```bash
+# Install huggingface_hub (required for downloading)
+pip install huggingface_hub
+```
+
+#### Available Models
+
+List all pre-configured models available for download:
+
+```bash
+llamacpp-manager models list --available
+```
+
+**Agentic & Tool-Calling Models** (optimized for arionComply):
+- **qwen-coder-7b** (8GB): Best for tool calling and structured JSON outputs
+- **hermes-3-llama-8b** (9GB): Multi-agent systems and autonomous workflows
+- **llama-3.1-8b** (9GB): Strong instruction following for compliance queries
+- **qwen-2.5-14b** (16GB): Balanced reasoning for document analysis
+
+**Traditional Coding Models**:
+- **qwen-coder-32b** (35GB): Complex refactoring and architecture design
+- **deepseek-coder-6.7b** (7GB): Fast code completion and explanation
+- **deepseek-coder-33b** (35GB): Advanced code generation and debugging
+
+#### Download Models
+
+```bash
+# Download a specific model
+llamacpp-manager models download qwen-coder-7b
+
+# View model information before downloading
+llamacpp-manager models info qwen-coder-7b
+```
+
+**Output Example**:
+```
+Downloading qwen-coder-7b from Hugging Face...
+Repository: Qwen/Qwen2.5-Coder-7B-Instruct-GGUF
+File: qwen2.5-coder-7b-instruct-q8_0.gguf
+Size: 7.54 GB
+RAM Required: ~12 GB
+
+Downloading... ━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 7.54 GB/7.54 GB
+
+✓ Downloaded to: ~/llms/qwen-coder-7b/qwen2.5-coder-7b-instruct-q8_0.gguf
+
+Add to config:
+  llamacpp-manager config add qwen-coder-7b \
+    ~/llms/qwen-coder-7b/qwen2.5-coder-7b-instruct-q8_0.gguf \
+    --port 8085
+```
+
+#### Storage Organization
+
+Models are automatically organized in `~/llms/<model-name>/`:
+
+```
+~/llms/
+├── qwen-coder-7b/
+│   └── qwen2.5-coder-7b-instruct-q8_0.gguf
+├── hermes-3-llama-8b/
+│   └── Hermes-3-Llama-3.1-8B.Q8_0.gguf
+└── llama-3.1-8b/
+    └── Meta-Llama-3.1-8B-Instruct-Q8_0.gguf
+```
+
+#### Model Groups and Exclusive Access
+
+Agentic models can be configured in **exclusive groups** to ensure only one runs at a time (important for memory-constrained systems):
+
+**Configuration Example** (`~/.config/llamacpp/config.yaml`):
+```yaml
+model_groups:
+  agentic-models:
+    exclusive: true
+    auto_stop_minutes: 60
+    description: "Agentic AI models for tool calling and autonomous workflows"
+    members:
+      - qwen-coder-7b
+      - hermes-3-llama-8b
+      - llama-3.1-8b
+
+models:
+  - name: qwen-coder-7b
+    model_path: ~/llms/qwen-coder-7b/qwen2.5-coder-7b-instruct-q8_0.gguf
+    port: 8085
+    group: agentic-models
+    deployment_type: native
+    metadata:
+      size_gb: 7.54
+      ram_gb: 12
+      use_case: "Agentic workflows, tool calling, function execution, JSON outputs"
+```
+
+**Exclusive Group Behavior**:
+```bash
+# Start qwen-coder-7b (any other model in group will auto-stop)
+llamacpp-manager launch qwen-coder-7b
+
+# Switch to hermes-3-llama-8b (qwen-coder-7b auto-stops)
+llamacpp-manager launch hermes-3-llama-8b
+```
+
+#### Model Selection Guide for arionComply
+
+Choose models based on your compliance workflow needs:
+
+| Workflow | Recommended Model | Why |
+|----------|------------------|-----|
+| **Evidence Mapping** | qwen-coder-7b | Best for structured JSON outputs and tool calling |
+| **Multi-Agent Analysis** | hermes-3-llama-8b | Trained specifically for autonomous agent workflows |
+| **Compliance Reports** | llama-3.1-8b | Strong instruction following for formal documentation |
+| **Document Analysis** | qwen-2.5-14b | Balanced reasoning with larger context window |
+
+**Example Workflow**:
+```bash
+# Download models for arionComply
+llamacpp-manager models download qwen-coder-7b
+llamacpp-manager models download hermes-3-llama-8b
+llamacpp-manager models download llama-3.1-8b
+
+# Add to configuration with exclusive group
+# (models auto-added to agentic-models group if group exists)
+
+# Start the appropriate model for your task
+llamacpp-manager launch qwen-coder-7b  # For evidence mapping
+# or
+llamacpp-manager launch llama-3.1-8b   # For compliance reports
+```
+
 ### Process Control
 
 ```bash

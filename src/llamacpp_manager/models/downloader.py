@@ -165,6 +165,7 @@ class ModelDownloader:
 
 # Pre-configured model definitions for easy downloading
 CODING_MODELS = {
+    # Large coding models
     "qwen-coder-32b": {
         "repo_id": "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF",
         "filename": "qwen2.5-coder-32b-instruct-q8_0.gguf",
@@ -188,6 +189,42 @@ CODING_MODELS = {
         "size_gb": 18,
         "ram_gb": 22,
         "use_case": "Quick debugging, code explanation, documentation"
+    },
+
+    # Agentic & Tool-Calling Models
+    "qwen-coder-7b": {
+        "repo_id": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-7b-instruct-q8_0.gguf",
+        "description": "Qwen 2.5 Coder 7B - Best for tool calling and structured outputs",
+        "size_gb": 8,
+        "ram_gb": 12,
+        "use_case": "Agentic workflows, tool calling, function execution, JSON outputs"
+    },
+    "hermes-3-llama-8b": {
+        "repo_id": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
+        "filename": "Hermes-3-Llama-3.1-8B.Q8_0.gguf",
+        "description": "Hermes 3 Llama 3.1 8B - Specifically trained for agentic use",
+        "size_gb": 9,
+        "ram_gb": 13,
+        "use_case": "Multi-agent systems, autonomous workflows, tool orchestration"
+    },
+    "llama-3.1-8b": {
+        "repo_id": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf",
+        "description": "Llama 3.1 8B Instruct - Strong instruction following",
+        "size_gb": 9,
+        "ram_gb": 13,
+        "use_case": "Compliance queries, report generation, document analysis"
+    },
+
+    # Reasoning & Analysis Models
+    "qwen-2.5-14b": {
+        "repo_id": "Qwen/Qwen2.5-14B-Instruct-GGUF",
+        "filename": "qwen2.5-14b-instruct-q8_0.gguf",
+        "description": "Qwen 2.5 14B Instruct - Balanced reasoning and speed",
+        "size_gb": 16,
+        "ram_gb": 20,
+        "use_case": "Document analysis, evidence mapping, complex queries"
     }
 }
 

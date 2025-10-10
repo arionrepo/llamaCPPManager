@@ -208,18 +208,24 @@ Acceptance Criteria
 - WHEN a model is in a group THEN the system SHALL display group membership in status output
 - WHEN models have no autostart THEN the system SHALL support on-demand launching for all models
 
-Requirement 18: Large Coding Model Support
-Phase: MVP-CodingModels
+Requirement 18: Large Coding Model Support ✅ COMPLETED
+Phase: MVP-CodingModels (Phase 2)
 
 User Story: As a developer, I want to run large coding models (Qwen Coder, DeepSeek Coder) on-demand so that I can use them for complex code generation without keeping them running constantly.
 
 Acceptance Criteria
-- WHEN I download a coding model THEN the system SHALL support downloading from Hugging Face with progress tracking
-- WHEN I launch a coding model THEN the system SHALL start it natively with appropriate resource allocation
-- WHEN a coding model is idle THEN the system SHALL optionally auto-stop it after configurable timeout
-- WHEN I query via MCP THEN the system SHALL support launching coding models on-demand from AI assistants
-- WHEN multiple coding models exist THEN the system SHALL enforce mutual exclusion to prevent memory exhaustion
-- WHEN I check status THEN the system SHALL show model size, RAM requirements, and use case metadata
+- ✅ WHEN I download a coding model THEN the system SHALL support downloading from Hugging Face with progress tracking
+- ✅ WHEN I launch a coding model THEN the system SHALL start it natively with appropriate resource allocation
+- 🔄 WHEN a coding model is idle THEN the system SHALL optionally auto-stop it after configurable timeout (planned)
+- ✅ WHEN I query via MCP THEN the system SHALL support launching coding models on-demand from AI assistants
+- ✅ WHEN multiple coding models exist THEN the system SHALL enforce mutual exclusion to prevent memory exhaustion
+- ✅ WHEN I check status THEN the system SHALL show model size, RAM requirements, and use case metadata
+
+Implementation Notes:
+- ✅ Implemented `models download <name>` command with huggingface_hub integration
+- ✅ Downloaded agentic models: qwen-coder-7b, hermes-3-llama-8b, llama-3.1-8b (23GB total)
+- ✅ Models stored in ~/llms/<model-name>/ with automatic directory creation
+- ✅ Exclusive groups working correctly (agentic-models group)
 
 Requirement 19: Flexible Deployment Architecture
 Phase: MVP-ModelManager
@@ -234,6 +240,70 @@ Acceptance Criteria
 - WHEN both native and containerized models exist THEN the system SHALL manage them uniformly
 - WHEN deployment_type changes THEN the system SHALL validate resources and provide clear migration guidance
 
+Requirement 20: GUI Model Downloader
+Phase: GUI-Enhancements (Phase 4)
+
+User Story: As a GUI user, I want to browse and download models from the menu bar app so that I don't need to use the CLI for model management.
+
+Acceptance Criteria
+- WHEN I open the model downloader UI THEN the system SHALL display available models from the curated library
+- WHEN I select a model to download THEN the system SHALL show metadata (size, RAM requirements, use case)
+- WHEN downloading a model THEN the system SHALL display real-time progress (percentage, speed, ETA)
+- WHEN a download completes THEN the system SHALL automatically add the model to configuration
+- WHEN a model is already downloaded THEN the system SHALL indicate that and offer to re-download or configure
+- WHEN I filter models THEN the system SHALL support filtering by size, use case, or model family
+
+Requirement 21: GUI Model Sanity Testing
+Phase: GUI-Enhancements (Phase 4)
+
+User Story: As a GUI user, I want to quickly test models with simple queries so that I can verify they're working correctly without using the CLI.
+
+Acceptance Criteria
+- WHEN I click "Test Model" THEN the system SHALL provide a quick query interface
+- WHEN I enter a test prompt THEN the system SHALL send it to the model and display the response
+- WHEN testing THEN the system SHALL show response time and token generation speed
+- WHEN a model fails to respond THEN the system SHALL display clear error messages with troubleshooting hints
+- WHEN I save test queries THEN the system SHALL remember them for quick re-testing
+- WHEN models are in exclusive groups THEN the system SHALL indicate which model will be stopped
+
+Requirement 22: GUI Help & Documentation
+Phase: GUI-Enhancements (Phase 4)
+
+User Story: As a GUI user, I want comprehensive help documentation built into the app so that I can learn how to use features without leaving the interface.
+
+Acceptance Criteria
+- WHEN I open Help THEN the system SHALL display a detailed manual covering all features
+- WHEN viewing help THEN the system SHALL include sections on model management, groups, deployment types, and troubleshooting
+- WHEN I search help THEN the system SHALL provide keyword search across all documentation
+- WHEN I click contextual help THEN the system SHALL open relevant documentation for that feature
+- WHEN viewing help THEN the system SHALL include visual diagrams and examples
+- WHEN updates occur THEN the system SHALL highlight new features in the help system
+
+Requirement 23: GUI Model Groups View
+Phase: GUI-Enhancements (Phase 4)
+
+User Story: As a GUI user, I want to see which models belong to groups and their exclusivity rules so that I understand resource constraints.
+
+Acceptance Criteria
+- WHEN I view models THEN the system SHALL display group badges for grouped models
+- WHEN I hover over a group badge THEN the system SHALL show group details (exclusive, members, timeout)
+- WHEN launching a model in an exclusive group THEN the system SHALL show which model will be stopped
+- WHEN models are grouped THEN the system SHALL visually indicate the active model in each group
+- WHEN I manage groups THEN the system SHALL provide UI to create, edit, and delete model groups
+
+Requirement 24: Container Management GUI
+Phase: GUI-Enhancements (Phase 4 - Optional)
+
+User Story: As a GUI user with Docker/Colima, I want to manage containerized models from the menu bar so that I can leverage containers without CLI commands.
+
+Acceptance Criteria
+- WHEN Docker is available THEN the system SHALL show container deployment option in model configuration
+- WHEN I start a containerized model THEN the system SHALL display container status (ID, resource usage)
+- WHEN viewing container models THEN the system SHALL show memory/CPU limits and actual usage
+- WHEN containers fail THEN the system SHALL provide container-specific troubleshooting guidance
+- WHEN I manage containers THEN the system SHALL support building, starting, stopping, and removing container images
+- WHEN using Docker Compose THEN the system SHALL show multi-container orchestration status
+
 ## 5. Stretch Goals (Optional)
 - macOS menu bar advanced features (quick prompts, Raycast integration)
 - Prometheus endpoint exposing metrics
@@ -242,6 +312,8 @@ Acceptance Criteria
 - Multi-cloud Kubernetes support (EKS, GKE, AKS)
 - GitOps integration for declarative model deployments
 - Auto-scaling based on request load and resource utilization
+- VLLM deployment support (alternative to llama.cpp for production inference)
+- Integration with MLX for Apple Silicon optimized inference
 
 ## 6. Open Questions
 - Preferred packaging for GUI (App Store vs. downloadable .dmg)

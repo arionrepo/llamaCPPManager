@@ -1,6 +1,6 @@
 # Next Activities - llamaCPP Manager
 
-## 🎯 Current Status Summary (Updated 2025-10-07)
+## 🎯 Current Status Summary (Updated 2025-10-10)
 
 ### ✅ Production Ready (Implemented & Tested)
 
@@ -22,6 +22,21 @@
 - ✅ **Hung process detection** and automatic cleanup
 - ✅ **Resource monitoring** and reporting
 
+**Unified Model Manager (Phase 1 - COMPLETED):**
+- ✅ **Model groups** with mutual exclusion (exclusive groups working)
+- ✅ **Flexible deployment** (native deployment implemented)
+- ✅ **On-demand launcher** (`launch` command with auto-stop)
+- ✅ **Model metadata** (size_gb, ram_gb, use_case tracking)
+- ✅ **ModelManager class** with group logic
+
+**Model Downloader (Phase 2 - COMPLETED):**
+- ✅ **Hugging Face Hub integration** (huggingface_hub)
+- ✅ **Curated model library** in downloader.py
+- ✅ **CLI commands** (`models list --available`, `models download`, `models info`)
+- ✅ **Agentic models downloaded** (qwen-coder-7b, hermes-3-llama-8b, llama-3.1-8b - 23GB)
+- ✅ **Automatic storage organization** (~/llms/<model-name>/)
+- ✅ **Progress tracking** for large downloads
+
 **GUI Application:**
 - ✅ **SwiftUI menu bar app** (builds, runs, tested)
 - ✅ **Real-time status monitoring**
@@ -29,6 +44,8 @@
 - ✅ **Infrastructure management** UI
 - ✅ **Log viewing** (models and infrastructure)
 - ✅ **Status indicators** and health display
+- 🔄 **Model downloader UI** (planned - Phase 4)
+- 🔄 **Model sanity testing UI** (planned - Phase 4)
 
 **MCP Integration:**
 - ✅ **MCP server module** (`mcp_server.py` implemented)
@@ -36,29 +53,22 @@
 - ✅ **9 MCP tools** for model management
 - ⚠️ **Needs installation verification** (entry point may need setup)
 
-**Documentation:**
+**Documentation (Phase 3 - COMPLETED):**
 - ✅ **Comprehensive user manual** with mermaid diagrams
+- ✅ **Model downloader guide** with arionComply workflows
+- ✅ **Architecture documentation** (model downloader flow)
 - ✅ **Testing guides** (CLI + GUI)
-- ✅ **Architecture documentation**
 - ✅ **MCP server API documentation**
 - ✅ **Infrastructure management guide**
 
-### 🎯 Planned for Implementation (Priority Order)
+### 🎯 Current Work (Phase 4 - GUI Enhancements)
 
-**Phase 1: Unified Model Manager (Next 1-2 weeks)**
-- 🔄 **Model groups** with mutual exclusion
-- 🔄 **Flexible deployment** (native + optional container)
-- 🔄 **On-demand launcher** for large coding models
-- 🔄 **Model downloader** for Hugging Face integration
-- 🔄 **Enhanced MCP tools** for coding models
-- 🔄 **GUI model groups** view
-
-**Phase 2: Large Coding Models (Following 1 week)**
-- 🔄 **Download Qwen Coder 32B, 14B** (~51GB total)
-- 🔄 **Download DeepSeek Coder Lite 16B** (~18GB)
-- 🔄 **Exclusive launching** (one large model at a time)
-- 🔄 **Inactivity auto-stop** (configurable timeout)
-- 🔄 **Resource monitoring** before launch
+**Phase 4: Enhanced GUI Features (Next 1-2 weeks)**
+- 🔄 **GUI model downloader** (browse, download, configure from menu bar)
+- 🔄 **Model sanity testing** (quick query interface to verify model responses)
+- 🔄 **Model groups view** (visual indicators for exclusive groups)
+- 🔄 **Download progress display** (real-time progress in GUI)
+- 🔄 **Container management UI** (optional - if containers implemented)
 
 ### 🚧 Optional Future Features
 
