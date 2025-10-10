@@ -718,6 +718,11 @@ def cmd_stop(args: argparse.Namespace) -> int:
     cfg = load_config()
     selected = _select_models(cfg, args.target)
     rc = 0
+
+    # Try using ModelManager first for models without PID files
+    from .model_manager import ModelManager
+    manager = ModelManager()
+
     for m in selected:
         name = m["name"]
         if getattr(args, "launchd", False):
@@ -732,16 +737,52 @@ def cmd_stop(args: argparse.Namespace) -> int:
                 pass
             print(f"launchd stopped {name}")
         else:
+            # Try PID file approach first (legacy)
             try:
                 pid = read_pid(name)
-            except FileNotFoundError:
-                print(f"warning: no pid file for {name}", file=sys.stderr)
-                rc = max(rc, 1)
-                continue
-            try:
                 stop_process(pid)
                 remove_pid(name)
                 print(f"stopped {name} pid={pid}")
+                continue
+            except FileNotFoundError:
+                # No PID file - try ModelManager instead
+                pass
+            except Exception as e:
+                print(f"error stopping {name}: {e}", file=sys.stderr)
+                rc = 2
+                continue
+
+            # Use ModelManager as fallback
+            try:
+                success, msg = manager.stop_model(name)
+                if success:
+                    print(f"stopped {name}")
+                else:
+                    # Last resort: try to kill by port
+                    import subprocess
+                    port = m.get("port")
+                    if port:
+                        try:
+                            # Find process listening on this port
+                            result = subprocess.run(
+                                ["lsof", "-ti", f":{port}"],
+                                capture_output=True,
+                                text=True,
+                                timeout=2
+                            )
+                            if result.returncode == 0 and result.stdout.strip():
+                                pid = int(result.stdout.strip().split()[0])
+                                subprocess.run(["kill", str(pid)], timeout=2)
+                                print(f"stopped {name} (killed PID {pid} on port {port})")
+                            else:
+                                print(f"warning: {msg}", file=sys.stderr)
+                                rc = max(rc, 1)
+                        except Exception as kill_err:
+                            print(f"warning: {msg}", file=sys.stderr)
+                            rc = max(rc, 1)
+                    else:
+                        print(f"warning: {msg}", file=sys.stderr)
+                        rc = max(rc, 1)
             except Exception as e:
                 print(f"error stopping {name}: {e}", file=sys.stderr)
                 rc = 2
