@@ -12,9 +12,14 @@ echo "🔧 Installing llamacpp-manager CLI to ~/.local/bin..."
 mkdir -p ~/.local/bin
 mkdir -p ~/.local/lib/python3.13/site-packages
 
-# Install package
-echo "📦 Installing Python package..."
-pip3 install --target ~/.local/lib/python3.13/site-packages .
+# Copy source files directly (pip wheel building seems to truncate files)
+echo "📦 Copying source files..."
+rm -rf ~/.local/lib/python3.13/site-packages/llamacpp_manager
+cp -r src/llamacpp_manager ~/.local/lib/python3.13/site-packages/
+
+# Install dependencies only
+echo "📦 Installing dependencies..."
+pip3 install --target ~/.local/lib/python3.13/site-packages PyYAML>=6.0 mcp>=1.0.0 httpx>=0.25.0 pydantic>=2.0.0 docker>=6.1.0 jinja2>=3.1.0 --quiet
 
 # Create executable wrapper
 echo "🔗 Creating executable wrapper..."
