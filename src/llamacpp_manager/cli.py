@@ -1031,11 +1031,24 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         port = int(m.get("port"))
         pid = None
         mode = "stopped"
+
+        # Try to read PID from file first
         try:
-            pid = read_pid(name)
-            mode = "direct" if process_alive(pid) else "stopped"
+            pid_from_file = read_pid(name)
+            if process_alive(pid_from_file):
+                # PID file is valid and process exists
+                pid = pid_from_file
+                mode = "direct"
+            else:
+                # PID file exists but process is dead - fall through to discovery
+                pid = None
+                mode = "stopped"
         except Exception:
-            # try to match discovered processes by model_path or --port
+            # No PID file - continue to discovery
+            pass
+
+        # If no valid PID from file, try process discovery
+        if pid is None:
             model_path = str(m.get("model_path", ""))
             found = None
             for p in procs:
