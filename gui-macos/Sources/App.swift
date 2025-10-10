@@ -467,7 +467,9 @@ final class StatusViewModel: ObservableObject {
     func openModelDownloader() {
         // Check if model downloader window already exists
         if let existingWindow = modelDownloaderWindow {
+            existingWindow.level = .floating
             existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -486,7 +488,9 @@ final class StatusViewModel: ObservableObject {
         window.title = "Model Downloader"
         window.contentViewController = hostingController
         window.center()
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Store window reference
         modelDownloaderWindow = window
@@ -592,7 +596,9 @@ final class StatusViewModel: ObservableObject {
         window.title = "llamaCPP Manager - User Manual"
         window.contentView = scrollView
         window.center()
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Keep window reference to prevent deallocation
         window.isReleasedWhenClosed = false

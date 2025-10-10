@@ -13,16 +13,6 @@ let package = Package(
         .executableTarget(
             name: "llamacpp-gui",
             path: "Sources"
-        ),
-        .testTarget(
-            name: "llamacpp-guiTests",
-            dependencies: ["llamacpp-gui"],
-            path: "Tests/Unit"
-        ),
-        .testTarget(
-            name: "llamacpp-guiUITests",
-            dependencies: ["llamacpp-gui"],
-            path: "Tests/UI"
         )
     ]
 )

@@ -102,6 +102,17 @@ def cmd_config(args: argparse.Namespace) -> int:
         except Exception:
             pass
         print(f"Added model '{spec.name}'")
+
+        # Add to continue.dev configuration
+        try:
+            from .integrations import add_model_to_continue
+            was_added = add_model_to_continue(spec.name, spec.port, host=spec.host)
+            if was_added:
+                print(f"✓ Added to continue.dev configuration")
+            else:
+                print(f"✓ Updated in continue.dev configuration")
+        except Exception as e:
+            print(f"warning: could not update continue.dev config: {e}", file=sys.stderr)
         return 0
 
     if sub == "update":
@@ -141,6 +152,15 @@ def cmd_config(args: argparse.Namespace) -> int:
             return 2
         save_config(cfg)
         print(f"Removed model '{args.name}'")
+
+        # Remove from continue.dev configuration
+        try:
+            from .integrations import remove_model_from_continue
+            was_removed = remove_model_from_continue(args.name)
+            if was_removed:
+                print(f"✓ Removed from continue.dev configuration")
+        except Exception as e:
+            print(f"warning: could not update continue.dev config: {e}", file=sys.stderr)
         return 0
 
     if sub == "migrate":
@@ -485,6 +505,7 @@ Examples:
 
     sp_models_list = models_sub.add_parser("list", help="📋 List downloaded models")
     sp_models_list.add_argument("--available", action="store_true", help="Show available pre-configured models")
+    sp_models_list.add_argument("--json", action="store_true", help="Output in JSON format")
     sp_models_list.set_defaults(func=cmd_models)
 
     sp_models_download = models_sub.add_parser("download", help="⬇️  Download model from Hugging Face")
@@ -790,18 +811,36 @@ def cmd_models(args: argparse.Namespace) -> int:
     if sub == "list":
         try:
             if args.available:
-                # Show available pre-configured models
-                print("Available Coding Models:")
-                print()
                 models = list_available_coding_models()
-                for name, info in models.items():
-                    print(f"  {name}")
-                    print(f"    Description: {info['description']}")
-                    print(f"    Size: ~{info['size_gb']} GB")
-                    print(f"    RAM needed: ~{info['ram_gb']} GB")
-                    print(f"    Use case: {info['use_case']}")
+
+                if args.json:
+                    # Output as JSON array
+                    import json
+                    models_list = []
+                    for name, info in models.items():
+                        model_dict = {
+                            "name": name,
+                            "repo_id": info["repo_id"],
+                            "filename": info["filename"],
+                            "description": info["description"],
+                            "size_gb": info["size_gb"],
+                            "ram_gb": info["ram_gb"],
+                            "use_case": info["use_case"]
+                        }
+                        models_list.append(model_dict)
+                    print(json.dumps(models_list, indent=2))
+                else:
+                    # Show available pre-configured models
+                    print("Available Coding Models:")
                     print()
-                print(f"Download with: llamacpp-manager models download <name>")
+                    for name, info in models.items():
+                        print(f"  {name}")
+                        print(f"    Description: {info['description']}")
+                        print(f"    Size: ~{info['size_gb']} GB")
+                        print(f"    RAM needed: ~{info['ram_gb']} GB")
+                        print(f"    Use case: {info['use_case']}")
+                        print()
+                    print(f"Download with: llamacpp-manager models download <name>")
             else:
                 # Show downloaded models
                 downloader = ModelDownloader()
