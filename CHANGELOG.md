@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.1.13] - 2025-10-11
+- Automated release
+- Includes latest improvements and bug fixes
 ## [1.1.12] - 2025-10-11
 ### Fixed
 - Version alignment across all artifacts (Info.plist, DMG filename, About dialog)
