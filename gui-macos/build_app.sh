@@ -76,9 +76,9 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>$VERSION</string>
+    <string>$DISPLAY_VERSION</string>
     <key>CFBundleVersion</key>
-    <string>$VERSION</string>
+    <string>$DISPLAY_VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -188,7 +188,7 @@ fi
 # Create distributable DMG (if available)
 if command -v hdiutil &> /dev/null; then
     log "Creating distributable DMG..."
-    DMG_NAME="$BUILD_DIR/llamaCPP-Manager-$VERSION.dmg"
+    DMG_NAME="$BUILD_DIR/llamaCPP-Manager-$DISPLAY_VERSION.dmg"
 
     # Create temporary dmg directory
     DMG_DIR="$BUILD_DIR/dmg"
@@ -213,8 +213,8 @@ info "Bundle location: $APP_DIR"
 info "Installation: Drag to Applications folder"
 info "Requirements: CLI must be installed separately"
 
-if [[ -f "$BUILD_DIR/llamaCPP-Manager-$VERSION.dmg" ]]; then
-    info "DMG available: $BUILD_DIR/llamaCPP-Manager-$VERSION.dmg"
+if [[ -f "$BUILD_DIR/llamaCPP-Manager-$DISPLAY_VERSION.dmg" ]]; then
+    info "DMG available: $BUILD_DIR/llamaCPP-Manager-$DISPLAY_VERSION.dmg"
 fi
 
 echo
