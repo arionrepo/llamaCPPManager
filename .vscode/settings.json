@@ -1,0 +1,11 @@
+{
+    "claude-code.selectedModel": "claude-3-5-haiku-20241022",
+    "files.associations": {
+        "CLAUDE.md": "markdown"
+    },
+    "swift.buildPath": "${workspaceFolder}/.build/x86_64-apple-macosx/debug",
+    "swift.autoGenerateLaunchConfigurations": false,
+    "files.watcherExclude": {
+        "**/.build/**": true
+    }
+}
