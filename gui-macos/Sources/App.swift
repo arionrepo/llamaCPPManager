@@ -33,22 +33,7 @@ enum AppLogger {
     }
 }
 
-// Extension to add logging to async operations
-extension Task where Success == Never, Failure == Never {
-    @discardableResult
-    static func detached(priority: TaskPriority? = nil, operation: @escaping () async -> Void) -> Task {
-        return Task(priority: priority) {
-            do {
-                try Task.checkCancellation()
-                await operation()
-            } catch is CancellationError {
-                AppLogger.log("Task was cancelled", level: .warning)
-            } catch {
-                AppLogger.log("Unexpected error in detached task: \(error)", level: .error)
-            }
-        }
-    }
-}
+// Any custom async operation logging can be added here if needed
 
 @main
 struct LlamaCPPManagerApp: App {
@@ -260,6 +245,10 @@ struct StatusRow: Codable {
     let log_path: String?
     let health_state: String?
     let uptime: String?
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case name, pid, host, port, up, latency_ms, http_status, version, mode, log_path, health_state, uptime
+    }
 }
 
 struct InfrastructureRow: Codable {
@@ -274,7 +263,7 @@ struct InfrastructureRow: Codable {
     let details: [String: AnyCodable]?
     let uptime: String?
 
-    enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case name, type, enabled, running, healthy, status, health_status, latency_ms, details, uptime
     }
 }
@@ -362,42 +351,99 @@ final class StatusViewModel: ObservableObject {
     // MARK: - Logging Control Methods
 
     func toggleLogging() {
-        Task {
-            if loggingConfig?.enabled == true {
-                _ = try? await service.run(["logging", "disable"])
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            let command = loggingConfig?.enabled == true ? ["logging", "disable"] : ["logging", "enable"]
+            let result = await service.run(command)
+
+            if result == 0 {
+                AppLogger.log("Logging toggle successful: \(command.joined(separator: " "))", level: .info)
+                refresh()
             } else {
-                _ = try? await service.run(["logging", "enable"])
+                AppLogger.log("Failed to toggle logging with command: \(command.joined(separator: " "))", level: .error)
             }
-            refresh()
         }
     }
 
     func toggleTimestamps() {
-        Task {
-            if loggingConfig?.timestamps == true {
-                _ = try? await service.run(["logging", "timestamps", "off"])
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            let command = loggingConfig?.timestamps == true ? ["logging", "timestamps", "off"] : ["logging", "timestamps", "on"]
+            let result = await service.run(command)
+
+            if result == 0 {
+                AppLogger.log("Timestamps toggle successful: \(command.joined(separator: " "))", level: .info)
+                refresh()
             } else {
-                _ = try? await service.run(["logging", "timestamps", "on"])
+                AppLogger.log("Failed to toggle timestamps with command: \(command.joined(separator: " "))", level: .error)
             }
-            refresh()
         }
     }
 
-    func start(name: String) { Task { _ = try? await service.run(["start", name]) ; refresh() } }
-    func stop(name: String) { Task { _ = try? await service.run(["stop", name]) ; refresh() } }
-    func restart(name: String) { Task { _ = try? await service.run(["restart", name]) ; refresh() } }
+    func start(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["start", name])
+            if result == 0 {
+                AppLogger.log("Successfully started model: \(name)", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to start model: \(name)", level: .error)
+            }
+        }
+    }
+
+    func stop(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["stop", name])
+            if result == 0 {
+                AppLogger.log("Successfully stopped model: \(name)", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to stop model: \(name)", level: .error)
+            }
+        }
+    }
+
+    func restart(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["restart", name])
+            if result == 0 {
+                AppLogger.log("Successfully restarted model: \(name)", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to restart model: \(name)", level: .error)
+            }
+        }
+    }
 
     func startAllModels() {
-        Task {
-            _ = try? await service.run(["start", "all"])
-            refresh()
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["start", "all"])
+            if result == 0 {
+                AppLogger.log("Successfully started all models", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to start all models", level: .error)
+            }
         }
     }
 
     func stopAllModels() {
-        Task {
-            _ = try? await service.run(["stop", "all"])
-            refresh()
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["stop", "all"])
+            if result == 0 {
+                AppLogger.log("Successfully stopped all models", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to stop all models", level: .error)
+            }
         }
     }
 
@@ -608,11 +654,12 @@ final class StatusViewModel: ObservableObject {
 
         if monitoredModels.contains(name) {
             // Untrack model
-            Task.detached {
-                // Use the returned exit status to determine success
+            Task { [weak self] in
+                guard let self = self else { return }
                 let result = await service.run(["monitor", "untrack", name])
-                await MainActor.run {
-                    // Only remove from monitored models if the command was successful (exit status 0)
+
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     if result == 0 {
                         monitoredModels.remove(name)
                         AppLogger.log("Successfully untracked model: \(name)", level: .info)
@@ -623,10 +670,12 @@ final class StatusViewModel: ObservableObject {
             }
         } else {
             // Track model
-            Task.detached {
+            Task { [weak self] in
+                guard let self = self else { return }
                 let result = await service.run(["monitor", "track", name])
-                await MainActor.run {
-                    // Only add to monitored models if the command was successful
+
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     if result == 0 {
                         monitoredModels.insert(name)
                         AppLogger.log("Successfully tracked model: \(name)", level: .info)
@@ -1103,15 +1152,30 @@ final class CLIService {
     }
 
     func startInfrastructure(_ name: String) async throws {
-        _ = try await run(["infra", "start", name])
+        let result = await run(["infra", "start", name])
+        if result != 0 {
+            throw NSError(domain: "InfrastructureService", code: Int(result), userInfo: [
+                NSLocalizedDescriptionKey: "Failed to start infrastructure: \(name)"
+            ])
+        }
     }
 
     func stopInfrastructure(_ name: String) async throws {
-        _ = try await run(["infra", "stop", name])
+        let result = await run(["infra", "stop", name])
+        if result != 0 {
+            throw NSError(domain: "InfrastructureService", code: Int(result), userInfo: [
+                NSLocalizedDescriptionKey: "Failed to stop infrastructure: \(name)"
+            ])
+        }
     }
 
     func restartInfrastructure(_ name: String) async throws {
-        _ = try await run(["infra", "restart", name])
+        let result = await run(["infra", "restart", name])
+        if result != 0 {
+            throw NSError(domain: "InfrastructureService", code: Int(result), userInfo: [
+                NSLocalizedDescriptionKey: "Failed to restart infrastructure: \(name)"
+            ])
+        }
     }
 
     func infrastructureLogs(_ name: String) async throws -> String {

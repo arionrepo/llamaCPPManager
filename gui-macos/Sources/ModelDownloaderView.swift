@@ -158,7 +158,7 @@ final class DownloadViewModel: ObservableObject {
     }
 
     var filteredModels: [ModelInfo] {
-        availableModels.filter { model in
+        let filtered = availableModels.filter { model in
             let sizeMatch: Bool
             switch filterSize {
             case "Small (<10GB)":
@@ -174,19 +174,44 @@ final class DownloadViewModel: ObservableObject {
             let useCaseMatch: Bool
             switch filterUseCase {
             case "Agentic AI":
-                useCaseMatch = model.useCase.lowercased().contains("agentic") || model.useCase.lowercased().contains("agent")
+                useCaseMatch = model.useCase.lowercased().contains("agentic") ||
+                               model.useCase.lowercased().contains("agent") ||
+                               model.useCase.lowercased().contains("workflow")
             case "Coding":
-                useCaseMatch = model.useCase.lowercased().contains("code") || model.useCase.lowercased().contains("coding")
+                useCaseMatch = model.useCase.lowercased().contains("code") ||
+                               model.useCase.lowercased().contains("coding") ||
+                               model.description.lowercased().contains("code") ||
+                               model.description.lowercased().contains("debugging")
             case "Compliance":
-                useCaseMatch = model.useCase.lowercased().contains("compliance")
+                useCaseMatch = model.useCase.lowercased().contains("compliance") ||
+                               model.useCase.lowercased().contains("analysis") ||
+                               model.description.lowercased().contains("report")
             case "General":
-                useCaseMatch = !model.useCase.lowercased().contains("agentic") && !model.useCase.lowercased().contains("code")
+                useCaseMatch = !model.useCase.lowercased().contains("agentic") &&
+                               !model.useCase.lowercased().contains("code") &&
+                               !model.useCase.lowercased().contains("compliance")
             default:
                 useCaseMatch = true
             }
 
-            return sizeMatch && useCaseMatch
+            let result = sizeMatch && useCaseMatch
+
+            // Debug logging
+            if !result {
+                print("Filtered out model: \(model.name)")
+                print("  Size: \(model.sizeGB) GB (filter: \(filterSize))")
+                print("  Use Case: \(model.useCase) (filter: \(filterUseCase))")
+                print("  Size Match: \(sizeMatch)")
+                print("  Use Case Match: \(useCaseMatch)")
+            }
+
+            return result
         }
+
+        // Log total count of filtered models
+        print("Total filtered models: \(filtered.count)")
+
+        return filtered
     }
 }
 

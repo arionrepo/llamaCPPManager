@@ -1,0 +1,51 @@
+# File: /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/.pre-commit-config.yaml
+# Description: Pre-commit hooks configuration including idempotency tests
+# Author: Libor Ballaty <libor@arionetworks.com>
+# Created: 2025-10-11
+
+repos:
+  - repo: local
+    hooks:
+      - id: idempotency-tests
+        name: Idempotency Tests
+        entry: python -m pytest tests/test_idempotency.py -v
+        language: system
+        stages: [commit]
+        always_run: true
+        pass_filenames: false
+        description: "Run idempotency tests to ensure operations can be safely retried"
+
+      - id: config-idempotency-tests
+        name: Config Idempotency Tests
+        entry: python -m pytest tests/test_config.py::test_add_model_idempotent tests/test_config.py::test_save_config_idempotent -v
+        language: system
+        stages: [commit]
+        files: "^(src/llamacpp_manager/config\\.py|tests/test_config\\.py)$"
+        description: "Run config-specific idempotency tests when config files change"
+
+      - id: full-test-suite
+        name: Full Test Suite
+        entry: python -m pytest tests/ -x
+        language: system
+        stages: [push]
+        always_run: true
+        pass_filenames: false
+        description: "Run full test suite before push to ensure all functionality works"
+
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        args: [--line-length=88]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black]
