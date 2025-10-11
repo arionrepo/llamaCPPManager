@@ -1,5 +1,54 @@
 import SwiftUI
 import AppKit
+import os.log
+
+// Centralized logging utility
+enum AppLogger {
+    private static let logger = Logger(subsystem: "com.llamacpp.manager", category: "GUI")
+
+    enum LogLevel {
+        case debug
+        case info
+        case warning
+        case error
+    }
+
+    static func log(_ message: String, level: LogLevel = .info, file: String = #file, function: String = #function, line: Int = #line) {
+        let filename = (file as NSString).lastPathComponent
+        let formattedMessage = "[\(filename):\(line)] \(function) - \(message)"
+
+        switch level {
+        case .debug:
+            logger.debug("\(formattedMessage)")
+        case .info:
+            logger.info("\(formattedMessage)")
+        case .warning:
+            logger.warning("\(formattedMessage)")
+        case .error:
+            logger.error("\(formattedMessage)")
+        }
+
+        // Additional console logging for development
+        print("[LlamaCPP Manager] \(formattedMessage)")
+    }
+}
+
+// Extension to add logging to async operations
+extension Task where Success == Never, Failure == Never {
+    @discardableResult
+    static func detached(priority: TaskPriority? = nil, operation: @escaping () async -> Void) -> Task {
+        return Task(priority: priority) {
+            do {
+                try Task.checkCancellation()
+                await operation()
+            } catch is CancellationError {
+                AppLogger.log("Task was cancelled", level: .warning)
+            } catch {
+                AppLogger.log("Unexpected error in detached task: \(error)", level: .error)
+            }
+        }
+    }
+}
 
 @main
 struct LlamaCPPManagerApp: App {
@@ -555,20 +604,35 @@ final class StatusViewModel: ObservableObject {
     }
 
     func toggleMonitoring(name: String) {
+        AppLogger.log("Toggling monitoring for model: \(name)", level: .debug)
+
         if monitoredModels.contains(name) {
             // Untrack model
-            Task {
-                _ = try? await service.run(["monitor", "untrack", name])
+            Task.detached {
+                // Use the returned exit status to determine success
+                let result = await service.run(["monitor", "untrack", name])
                 await MainActor.run {
-                    monitoredModels.remove(name)
+                    // Only remove from monitored models if the command was successful (exit status 0)
+                    if result == 0 {
+                        monitoredModels.remove(name)
+                        AppLogger.log("Successfully untracked model: \(name)", level: .info)
+                    } else {
+                        AppLogger.log("Failed to untrack model: \(name)", level: .error)
+                    }
                 }
             }
         } else {
             // Track model
-            Task {
-                _ = try? await service.run(["monitor", "track", name])
+            Task.detached {
+                let result = await service.run(["monitor", "track", name])
                 await MainActor.run {
-                    monitoredModels.insert(name)
+                    // Only add to monitored models if the command was successful
+                    if result == 0 {
+                        monitoredModels.insert(name)
+                        AppLogger.log("Successfully tracked model: \(name)", level: .info)
+                    } else {
+                        AppLogger.log("Failed to track model: \(name)", level: .error)
+                    }
                 }
             }
         }
@@ -1017,9 +1081,21 @@ final class CLIService {
     }
 
     func fetchStatus() async throws -> StatusResponse {
-        let data = try await runAndCapture(["status", "--json"]).data(using: .utf8) ?? Data()
-        let response = try JSONDecoder().decode(StatusResponse.self, from: data)
-        return response
+        AppLogger.log("Fetching status from CLI", level: .debug)
+        do {
+            let jsonString = try await runAndCapture(["status", "--json"])
+            guard let data = jsonString.data(using: .utf8), !data.isEmpty else {
+                AppLogger.log("Empty status response", level: .warning)
+                throw NSError(domain: "CLIService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty status response"])
+            }
+
+            let response = try JSONDecoder().decode(StatusResponse.self, from: data)
+            AppLogger.log("Status fetched successfully: \(response.models.count) models", level: .debug)
+            return response
+        } catch {
+            AppLogger.log("Failed to fetch status: \(error.localizedDescription)", level: .error)
+            throw error
+        }
     }
 
     func fetchInfrastructureList() async throws -> String {
@@ -1042,14 +1118,52 @@ final class CLIService {
         return try await runAndCapture(["infra", "logs", name])
     }
 
-    func run(_ args: [String]) async throws -> Int32 {
-        let url = try requireExec()
-        let process = Process()
-        process.executableURL = url
-        process.arguments = args
-        try process.run()
-        process.waitUntilExit()
-        return process.terminationStatus
+    func run(_ args: [String]) async -> Int32 {
+        // Log the command being executed
+        AppLogger.log("Executing CLI command: \(args.joined(separator: " "))", level: .debug)
+
+        do {
+            let url = try requireExec()
+            let process = Process()
+            process.executableURL = url
+            process.arguments = args
+
+            // Capture output and error
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            // Start the process
+            try process.run()
+            process.waitUntilExit()
+
+            // Read output and error data
+            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+            // Log output if any
+            if let outputString = String(data: outputData, encoding: .utf8), !outputString.isEmpty {
+                AppLogger.log("CLI Command Output: \(outputString)", level: .debug)
+            }
+
+            // Log and handle errors
+            if let errorString = String(data: errorData, encoding: .utf8), !errorString.isEmpty {
+                AppLogger.log("CLI Command Error: \(args.joined(separator: " ")) - \(errorString)", level: .warning)
+            }
+
+            // Log termination status
+            let status = process.terminationStatus
+            if status != 0 {
+                AppLogger.log("CLI Command Failed: \(args.joined(separator: " ")) - Exit Status: \(status)", level: .error)
+            }
+
+            return status
+        } catch {
+            // Log any execution errors
+            AppLogger.log("CLI Execution Error: \(args.joined(separator: " ")) - \(error.localizedDescription)", level: .error)
+            return -1
+        }
     }
 
     func runAndCapture(_ args: [String]) async throws -> String {
