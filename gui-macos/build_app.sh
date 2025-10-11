@@ -35,6 +35,13 @@ log() { echo -e "${GREEN}[BUILD]${NC} $1"; }
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Update APP_VERSION in App.swift BEFORE building
+log "Updating APP_VERSION to $DISPLAY_VERSION..."
+ABOUT_FILE="Sources/App.swift"
+
+# Use perl for more reliable multi-line replacement
+perl -i -pe "BEGIN{undef $/;} s/let APP_VERSION: String = \{\s*return \"[^\"]*\"\s*\}\(\)/let APP_VERSION: String = {\n    return \"$DISPLAY_VERSION\"\n}()/smg" "$ABOUT_FILE"
+
 # Clean previous builds
 log "Cleaning previous builds..."
 rm -rf "$BUILD_DIR"
@@ -90,13 +97,6 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
 </dict>
 </plist>
 EOF
-
-# Update APP_VERSION in App.swift
-log "Updating APP_VERSION to $DISPLAY_VERSION..."
-ABOUT_FILE="Sources/App.swift"
-
-# Use perl for more reliable multi-line replacement
-perl -i -pe "BEGIN{undef $/;} s/let APP_VERSION: String = \{\s*return \"[^\"]*\"\s*\}\(\)/let APP_VERSION: String = {\n    return \"$DISPLAY_VERSION\"\n}()/smg" "$ABOUT_FILE"
 
 # Create app icon (if available)
 if command -v sips &> /dev/null; then
