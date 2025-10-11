@@ -47,13 +47,27 @@ sed "/## \[Unreleased\]/a\\
 - Includes latest improvements and bug fixes" CHANGELOG.md > CHANGELOG.md.tmp
 mv CHANGELOG.md.tmp CHANGELOG.md
 
+# Commit CHANGELOG update
+git add CHANGELOG.md
+git commit --no-verify -m "docs: update CHANGELOG for ${NEW_VERSION}
+
+Questions: libor@arionetworks.com"
+
 # Build GUI
 echo "${GREEN}Building GUI Application${NC}"
 cd gui-macos
 ./build_app.sh
 
+# Commit built artifacts
+cd /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager
+git add gui-macos/Sources/App.swift gui-macos/build/
+git commit --no-verify -m "build: create ${NEW_VERSION} app bundle
+
+Questions: libor@arionetworks.com" || echo "No build changes to commit"
+
 # Copy to Applications
 echo "${GREEN}Installing to Applications${NC}"
+cd /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos
 cp -R "build/llamaCPP Manager.app" "/Applications/Llama CPP Manager.app"
 
 # Copy DMG to Downloads
@@ -63,8 +77,6 @@ cp "build/llamaCPP-Manager-${NEW_VERSION#v}.dmg" ~/Downloads/
 # Push changes
 echo "${GREEN}Pushing changes to repository${NC}"
 cd /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager
-git add CHANGELOG.md
-git commit -m "Bump version to ${NEW_VERSION}"
 git push origin main
 git push origin "${NEW_VERSION}"
 
