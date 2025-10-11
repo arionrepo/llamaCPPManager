@@ -3,8 +3,9 @@ import AppKit
 
 // Version constant to ensure dynamic version
 let APP_VERSION: String = {
-    return "1.1.6"
+    return "1.1.10"
 }()
+
 import os.log
 
 // Centralized logging utility

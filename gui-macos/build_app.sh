@@ -95,11 +95,8 @@ EOF
 log "Updating APP_VERSION to $DISPLAY_VERSION..."
 ABOUT_FILE="Sources/App.swift"
 
-# Use a simpler sed replacement for APP_VERSION constant
-sed -i '' "s/let APP_VERSION: String = {/let APP_VERSION: String = {/; /let APP_VERSION: String = {/,/}()/c\\
-let APP_VERSION: String = {\\
-    return \"$DISPLAY_VERSION\"\\
-}()" "$ABOUT_FILE"
+# Use perl for more reliable multi-line replacement
+perl -i -pe "BEGIN{undef $/;} s/let APP_VERSION: String = \{\s*return \"[^\"]*\"\s*\}\(\)/let APP_VERSION: String = {\n    return \"$DISPLAY_VERSION\"\n}()/smg" "$ABOUT_FILE"
 
 # Create app icon (if available)
 if command -v sips &> /dev/null; then
