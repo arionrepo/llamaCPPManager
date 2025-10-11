@@ -576,16 +576,30 @@ final class StatusViewModel: ObservableObject {
         // Open comprehensive help documentation in a separate window
         let helpContent = loadUserManual()
 
-        let textView = NSTextView()
+        // Create text view with proper sizing
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
         textView.string = helpContent
         textView.isEditable = false
-        textView.font = NSFont.systemFont(ofSize: 13)
+        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textColor = NSColor.labelColor
+        textView.backgroundColor = NSColor.textBackgroundColor
         textView.textContainerInset = NSSize(width: 20, height: 20)
+        textView.autoresizingMask = [.width, .height]
+
+        // Ensure text view is properly sized
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.textContainer?.containerSize = NSSize(width: 860, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
 
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 900, height: 700))
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
