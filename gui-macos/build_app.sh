@@ -6,7 +6,16 @@ set -e
 # Configuration
 APP_NAME="llamaCPP Manager"
 BUNDLE_ID="com.llamacpp.manager"
-VERSION="1.0.0"
+# Get version from git tag, fallback to default
+VERSION=$(git describe --tags --always 2>/dev/null || echo "1.1.0")
+
+# Ensure version starts with 'v'
+if [[ ! "$VERSION" =~ ^v ]]; then
+    VERSION="v$VERSION"
+fi
+
+# Strip 'v' prefix for Info.plist and other uses
+DISPLAY_VERSION="${VERSION#v}"
 BUILD_DIR="build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 
