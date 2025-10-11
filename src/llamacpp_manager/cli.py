@@ -542,6 +542,16 @@ Examples:
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
     sp_ens.set_defaults(func=cmd_ensure_running)
 
+    # compare (multi-model comparison)
+    sp_compare = sub.add_parser("compare", help="🔍 Query multiple models simultaneously for comparison")
+    sp_compare.add_argument("question", help="Question to ask all models")
+    sp_compare.add_argument("--models", required=True, help="Comma-separated model names (e.g., phi3,qwen-coder-7b,hermes-3)")
+    sp_compare.add_argument("--save", action="store_true", help="Save to chat history database")
+    sp_compare.add_argument("--title", help="Conversation title (if saving)")
+    sp_compare.add_argument("--timeout", type=int, default=30, help="Timeout per model in seconds (default: 30)")
+    sp_compare.add_argument("--format", choices=["table", "json", "markdown"], default="table", help="Output format")
+    sp_compare.set_defaults(func=cmd_compare)
+
     # monitor commands (enhanced crash monitoring)
     sp_mon = sub.add_parser("monitor", help="🔍 Advanced model monitoring and crash detection")
     mon_sub = sp_mon.add_subparsers(dest="subcommand", required=True, help="Monitor commands")
@@ -1510,6 +1520,104 @@ def cmd_monitor(args: argparse.Namespace) -> int:
 
     print("unknown monitor subcommand", file=sys.stderr)
     return 2
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """
+    Compare responses from multiple models simultaneously.
+
+    Business Purpose: Allows users to evaluate different models' responses
+    to the same question for quality comparison and model selection.
+    """
+    from .multi_query import compare_models_sync
+    import json
+
+    # Parse comma-separated model list
+    model_names = [m.strip() for m in args.models.split(",")]
+
+    if len(model_names) < 2:
+        print("error: specify at least 2 models for comparison", file=sys.stderr)
+        return 2
+
+    try:
+        # Query all models
+        print(f"Querying {len(model_names)} models...\n")
+        responses = compare_models_sync(
+            question=args.question,
+            models=model_names,
+            save_to_history=args.save,
+            timeout=args.timeout
+        )
+
+        if args.format == "json":
+            # JSON output
+            output = {
+                "question": args.question,
+                "models": len(model_names),
+                "responses": [
+                    {
+                        "model": r.model_name,
+                        "content": r.content,
+                        "response_time_ms": r.response_time_ms,
+                        "error": r.error
+                    }
+                    for r in responses
+                ]
+            }
+            print(json.dumps(output, indent=2))
+
+        elif args.format == "markdown":
+            # Markdown output
+            print(f"# Question\n{args.question}\n")
+            for r in responses:
+                print(f"## {r.model_name} ({r.response_time_ms}ms)")
+                if r.error:
+                    print(f"**Error:** {r.error}\n")
+                else:
+                    print(f"{r.content}\n")
+
+        else:
+            # Table output (default)
+            print(f"Question: {args.question}\n")
+            print("=" * 80)
+
+            for r in responses:
+                print(f"\n{r.model_name} ({r.response_time_ms}ms):")
+                print("-" * 80)
+                if r.error:
+                    print(f"ERROR: {r.error}")
+                else:
+                    # Word wrap long responses
+                    words = r.content.split()
+                    line = ""
+                    for word in words:
+                        if len(line) + len(word) + 1 > 78:
+                            print(line)
+                            line = word
+                        else:
+                            line = line + " " + word if line else word
+                    if line:
+                        print(line)
+
+            print("\n" + "=" * 80)
+
+            # Show summary
+            successful = [r for r in responses if not r.error]
+            if successful:
+                fastest = min(successful, key=lambda x: x.response_time_ms)
+                print(f"\nFastest: {fastest.model_name} ({fastest.response_time_ms}ms)")
+                print(f"Success rate: {len(successful)}/{len(responses)} models")
+
+        if args.save:
+            print(f"\n✓ Saved to chat history database")
+            if args.title:
+                print(f"  Title: {args.title}")
+
+        return 0
+
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
 
 def cmd_query(args: argparse.Namespace) -> int:
