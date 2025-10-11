@@ -3,7 +3,7 @@ import AppKit
 
 // Version constant to ensure dynamic version
 let APP_VERSION: String = {
-    return "1.1.10"
+    return "1.1.12-1-gefc054a"
 }()
 
 import os.log

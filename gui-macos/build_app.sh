@@ -7,7 +7,7 @@ set -e
 APP_NAME="llamaCPP Manager"
 BUNDLE_ID="com.llamacpp.manager"
 # Get version from git tag, fallback to default
-VERSION=$(git describe --tags --always 2>/dev/null || echo "v1.1.0")
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.1.0")
 
 # Always ensure version starts with 'v'
 if [[ ! "$VERSION" =~ ^v ]]; then
