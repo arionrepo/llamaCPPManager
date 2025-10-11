@@ -133,11 +133,22 @@ struct LlamaCPPManagerApp: App {
                     }
                 }
                 HStack {
-                    Button("Ensure Running") { vm.ensureRunning() }
-                        .help("Start all models with autostart=true")
-                    Button("Stop All Models") { vm.stopAllModels() }
-                        .foregroundColor(.red)
-                        .help("Stop all running models (infrastructure components continue running)")
+                    Button(action: { vm.startAllModels() }) {
+                        Text("Start All Models")
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Start all models")
+
+                    Button(action: { vm.stopAllModels() }) {
+                        Text("Stop All Models")
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundColor(.red)
+                    .help("Stop all running models (infrastructure components continue running)")
                 }
                 .buttonStyle(.borderless)
                 Divider()
@@ -327,7 +338,13 @@ final class StatusViewModel: ObservableObject {
     func start(name: String) { Task { _ = try? await service.run(["start", name]) ; refresh() } }
     func stop(name: String) { Task { _ = try? await service.run(["stop", name]) ; refresh() } }
     func restart(name: String) { Task { _ = try? await service.run(["restart", name]) ; refresh() } }
-    func ensureRunning() { Task { _ = try? await service.run(["ensure-running"]) ; refresh() } }
+
+    func startAllModels() {
+        Task {
+            _ = try? await service.run(["start", "all"])
+            refresh()
+        }
+    }
 
     func stopAllModels() {
         Task {
@@ -650,7 +667,7 @@ final class StatusViewModel: ObservableObject {
         • **Logs** - View model logs in Console.app
 
         **Global Actions:**
-        • **Ensure Running** - Start all models with autostart=true
+        • **Start All Models** - Start all configured models
         • **Stop All Models** - Stop all currently running models
         • **Refresh** - Manually refresh status
         • **Open Config** - Open configuration directory in Finder
