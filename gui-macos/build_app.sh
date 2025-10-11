@@ -7,15 +7,21 @@ set -e
 APP_NAME="llamaCPP Manager"
 BUNDLE_ID="com.llamacpp.manager"
 # Get version from git tag, fallback to default
-VERSION=$(git describe --tags --always 2>/dev/null || echo "1.1.0")
+VERSION=$(git describe --tags --always 2>/dev/null || echo "v1.1.0")
 
-# Ensure version starts with 'v'
+# Always ensure version starts with 'v'
 if [[ ! "$VERSION" =~ ^v ]]; then
     VERSION="v$VERSION"
 fi
 
-# Strip 'v' prefix for Info.plist and other uses
-DISPLAY_VERSION="${VERSION#v}"
+# Always use a clean version for display
+if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+    DISPLAY_VERSION="${VERSION#v}"
+else
+    # Force version to 1.1.0 if it doesn't match semantic versioning
+    DISPLAY_VERSION="1.1.0"
+    VERSION="v1.1.0"
+fi
 BUILD_DIR="build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 
@@ -84,6 +90,16 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
 </dict>
 </plist>
 EOF
+
+# Update APP_VERSION in App.swift
+log "Updating APP_VERSION to $DISPLAY_VERSION..."
+ABOUT_FILE="Sources/App.swift"
+
+# Use a simpler sed replacement for APP_VERSION constant
+sed -i '' "s/let APP_VERSION: String = {/let APP_VERSION: String = {/; /let APP_VERSION: String = {/,/}()/c\\
+let APP_VERSION: String = {\\
+    return \"$DISPLAY_VERSION\"\\
+}()" "$ABOUT_FILE"
 
 # Create app icon (if available)
 if command -v sips &> /dev/null; then

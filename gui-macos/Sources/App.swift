@@ -1,5 +1,10 @@
 import SwiftUI
 import AppKit
+
+// Version constant to ensure dynamic version
+let APP_VERSION: String = {
+    return "1.1.6"
+}()
 import os.log
 
 // Centralized logging utility
@@ -1078,7 +1083,7 @@ final class StatusViewModel: ObservableObject {
 
     func openAbout() {
         let aboutText = """
-        llamaCPP Manager v1.0.0
+        llamaCPP Manager v\(APP_VERSION)
 
         A toolkit for managing local llama.cpp server instances on macOS.
 
@@ -1089,7 +1094,8 @@ final class StatusViewModel: ObservableObject {
         • CLI automation
         • Container & Kubernetes support
 
-        GitHub: https://github.com/your-username/llamacpp-manager
+        GitHub: https://github.com/arionrepo/llamaCPPManager
+        Release Notes: https://github.com/arionrepo/llamaCPPManager/blob/main/CHANGELOG.md
         """
 
         showAlert(title: "About llamaCPP Manager", message: aboutText)
