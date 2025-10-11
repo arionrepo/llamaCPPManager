@@ -47,11 +47,13 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
     monkeypatch.setenv("LLAMACPP_MANAGER_CONFIG_DIR", str(tmp_path / "cfg"))
     monkeypatch.setattr(proc, "Popen", fake_popen)
 
-    spec = ModelSpec(name="m1", model_path=str(tmp_path / "m.gguf"), port=8081, host="127.0.0.1", args=["-c", "8192"]) 
+    spec = ModelSpec(name="m1", model_path=str(tmp_path / "m.gguf"), port=8081, host="127.0.0.1", args=["-c", "8192"])
     # create a dummy model file to satisfy validation elsewhere if added later
     Path(spec.model_path).write_text("x")
 
-    pid = proc.start_process("/opt/homebrew/bin/llama-server", spec, Path(tmp_path / "logs"))
+    # Test with timestamps disabled to get direct binary execution
+    logging_config = {"enabled": True, "timestamps": False}
+    pid = proc.start_process("/opt/homebrew/bin/llama-server", spec, Path(tmp_path / "logs"), logging_config=logging_config)
     assert pid == 12345
     argv = recorded["args"]
     # Contains binary, -m, model path, --host, --port, and extra args order preserved
