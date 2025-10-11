@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.1.12] - 2025-10-11
+### Fixed
+- Version alignment across all artifacts (Info.plist, DMG filename, About dialog)
+- DMG filename now uses numeric version without 'v' prefix
+- Info.plist now uses numeric version per Apple standards
+- Build script commits are now part of release process
+
+## [1.1.11] - 2025-10-11
+### Fixed
+- About dialog now dynamically uses APP_VERSION constant
+- Added Release Notes link to About dialog
+- Improved version update mechanism with perl replacement
+
 ## [v1.1.0] - 2025-10-11
 ### Added
 - Enhanced Model Downloader filtering mechanism
