@@ -11,7 +11,9 @@ venv/
 
 # Swift build artifacts
 gui-macos/.build/
-gui-macos/build/
+gui-macos/build/*.app/
+gui-macos/build/*.dmg
+gui-macos/build/README.txt
 *.dSYM/
 
 # Logs
