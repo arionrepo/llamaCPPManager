@@ -1,0 +1,1 @@
+/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/gui-macos/scripts/build-gui-release.sh
