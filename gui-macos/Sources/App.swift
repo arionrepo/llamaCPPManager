@@ -150,7 +150,6 @@ struct LlamaCPPManagerApp: App {
                     .foregroundColor(.red)
                     .help("Stop all running models (infrastructure components continue running)")
                 }
-                .buttonStyle(.borderless)
                 Divider()
 
                 // MARK: - Logging Section
