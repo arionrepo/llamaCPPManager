@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+import yaml
 
 
 def get_continue_config_path() -> Path:
@@ -22,16 +23,23 @@ def get_continue_config_path() -> Path:
     Get path to continue.dev configuration file.
 
     Business Purpose: Locate user's continue.dev config to enable automatic
-    model registration.
+    model registration. Prefers config.yaml over config.json.
 
     Returns:
-        Path to ~/.continue/config.json
+        Path to ~/.continue/config.yaml (or config.json if yaml doesn't exist)
 
     Example:
         config_path = get_continue_config_path()
-        # Returns: /Users/username/.continue/config.json
+        # Returns: /Users/username/.continue/config.yaml
     """
-    return Path.home() / ".continue" / "config.json"
+    continue_dir = Path.home() / ".continue"
+    yaml_path = continue_dir / "config.yaml"
+    json_path = continue_dir / "config.json"
+
+    # Prefer YAML if it exists
+    if yaml_path.exists():
+        return yaml_path
+    return json_path
 
 
 def read_continue_config() -> Dict[str, Any]:
@@ -39,7 +47,7 @@ def read_continue_config() -> Dict[str, Any]:
     Read existing continue.dev configuration.
 
     Business Purpose: Load current IDE configuration to preserve existing
-    settings while adding new models.
+    settings while adding new models. Supports both YAML and JSON formats.
 
     Returns:
         Dictionary with continue.dev config, or default structure if not exists
@@ -59,8 +67,11 @@ def read_continue_config() -> Dict[str, Any]:
 
     try:
         with open(config_path, 'r') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
+            if config_path.suffix == '.yaml' or config_path.suffix == '.yml':
+                return yaml.safe_load(f) or {}
+            else:
+                return json.load(f)
+    except (json.JSONDecodeError, yaml.YAMLError, IOError):
         # Return default structure if file is invalid
         return {
             "models": [],
@@ -73,7 +84,7 @@ def write_continue_config(config: Dict[str, Any]) -> None:
     Write continue.dev configuration to disk.
 
     Business Purpose: Persist model configuration so developers can
-    immediately use newly downloaded models in their IDE.
+    immediately use newly downloaded models in their IDE. Preserves format (YAML/JSON).
 
     Args:
         config: Complete continue.dev configuration dictionary
@@ -88,9 +99,12 @@ def write_continue_config(config: Dict[str, Any]) -> None:
     # Ensure directory exists
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write with pretty formatting
+    # Write with pretty formatting in the appropriate format
     with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
+        if config_path.suffix == '.yaml' or config_path.suffix == '.yml':
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        else:
+            json.dump(config, f, indent=2)
 
 
 def add_model_to_continue(
@@ -125,7 +139,9 @@ def add_model_to_continue(
     # Check if model already exists
     existing_models = config.get("models", [])
     for model in existing_models:
-        if model.get("model") == model_name:
+        # Check both 'model' and 'name' fields (YAML uses 'name', JSON uses 'model')
+        model_id = model.get("model") or model.get("name")
+        if model_id == model_name or model.get("apiBase", "").endswith(f":{port}/v1"):
             # Update existing model with new port
             model["apiBase"] = f"http://{host}:{port}/v1"
             write_continue_config(config)
@@ -136,14 +152,27 @@ def add_model_to_continue(
         # Convert "qwen-coder-7b" -> "Qwen Coder 7B"
         title = model_name.replace("-", " ").title()
 
-    # Create new model entry
-    new_model = {
-        "title": title,
-        "provider": "openai",
-        "model": model_name,
-        "apiBase": f"http://{host}:{port}/v1",
-        "apiKey": "not-needed"
-    }
+    # Determine format based on config path
+    config_path = get_continue_config_path()
+    is_yaml = config_path.suffix in ['.yaml', '.yml']
+
+    # Create new model entry (different format for YAML vs JSON)
+    if is_yaml:
+        new_model = {
+            "name": title,
+            "provider": "openai",
+            "model": model_name,
+            "apiBase": f"http://{host}:{port}/v1",
+            "apiKey": "not-needed"
+        }
+    else:
+        new_model = {
+            "title": title,
+            "provider": "openai",
+            "model": model_name,
+            "apiBase": f"http://{host}:{port}/v1",
+            "apiKey": "not-needed"
+        }
 
     # Add to models list
     if "models" not in config:
