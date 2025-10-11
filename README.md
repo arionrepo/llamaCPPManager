@@ -17,4 +17,57 @@ echo "Project root is at: $PROJECT_ROOT"
 echo "GUI Application is at: $APP_PATH"
 ```
 
-(Rest of the README remains the same)
+### Version Management
+
+For detailed information on how versions are managed in the GUI application, see [Version Update Process](docs/VERSION_UPDATE_PROCESS.md).
+
+Key points:
+- Versions are sourced from git tags
+- Automatic updates to Info.plist and About text
+- Semantic versioning enforced
+
+### Model Management
+
+For details on the "Stop All Models" functionality, see [Stop All Models Implementation](docs/STOP_ALL_MODELS.md).
+
+## Updating and Releasing
+
+### Automated GUI Release
+
+Use the unified GUI release script to build and publish a new version:
+
+```bash
+# From project root
+./build-gui-release.sh
+
+# Or from gui-macos directory
+./scripts/build-gui-release.sh
+```
+
+This script:
+- Automatically increments version
+- Builds GUI application
+- Updates CHANGELOG
+- Creates git tag
+- Installs to Applications
+- Copies DMG to Downloads
+- Pushes changes to repository
+
+### Manual Update
+
+Update CLI or GUI manually:
+```bash
+# CLI only
+pipx install --force .
+
+# GUI only (from gui-macos directory)
+cd gui-macos && ./build_app.sh
+cp -R "build/llamaCPP Manager.app" /Applications/
+```
+
+### Versioning
+
+- Uses semantic versioning (v1.2.3)
+- Automatically updates Info.plist and About text
+- Version tracked in git tags and CHANGELOG
+- See [Version Update Process](docs/VERSION_UPDATE_PROCESS.md) for details
