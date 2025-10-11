@@ -11,6 +11,8 @@ venv/
 
 # Swift build artifacts
 gui-macos/.build/
+gui-macos/build/
+*.dSYM/
 
 # Logs
 logs/
@@ -22,3 +24,13 @@ logs/
 *.local.yaml
 *.local.yml
 *.local.json
+
+# Weird artifact files (from failed commands)
+=*
+
+# GUI app builds
+*.app/
+*.dmg
+
+# Package manager artifacts
+src/llamacpp_manager.egg-info/
