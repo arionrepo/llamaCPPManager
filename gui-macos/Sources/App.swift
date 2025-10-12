@@ -568,7 +568,9 @@ final class StatusViewModel: ObservableObject {
     func openChat(name: String) {
         // Check if chat window already exists for this model
         if let existingWindow = chatWindows[name] {
+            existingWindow.level = .floating
             existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -587,7 +589,9 @@ final class StatusViewModel: ObservableObject {
         window.title = "Chat with \(name)"
         window.contentViewController = hostingController
         window.center()
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Store window reference
         chatWindows[name] = window
@@ -1109,6 +1113,7 @@ final class StatusViewModel: ObservableObject {
 
     func openPreferences() {
         if let window = preferencesWindow {
+            window.level = .floating
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -1121,6 +1126,7 @@ final class StatusViewModel: ObservableObject {
         window.title = "Preferences"
         window.styleMask = [.titled, .closable]
         window.center()
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
