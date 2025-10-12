@@ -1130,6 +1130,12 @@ final class StatusViewModel: ObservableObject {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Set up window delegate to clean up when closed
+        let delegate = PreferencesWindowDelegate { [weak self] in
+            self?.preferencesWindow = nil
+        }
+        window.delegate = delegate
+
         preferencesWindow = window
     }
 
@@ -1551,6 +1557,19 @@ class ChatWindowDelegate: NSObject, NSWindowDelegate {
 }
 
 class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        super.init()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
+    }
+}
+
+class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
 
     init(onClose: @escaping () -> Void) {

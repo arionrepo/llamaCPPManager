@@ -99,7 +99,7 @@ echo "" | tee -a "$TEST_LOG"
 echo "=== Configuration Commands ===" | tee -a "$TEST_LOG"
 run_test "Config list" "llamacpp-manager config list"
 run_test "Config list (JSON)" "llamacpp-manager config list --json"
-run_test "Config show path" "llamacpp-manager config show-path"
+# Note: GUI "Open Config" opens Finder to config dir, no CLI equivalent needed
 echo "" | tee -a "$TEST_LOG"
 
 echo "=== Model Discovery Commands ===" | tee -a "$TEST_LOG"
@@ -121,7 +121,7 @@ run_test "Infrastructure list" "llamacpp-manager infra list || llamacpp-manager 
 echo "" | tee -a "$TEST_LOG"
 
 echo "=== Error Handling Tests ===" | tee -a "$TEST_LOG"
-run_test "Invalid command fails" "llamacpp-manager invalid_command_xyz" 1
+run_test "Invalid command fails" "llamacpp-manager invalid_command_xyz" 2
 run_test "Start non-existent model fails" "llamacpp-manager start nonexistent_model_xyz" 1
 run_test "Stop non-existent model fails" "llamacpp-manager stop nonexistent_model_xyz" 1
 echo "" | tee -a "$TEST_LOG"
