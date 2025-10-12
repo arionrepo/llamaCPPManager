@@ -4,6 +4,7 @@
 // Created: 2025-10-10
 
 import SwiftUI
+import AppKit
 
 struct ModelInfo: Identifiable, Codable {
     let id: String
@@ -154,6 +155,38 @@ final class DownloadViewModel: ObservableObject {
                     errorMessage = "Failed to configure \(name): \(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    func showModelInfo(model: ModelInfo) {
+        let infoText = """
+        Model: \(model.name)
+
+        Repository: \(model.repoId)
+        Filename: \(model.filename)
+
+        Size: \(String(format: "%.1f", model.sizeGB)) GB
+        RAM Required: \(model.ramGB) GB
+
+        Use Case: \(model.useCase)
+
+        Description:
+        \(model.description)
+        """
+
+        let alert = NSAlert()
+        alert.messageText = "Model Information"
+        alert.informativeText = infoText
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+
+        // Create a window to display the alert at floating level
+        if let window = NSApp.windows.first(where: { $0.title == "Model Downloader" }) {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            // If no parent window, show as standalone
+            let response = alert.runModal()
+            _ = response
         }
     }
 
@@ -413,7 +446,7 @@ struct ModelCard: View {
                     .buttonStyle(.borderedProminent)
 
                     Button("Info") {
-                        // TODO: Show detailed model info
+                        viewModel.showModelInfo(model: model)
                     }
                     .buttonStyle(.bordered)
                 }

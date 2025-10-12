@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 // Version constant to ensure dynamic version
 let APP_VERSION: String = {
@@ -226,6 +227,9 @@ struct LlamaCPPManagerApp: App {
                 Button("Open Config") { vm.openConfig() }
                 Button("Open CLI") { vm.openCLI() }
                 Divider()
+                Button("Preferences...") { vm.openPreferences() }
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
                 Button("Help") { vm.openHelp() }
                 Button("About") { vm.openAbout() }
                 Divider()
@@ -332,13 +336,73 @@ final class StatusViewModel: ObservableObject {
     private var windowDelegates: [String: ChatWindowDelegate] = [:]
     private var monitoredModels: Set<String> = []
     private var modelDownloaderWindow: NSWindow?
+    private var preferencesWindow: NSWindow?
+    private let preferences = PreferencesManager.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Observe refresh interval changes
+        preferences.$refreshInterval
+            .sink { [weak self] _ in
+                self?.setupRefreshTimer()
+            }
+            .store(in: &cancellables)
+    }
 
     func startPolling(interval: TimeInterval = 2.0) {
+        setupRefreshTimer()
+        refresh()
+        loadMonitoredModels()
+    }
+
+    private func loadMonitoredModels() {
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            // Get monitor status to load tracked models
+            guard let output = try? await service.runAndCapture(["monitor", "status"]) else {
+                AppLogger.log("Failed to load monitored models", level: .error)
+                return
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+
+                // Parse output to find tracked models
+                // Output format: "  - model-name"
+                let lines = output.components(separatedBy: "\n")
+                var tracked = Set<String>()
+                var inTrackedSection = false
+
+                for line in lines {
+                    if line.contains("Tracked Models:") {
+                        inTrackedSection = true
+                        continue
+                    }
+                    if inTrackedSection && line.trimmingCharacters(in: .whitespaces).starts(with: "- ") {
+                        let modelName = line.trimmingCharacters(in: .whitespaces).dropFirst(2).trimmingCharacters(in: .whitespaces)
+                        tracked.insert(String(modelName))
+                    } else if inTrackedSection && !line.trimmingCharacters(in: .whitespaces).isEmpty && !line.contains("- ") {
+                        break
+                    }
+                }
+
+                self.monitoredModels = tracked
+                AppLogger.log("Loaded \(tracked.count) monitored models", level: .info)
+            }
+        }
+    }
+
+    private func setupRefreshTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        guard preferences.refreshInterval > 0 else { return }
+
+        timer = Timer.scheduledTimer(
+            withTimeInterval: TimeInterval(preferences.refreshInterval),
+            repeats: true
+        ) { [weak self] _ in
             self?.refresh()
         }
-        refresh()
     }
 
     func refresh() {
@@ -543,7 +607,9 @@ final class StatusViewModel: ObservableObject {
     func openChat(name: String) {
         // Check if chat window already exists for this model
         if let existingWindow = chatWindows[name] {
+            existingWindow.level = .floating
             existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -562,7 +628,9 @@ final class StatusViewModel: ObservableObject {
         window.title = "Chat with \(name)"
         window.contentViewController = hostingController
         window.center()
+        window.level = .floating
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Store window reference
         chatWindows[name] = window
@@ -669,6 +737,7 @@ final class StatusViewModel: ObservableObject {
                     if result == 0 {
                         monitoredModels.remove(name)
                         AppLogger.log("Successfully untracked model: \(name)", level: .info)
+                        refresh()
                     } else {
                         AppLogger.log("Failed to untrack model: \(name)", level: .error)
                     }
@@ -685,6 +754,7 @@ final class StatusViewModel: ObservableObject {
                     if result == 0 {
                         monitoredModels.insert(name)
                         AppLogger.log("Successfully tracked model: \(name)", level: .info)
+                        refresh()
                     } else {
                         AppLogger.log("Failed to track model: \(name)", level: .error)
                     }
@@ -1080,6 +1150,34 @@ final class StatusViewModel: ObservableObject {
         llamacpp-manager --help
         ```
         """
+    }
+
+    func openPreferences() {
+        if let window = preferencesWindow {
+            window.level = .floating
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let contentView = PreferencesView()
+        let hostingController = NSHostingController(rootView: contentView)
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Preferences"
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Set up window delegate to clean up when closed
+        let delegate = PreferencesWindowDelegate { [weak self] in
+            self?.preferencesWindow = nil
+        }
+        window.delegate = delegate
+
+        preferencesWindow = window
     }
 
     func openAbout() {
@@ -1500,6 +1598,19 @@ class ChatWindowDelegate: NSObject, NSWindowDelegate {
 }
 
 class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
+    private let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        super.init()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
+    }
+}
+
+class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
 
     init(onClose: @escaping () -> Void) {
