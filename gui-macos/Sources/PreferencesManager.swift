@@ -89,22 +89,23 @@ final class PreferencesManager: ObservableObject {
 
     private init() {
         // Load from UserDefaults or use defaults
-        self.refreshInterval = defaults.integer(forKey: prefKey("refreshInterval"))
-        if self.refreshInterval == 0 { self.refreshInterval = 10 }
+        let refreshKey = prefix + "refreshInterval"
+        let interval = defaults.integer(forKey: refreshKey)
+        self.refreshInterval = interval == 0 ? 10 : interval
 
-        self.autoStartModels = defaults.bool(forKey: prefKey("autoStartModels"))
-        self.showNotifications = defaults.object(forKey: prefKey("showNotifications")) as? Bool ?? true
-        self.showStoppedModels = defaults.object(forKey: prefKey("showStoppedModels")) as? Bool ?? true
-        self.showInfrastructure = defaults.object(forKey: prefKey("showInfrastructure")) as? Bool ?? true
+        self.autoStartModels = defaults.bool(forKey: prefix + "autoStartModels")
+        self.showNotifications = defaults.object(forKey: prefix + "showNotifications") as? Bool ?? true
+        self.showStoppedModels = defaults.object(forKey: prefix + "showStoppedModels") as? Bool ?? true
+        self.showInfrastructure = defaults.object(forKey: prefix + "showInfrastructure") as? Bool ?? true
 
-        let viewModeString = defaults.string(forKey: prefKey("viewMode")) ?? "detailed"
+        let viewModeString = defaults.string(forKey: prefix + "viewMode") ?? "detailed"
         self.viewMode = ViewMode(rawValue: viewModeString) ?? .detailed
 
-        self.showUptime = defaults.object(forKey: prefKey("showUptime")) as? Bool ?? true
-        self.showPortNumbers = defaults.object(forKey: prefKey("showPortNumbers")) as? Bool ?? true
-        self.showHealthStatus = defaults.object(forKey: prefKey("showHealthStatus")) as? Bool ?? true
-        self.showVersionInfo = defaults.object(forKey: prefKey("showVersionInfo")) as? Bool ?? true
-        self.debugMode = defaults.bool(forKey: prefKey("debugMode"))
+        self.showUptime = defaults.object(forKey: prefix + "showUptime") as? Bool ?? true
+        self.showPortNumbers = defaults.object(forKey: prefix + "showPortNumbers") as? Bool ?? true
+        self.showHealthStatus = defaults.object(forKey: prefix + "showHealthStatus") as? Bool ?? true
+        self.showVersionInfo = defaults.object(forKey: prefix + "showVersionInfo") as? Bool ?? true
+        self.debugMode = defaults.bool(forKey: prefix + "debugMode")
     }
 
     // MARK: - Methods
