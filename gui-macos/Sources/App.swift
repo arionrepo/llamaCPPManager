@@ -352,6 +352,45 @@ final class StatusViewModel: ObservableObject {
     func startPolling(interval: TimeInterval = 2.0) {
         setupRefreshTimer()
         refresh()
+        loadMonitoredModels()
+    }
+
+    private func loadMonitoredModels() {
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            // Get monitor status to load tracked models
+            guard let output = try? await service.runAndCapture(["monitor", "status"]) else {
+                AppLogger.log("Failed to load monitored models", level: .error)
+                return
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+
+                // Parse output to find tracked models
+                // Output format: "  - model-name"
+                let lines = output.components(separatedBy: "\n")
+                var tracked = Set<String>()
+                var inTrackedSection = false
+
+                for line in lines {
+                    if line.contains("Tracked Models:") {
+                        inTrackedSection = true
+                        continue
+                    }
+                    if inTrackedSection && line.trimmingCharacters(in: .whitespaces).starts(with: "- ") {
+                        let modelName = line.trimmingCharacters(in: .whitespaces).dropFirst(2).trimmingCharacters(in: .whitespaces)
+                        tracked.insert(String(modelName))
+                    } else if inTrackedSection && !line.trimmingCharacters(in: .whitespaces).isEmpty && !line.contains("- ") {
+                        break
+                    }
+                }
+
+                self.monitoredModels = tracked
+                AppLogger.log("Loaded \(tracked.count) monitored models", level: .info)
+            }
+        }
     }
 
     private func setupRefreshTimer() {
@@ -698,6 +737,7 @@ final class StatusViewModel: ObservableObject {
                     if result == 0 {
                         monitoredModels.remove(name)
                         AppLogger.log("Successfully untracked model: \(name)", level: .info)
+                        refresh()
                     } else {
                         AppLogger.log("Failed to untrack model: \(name)", level: .error)
                     }
@@ -714,6 +754,7 @@ final class StatusViewModel: ObservableObject {
                     if result == 0 {
                         monitoredModels.insert(name)
                         AppLogger.log("Successfully tracked model: \(name)", level: .info)
+                        refresh()
                     } else {
                         AppLogger.log("Failed to track model: \(name)", level: .error)
                     }
