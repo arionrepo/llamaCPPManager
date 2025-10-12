@@ -337,7 +337,7 @@ final class StatusViewModel: ObservableObject {
     private var monitoredModels: Set<String> = []
     private var modelDownloaderWindow: NSWindow?
     private var preferencesWindow: NSWindow?
-    @ObservedObject private var preferences = PreferencesManager.shared
+    private let preferences = PreferencesManager.shared
     private var cancellables = Set<AnyCancellable>()
 
     init() {
