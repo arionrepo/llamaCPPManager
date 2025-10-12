@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 // Version constant to ensure dynamic version
 let APP_VERSION: String = {
@@ -226,6 +227,9 @@ struct LlamaCPPManagerApp: App {
                 Button("Open Config") { vm.openConfig() }
                 Button("Open CLI") { vm.openCLI() }
                 Divider()
+                Button("Preferences...") { vm.openPreferences() }
+                    .keyboardShortcut(",", modifiers: .command)
+                Divider()
                 Button("Help") { vm.openHelp() }
                 Button("About") { vm.openAbout() }
                 Divider()
@@ -332,13 +336,34 @@ final class StatusViewModel: ObservableObject {
     private var windowDelegates: [String: ChatWindowDelegate] = [:]
     private var monitoredModels: Set<String> = []
     private var modelDownloaderWindow: NSWindow?
+    private var preferencesWindow: NSWindow?
+    @ObservedObject private var preferences = PreferencesManager.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Observe refresh interval changes
+        preferences.$refreshInterval
+            .sink { [weak self] _ in
+                self?.setupRefreshTimer()
+            }
+            .store(in: &cancellables)
+    }
 
     func startPolling(interval: TimeInterval = 2.0) {
+        setupRefreshTimer()
+        refresh()
+    }
+
+    private func setupRefreshTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        guard preferences.refreshInterval > 0 else { return }
+
+        timer = Timer.scheduledTimer(
+            withTimeInterval: TimeInterval(preferences.refreshInterval),
+            repeats: true
+        ) { [weak self] _ in
             self?.refresh()
         }
-        refresh()
     }
 
     func refresh() {
@@ -1080,6 +1105,26 @@ final class StatusViewModel: ObservableObject {
         llamacpp-manager --help
         ```
         """
+    }
+
+    func openPreferences() {
+        if let window = preferencesWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let contentView = PreferencesView()
+        let hostingController = NSHostingController(rootView: contentView)
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Preferences"
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        preferencesWindow = window
     }
 
     func openAbout() {
