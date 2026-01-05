@@ -661,6 +661,9 @@ def get_log_path(component: Dict[str, Any], log_type: str = "out") -> Optional[s
         filename = f"cloudflared.{log_type}.log"
     elif component_type == "script_managed" and "controller" in name.lower():
         filename = f"controller.{log_type}.log"
+    elif component_type == "script_managed" and name == "myragdb":
+        # MyRAGDB uses standard log file location
+        filename = "myragdb_server.log"
     else:
         filename = f"{name}.{log_type}.log"
 

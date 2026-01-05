@@ -70,7 +70,7 @@ def default_infrastructure_config() -> Dict[str, Any]:
     Return default infrastructure configuration.
 
     Business Purpose: Provides sensible defaults for infrastructure components
-    based on the user's actual setup with controller.sh and cloudflared.
+    based on the user's actual setup with controller.sh, cloudflared, and myragdb.
     """
     home = str(Path.home())
     return {
@@ -101,6 +101,19 @@ def default_infrastructure_config() -> Dict[str, Any]:
                 }
             },
             "autostart": True
+        },
+        "myragdb": {
+            "enabled": False,
+            "type": "script_managed",
+            "management_script": f"{home}/LocalProjects/GitHubProjectsDocuments/myragdb/manage.sh",
+            "log_dir": "/tmp",
+            "health_check": {
+                "type": "http",
+                "endpoint": "http://127.0.0.1:3003/health",
+                "interval_seconds": 30,
+                "timeout_ms": 3000
+            },
+            "autostart": False
         }
     }
 
