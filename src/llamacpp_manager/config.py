@@ -111,9 +111,15 @@ def default_infrastructure_config() -> Dict[str, Any]:
                 "type": "http",
                 "endpoint": "http://127.0.0.1:3003/health",
                 "interval_seconds": 30,
-                "timeout_ms": 3000
+                "timeout_ms": 5000
             },
-            "autostart": False
+            "autostart": False,
+            "restart_policy": {
+                "enabled": True,
+                "health_check_failures_threshold": 5,
+                "max_retries": 3,
+                "backoff_seconds": 30
+            }
         }
     }
 
