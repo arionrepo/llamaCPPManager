@@ -2,9 +2,9 @@ import SwiftUI
 import AppKit
 import Combine
 
-// Version constant to ensure dynamic version
+// Version constant - Date-based: YYYY.MM.DD.N (N = build number for that day)
 let APP_VERSION: String = {
-    return "1.1.14"
+    return "2026.03.25.1"
 }()
 
 import os.log
@@ -149,9 +149,32 @@ struct LlamaCPPManagerApp: App {
                             }
                             .padding(.horizontal, 8)
 
+                            // Mode picker (show when stopped)
+                            if !row.up {
+                                HStack(spacing: 4) {
+                                    Text("Mode:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Picker("", selection: Binding(
+                                        get: { vm.selectedModes[row.name] ?? "tools" },
+                                        set: { vm.selectedModes[row.name] = $0 }
+                                    )) {
+                                        Text("Basic").tag("basic")
+                                        Text("Tools").tag("tools")
+                                        Text("Performance").tag("performance")
+                                        Text("Extended").tag("extended")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 4)
+                            }
+
                             // Control buttons
                             HStack {
-                                Button("Start") { vm.start(name: row.name) }
+                                Button("Start") { vm.startWithScript(name: row.name, mode: vm.selectedModes[row.name]) }
                                     .disabled(row.up)
                                 Button("Stop") { vm.stop(name: row.name) }
                                     .disabled(!row.up)
@@ -166,7 +189,7 @@ struct LlamaCPPManagerApp: App {
 
                                 Button("Logs") { vm.tailLogs(name: row.name) }
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(.plain)
                             .font(.caption)
                             .padding(.leading, 18)
                         }
@@ -330,6 +353,7 @@ final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
     @Published var infrastructureRows: [InfrastructureRow] = []
     @Published var loggingConfig: LoggingConfig?
+    @Published var selectedModes: [String: String] = [:]  // Model name -> mode
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
@@ -461,6 +485,27 @@ final class StatusViewModel: ObservableObject {
                 refresh()
             } else {
                 AppLogger.log("Failed to start model: \(name)", level: .error)
+            }
+        }
+    }
+
+    func startWithScript(name: String, mode: String? = nil) {
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            let effectiveMode = mode ?? selectedModes[name] ?? "basic"
+
+            // Use start-script command to call the working script
+            let command = ["start-script", name, "--mode", effectiveMode]
+
+            let result = await service.run(command)
+            if result == 0 {
+                AppLogger.log("Successfully started \(name) in \(effectiveMode) mode via script", level: .info)
+                // Wait for startup
+                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds
+                refresh()
+            } else {
+                AppLogger.log("Failed to start \(name) via script", level: .error)
             }
         }
     }
