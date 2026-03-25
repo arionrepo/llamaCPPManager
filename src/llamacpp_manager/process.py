@@ -93,6 +93,7 @@ done >> {shlex.quote(str(log_path))}
 
             # Start the wrapper script
             proc = Popen(['/bin/bash', wrapper_path], env=env)
+            wrapper_pid = proc.pid
 
             # Clean up wrapper script after a delay (it will keep running)
             import threading
@@ -104,6 +105,32 @@ done >> {shlex.quote(str(log_path))}
                 except:
                     pass
             threading.Thread(target=cleanup_wrapper, daemon=True).start()
+
+            # CRITICAL FIX: Track actual llama-server child PID, not bash wrapper
+            # The wrapper is just a logging helper; we need to track the real server process
+            import subprocess
+            llama_server_pid = None
+            # Wait up to 5 seconds for llama-server child to spawn
+            for attempt in range(50):  # 50 attempts * 0.1s = 5 seconds max
+                time.sleep(0.1)
+                try:
+                    # Find child processes of bash wrapper
+                    result = subprocess.run(
+                        ['pgrep', '-P', str(wrapper_pid)],
+                        capture_output=True,
+                        text=True,
+                        timeout=1
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        # Get first child PID (should be llama-server)
+                        llama_server_pid = int(result.stdout.strip().split()[0])
+                        break
+                except:
+                    pass
+
+            # Return actual llama-server PID if found, otherwise fallback to wrapper
+            # (wrapper fallback maintains backwards compatibility if pgrep fails)
+            return llama_server_pid if llama_server_pid else wrapper_pid
         else:
             # No timestamps - direct file logging
             stdout_log = open_log_append(log_path)

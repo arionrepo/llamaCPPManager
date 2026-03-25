@@ -1,6 +1,7 @@
 import argparse
 import os
 import shlex
+import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 from pathlib import Path
@@ -480,6 +481,17 @@ Examples:
     sp_start.add_argument("--allow-remote", action="store_true", help="Allow external IP binds (security risk)")
     sp_start.set_defaults(func=cmd_start)
 
+    sp_start_script = sub.add_parser("start-script", help="▶️  Start model using restart-llm-interactive.sh script")
+    sp_start_script.add_argument("target", help="Model name")
+    sp_start_script.add_argument(
+        "--mode",
+        choices=["basic", "tools", "performance", "extended"],
+        default="basic",
+        help="Mode to start model in"
+    )
+    sp_start_script.add_argument("--dry-run", action="store_true", help="Show command without executing")
+    sp_start_script.set_defaults(func=cmd_start_script)
+
     sp_stop = sub.add_parser("stop", help="⏹️  Stop running model(s)")
     sp_stop.add_argument("target", help="Model name (e.g., 'phi3') or 'all' for all models")
     sp_stop.add_argument("--launchd", action="store_true", help="Stop launchd service instead of direct process")
@@ -724,6 +736,52 @@ def cmd_start(args: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_start_script(args: argparse.Namespace) -> int:
+    """
+    Start model using restart-llm-interactive.sh script.
+
+    This delegates to the proven script with proper mode handling.
+    """
+    cfg = load_config()
+    model_name = args.target
+    mode = args.mode or "basic"
+
+    # Find model in config to validate it exists
+    models = cfg.get("models", [])
+    model_found = None
+    for m in models:
+        if m.get("name") == model_name:
+            model_found = m
+            break
+
+    if not model_found:
+        print(f"error: model '{model_name}' not found in config", file=sys.stderr)
+        return 1
+
+    # Get script path from config, fallback to default
+    script_path = cfg.get(
+        "restart_script_path",
+        "/Users/liborballaty/llms/restart-llm-interactive.sh"
+    )
+
+    if not os.path.exists(script_path):
+        print(f"error: restart script not found at {script_path}", file=sys.stderr)
+        print(f"Set 'restart_script_path' in config.yaml", file=sys.stderr)
+        return 1
+
+    # Call the script
+    cmd = [script_path, model_name, mode]
+
+    if args.dry_run:
+        print("DRY-RUN:", " ".join(shlex.quote(c) for c in cmd))
+        return 0
+
+    print(f"Starting {model_name} in {mode} mode using restart script...")
+    result = subprocess.run(cmd)
+
+    return result.returncode
+
+
 def cmd_stop(args: argparse.Namespace) -> int:
     cfg = load_config()
     selected = _select_models(cfg, args.target)
@@ -750,6 +808,29 @@ def cmd_stop(args: argparse.Namespace) -> int:
             # Try PID file approach first (legacy)
             try:
                 pid = read_pid(name)
+
+                # DEFENSIVE FIX: Kill any child processes first
+                # This handles cases where PID file contains bash wrapper PID
+                # and the actual llama-server is a child process
+                import subprocess
+                try:
+                    children = subprocess.run(
+                        ['pgrep', '-P', str(pid)],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    if children.returncode == 0 and children.stdout.strip():
+                        for child_pid_str in children.stdout.strip().split('\n'):
+                            if child_pid_str.strip():
+                                try:
+                                    child_pid = int(child_pid_str.strip())
+                                    os.kill(child_pid, signal.SIGTERM)
+                                except (ValueError, ProcessLookupError, PermissionError):
+                                    pass
+                except subprocess.TimeoutExpired:
+                    pass
+
                 stop_process(pid)
                 remove_pid(name)
                 print(f"stopped {name} pid={pid}")
