@@ -49,8 +49,12 @@ struct LlamaCPPManagerApp: App {
     var body: some Scene {
         MenuBarExtra("llamaCPP", systemImage: "brain.head.profile") {
             VStack(alignment: .leading, spacing: 6) {
-                // MARK: - Infrastructure Section
-                if !vm.infrastructureRows.isEmpty {
+                // MARK: - Tabbed Interface
+                TabView {
+                    // MARK: - Infrastructure Tab
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !vm.infrastructureRows.isEmpty {
                     Text("Infrastructure")
                         .font(.headline)
                         .padding(.horizontal, 8)
@@ -104,8 +108,15 @@ struct LlamaCPPManagerApp: App {
                         Divider()
                     }
                 }
+                        }
+                    }
+                    .tabItem {
+                        Label("Infrastructure", systemImage: "server.rack")
+                    }
 
-                // MARK: - Models Section
+                    // MARK: - Models Tab
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
                 Text("Models")
                     .font(.headline)
                     .padding(.horizontal, 8)
@@ -214,6 +225,20 @@ struct LlamaCPPManagerApp: App {
                     .foregroundColor(.red)
                     .help("Stop all running models (infrastructure components continue running)")
                 }
+                        }
+                    }
+                    .tabItem {
+                        Label("Models", systemImage: "brain.head.profile")
+                    }
+
+                    // MARK: - Docker/Colima Tab
+                    DockerColimaView()
+                        .tabItem {
+                            Label("Docker", systemImage: "shippingbox")
+                        }
+                }
+                .frame(minHeight: 400, maxHeight: 600)
+
                 Divider()
 
                 // MARK: - Logging Section
