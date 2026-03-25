@@ -161,7 +161,17 @@ struct DockerColimaView: View {
                         .foregroundColor(.secondary)
                         .padding(.leading, 8)
                 } else {
-                    ForEach(viewModel.dockerContainers) { container in
+                    // Group containers by Colima profile
+                    let groupedContainers = Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
+
+                    ForEach(groupedContainers.keys.sorted(), id: \.self) { profile in
+                        Text(profile.uppercased())
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                            .padding(.leading, 8)
+                            .padding(.top, 4)
+
+                        ForEach(groupedContainers[profile] ?? []) { container in
                         HStack(spacing: 8) {
                             Circle()
                                 .fill(container.isRunning ? Color.blue : Color.gray)
@@ -172,7 +182,7 @@ struct DockerColimaView: View {
                                     .font(.system(.body, design: .monospaced))
                                     .fontWeight(.medium)
 
-                                Text("Profile: \(container.colimaProfile) | \(container.image)")
+                                Text(container.image)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
@@ -215,6 +225,7 @@ struct DockerColimaView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
+                    }
                     }
                 }
 
