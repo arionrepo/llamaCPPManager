@@ -81,7 +81,8 @@ struct DockerColimaView: View {
                 // MARK: - Colima Profiles Section
                 Text("COLIMA PROFILES")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
 
                 if viewModel.colimaProfiles.isEmpty {
                     Text("No Colima profiles found")
@@ -153,7 +154,8 @@ struct DockerColimaView: View {
                 // MARK: - Docker Containers Section
                 Text("DOCKER CONTAINERS")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
 
                 if viewModel.dockerContainers.isEmpty {
                     Text("No containers found")
@@ -166,8 +168,9 @@ struct DockerColimaView: View {
 
                     ForEach(groupedContainers.keys.sorted(), id: \.self) { profile in
                         Text(profile.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.orange)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
                             .padding(.leading, 8)
                             .padding(.top, 4)
 

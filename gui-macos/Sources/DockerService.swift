@@ -94,11 +94,14 @@ final class DockerService {
                 // Use colima-specific Docker context
                 let output = try await runCommand("docker", args: ["--context", "colima-\(profile.name)", "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}"])
                 let containers = parseDockerContainers(output, profileName: profile.name)
+                AppLogger.log("Found \(containers.count) containers in profile \(profile.name)", level: .debug)
                 allContainers.append(contentsOf: containers)
             } catch {
                 AppLogger.log("Failed to get containers for profile \(profile.name): \(error)", level: .error)
             }
         }
+
+        AppLogger.log("Total containers before dedup: \(allContainers.count)", level: .debug)
 
         // Deduplicate by container ID (same container shouldn't appear twice)
         var seen = Set<String>()
