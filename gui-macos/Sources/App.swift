@@ -247,7 +247,7 @@ struct LlamaCPPManagerApp: App {
                         Spacer()
                         Text(logging.enabled ? "ON" : "OFF")
                             .font(.caption)
-                            .foregroundColor(logging.enabled ? .green : .red)
+                            .foregroundColor(logging.enabled ? .blue : .red)
                     }
                     .padding(.horizontal, 8)
 
@@ -258,7 +258,7 @@ struct LlamaCPPManagerApp: App {
                         Button(logging.timestamps ? "Timestamps: ON" : "Timestamps: OFF") {
                             vm.toggleTimestamps()
                         }
-                        .foregroundColor(logging.timestamps ? .green : .secondary)
+                        .foregroundColor(logging.timestamps ? .blue : .secondary)
                     }
                     .buttonStyle(.borderless)
                     .font(.caption)

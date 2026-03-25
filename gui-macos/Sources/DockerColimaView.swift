@@ -93,7 +93,7 @@ struct DockerColimaView: View {
                     ForEach(viewModel.colimaProfiles) { profile in
                         HStack(spacing: 8) {
                             Circle()
-                                .fill(profile.isRunning ? Color.green : Color.gray)
+                                .fill(profile.isRunning ? Color.blue : Color.gray)
                                 .frame(width: 8, height: 8)
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -110,7 +110,7 @@ struct DockerColimaView: View {
 
                             Text(profile.status)
                                 .font(.caption)
-                                .foregroundColor(profile.isRunning ? .green : .secondary)
+                                .foregroundColor(profile.isRunning ? .blue : .secondary)
                                 .frame(minWidth: 60, alignment: .trailing)
 
                             HStack(spacing: 4) {
@@ -193,7 +193,7 @@ struct DockerColimaView: View {
                                 if let stats = viewModel.containerStats[container.name] {
                                     Text("CPU: \(stats.cpu, specifier: "%.1f")% | MEM: \(stats.memory)")
                                         .font(.caption2)
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(.secondary)
                                 }
                             }
 
