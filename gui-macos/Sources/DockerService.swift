@@ -28,6 +28,7 @@ struct DockerContainer: Identifiable {
     let ports: String
     let cpuPercent: Double?
     let memoryUsage: String?
+    let colimaProfile: String  // Track which Colima profile this container belongs to
 
     var isRunning: Bool {
         status.lowercased().contains("up")
@@ -84,19 +85,28 @@ final class DockerService {
     // MARK: - Docker Container Management
 
     func getDockerContainers() async -> [DockerContainer] {
-        do {
-            let output = try await runCommand("docker", args: ["ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}"])
-            return parseDockerContainers(output)
-        } catch {
-            AppLogger.log("Failed to get Docker containers: \(error)", level: .error)
-            return []
+        // Get all running Colima profiles and query containers from each
+        let profiles = await getColimaProfiles()
+        var allContainers: [DockerContainer] = []
+
+        for profile in profiles where profile.isRunning {
+            do {
+                // Use colima-specific Docker context
+                let output = try await runCommand("docker", args: ["--context", "colima-\(profile.name)", "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}"])
+                let containers = parseDockerContainers(output, profileName: profile.name)
+                allContainers.append(contentsOf: containers)
+            } catch {
+                AppLogger.log("Failed to get containers for profile \(profile.name): \(error)", level: .error)
+            }
         }
+
+        return allContainers
     }
 
-    func startDockerContainer(_ containerName: String) async -> Bool {
+    func startDockerContainer(_ containerName: String, profile: String) async -> Bool {
         do {
-            _ = try await runCommand("docker", args: ["start", containerName])
-            AppLogger.log("Started container: \(containerName)", level: .info)
+            _ = try await runCommand("docker", args: ["--context", "colima-\(profile)", "start", containerName])
+            AppLogger.log("Started container: \(containerName) (profile: \(profile))", level: .info)
             return true
         } catch {
             AppLogger.log("Failed to start container \(containerName): \(error)", level: .error)
@@ -104,10 +114,10 @@ final class DockerService {
         }
     }
 
-    func stopDockerContainer(_ containerName: String) async -> Bool {
+    func stopDockerContainer(_ containerName: String, profile: String) async -> Bool {
         do {
-            _ = try await runCommand("docker", args: ["stop", containerName])
-            AppLogger.log("Stopped container: \(containerName)", level: .info)
+            _ = try await runCommand("docker", args: ["--context", "colima-\(profile)", "stop", containerName])
+            AppLogger.log("Stopped container: \(containerName) (profile: \(profile))", level: .info)
             return true
         } catch {
             AppLogger.log("Failed to stop container \(containerName): \(error)", level: .error)
@@ -115,10 +125,10 @@ final class DockerService {
         }
     }
 
-    func restartDockerContainer(_ containerName: String) async -> Bool {
+    func restartDockerContainer(_ containerName: String, profile: String) async -> Bool {
         do {
-            _ = try await runCommand("docker", args: ["restart", containerName])
-            AppLogger.log("Restarted container: \(containerName)", level: .info)
+            _ = try await runCommand("docker", args: ["--context", "colima-\(profile)", "restart", containerName])
+            AppLogger.log("Restarted container: \(containerName) (profile: \(profile))", level: .info)
             return true
         } catch {
             AppLogger.log("Failed to restart container \(containerName): \(error)", level: .error)
@@ -127,13 +137,21 @@ final class DockerService {
     }
 
     func getContainerStats() async -> [String: (cpu: Double, memory: String)] {
-        do {
-            let output = try await runCommand("docker", args: ["stats", "--no-stream", "--format", "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}"])
-            return parseDockerStats(output)
-        } catch {
-            AppLogger.log("Failed to get container stats: \(error)", level: .error)
-            return [:]
+        // Query stats from all running Colima profiles
+        let profiles = await getColimaProfiles()
+        var allStats: [String: (cpu: Double, memory: String)] = [:]
+
+        for profile in profiles where profile.isRunning {
+            do {
+                let output = try await runCommand("docker", args: ["--context", "colima-\(profile.name)", "stats", "--no-stream", "--format", "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}"])
+                let stats = parseDockerStats(output)
+                allStats.merge(stats) { current, _ in current }
+            } catch {
+                AppLogger.log("Failed to get stats for profile \(profile.name): \(error)", level: .error)
+            }
         }
+
+        return allStats
     }
 
     // MARK: - Helper Methods
@@ -181,7 +199,7 @@ final class DockerService {
         }
     }
 
-    private func parseDockerContainers(_ output: String) -> [DockerContainer] {
+    private func parseDockerContainers(_ output: String, profileName: String) -> [DockerContainer] {
         let lines = output.split(separator: "\n").map(String.init)
 
         return lines.compactMap { line in
@@ -195,7 +213,8 @@ final class DockerService {
                 image: parts[3],
                 ports: parts[4],
                 cpuPercent: nil,
-                memoryUsage: nil
+                memoryUsage: nil,
+                colimaProfile: profileName
             )
         }
     }

@@ -56,18 +56,18 @@ class DockerColimaViewModel: ObservableObject {
         await refresh()
     }
 
-    func startContainer(name: String) async {
-        _ = await dockerService.startDockerContainer(name)
+    func startContainer(name: String, profile: String) async {
+        _ = await dockerService.startDockerContainer(name, profile: profile)
         await refresh()
     }
 
-    func stopContainer(name: String) async {
-        _ = await dockerService.stopDockerContainer(name)
+    func stopContainer(name: String, profile: String) async {
+        _ = await dockerService.stopDockerContainer(name, profile: profile)
         await refresh()
     }
 
-    func restartContainer(name: String) async {
-        _ = await dockerService.restartDockerContainer(name)
+    func restartContainer(name: String, profile: String) async {
+        _ = await dockerService.restartDockerContainer(name, profile: profile)
         await refresh()
     }
 }
@@ -172,7 +172,7 @@ struct DockerColimaView: View {
                                     .font(.system(.body, design: .monospaced))
                                     .fontWeight(.medium)
 
-                                Text(container.image)
+                                Text("Profile: \(container.colimaProfile) | \(container.image)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
@@ -194,19 +194,19 @@ struct DockerColimaView: View {
                             HStack(spacing: 4) {
                                 if container.isRunning {
                                     Button("Stop") {
-                                        Task { await viewModel.stopContainer(name: container.name) }
+                                        Task { await viewModel.stopContainer(name: container.name, profile: container.colimaProfile) }
                                     }
                                     .buttonStyle(.borderless)
                                     .font(.caption)
 
                                     Button("Restart") {
-                                        Task { await viewModel.restartContainer(name: container.name) }
+                                        Task { await viewModel.restartContainer(name: container.name, profile: container.colimaProfile) }
                                     }
                                     .buttonStyle(.borderless)
                                     .font(.caption)
                                 } else {
                                     Button("Start") {
-                                        Task { await viewModel.startContainer(name: container.name) }
+                                        Task { await viewModel.startContainer(name: container.name, profile: container.colimaProfile) }
                                     }
                                     .buttonStyle(.borderless)
                                     .font(.caption)
