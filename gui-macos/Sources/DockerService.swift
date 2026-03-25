@@ -107,10 +107,16 @@ final class DockerService {
         var seen = Set<String>()
         let uniqueContainers = allContainers.filter { container in
             if seen.contains(container.id) {
+                AppLogger.log("Skipping duplicate container: \(container.name) (ID: \(container.id), profile: \(container.colimaProfile))", level: .debug)
                 return false
             }
             seen.insert(container.id)
             return true
+        }
+
+        AppLogger.log("Total unique containers: \(uniqueContainers.count)", level: .debug)
+        for container in uniqueContainers {
+            AppLogger.log("  - \(container.name) from profile '\(container.colimaProfile)'", level: .debug)
         }
 
         return uniqueContainers
