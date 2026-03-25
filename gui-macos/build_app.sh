@@ -15,12 +15,13 @@ if [[ ! "$VERSION" =~ ^v ]]; then
 fi
 
 # Always use a clean version for display
-if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+# Support both semantic versioning (v1.2.3) and date-based (v2026.03.25.1)
+if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-.*)?$ ]]; then
     DISPLAY_VERSION="${VERSION#v}"
 else
-    # Force version to 1.1.0 if it doesn't match semantic versioning
-    DISPLAY_VERSION="1.1.0"
-    VERSION="v1.1.0"
+    # Force version to current date if format doesn't match
+    DISPLAY_VERSION="$(date +%Y.%m.%d).1"
+    VERSION="v$DISPLAY_VERSION"
 fi
 BUILD_DIR="build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
