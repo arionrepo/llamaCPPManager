@@ -185,7 +185,7 @@ struct DockerColimaView: View {
                                     .font(.system(.body, design: .monospaced))
                                     .fontWeight(.medium)
 
-                                Text(container.image)
+                                Text("\(container.image) [ID: \(container.id.prefix(12))]")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)

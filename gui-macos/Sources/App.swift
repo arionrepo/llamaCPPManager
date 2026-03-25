@@ -49,6 +49,14 @@ struct LlamaCPPManagerApp: App {
     var body: some Scene {
         MenuBarExtra("llamaCPP", systemImage: "brain.head.profile") {
             VStack(alignment: .leading, spacing: 6) {
+                // Version header
+                Text("llamaCPP Manager v\(APP_VERSION)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+                Divider()
+
                 // MARK: - Tabbed Interface
                 TabView {
                     // MARK: - Infrastructure Tab
