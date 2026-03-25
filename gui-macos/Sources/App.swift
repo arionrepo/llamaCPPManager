@@ -108,6 +108,10 @@ struct LlamaCPPManagerApp: App {
                         Divider()
                     }
                 }
+
+                            // MARK: - Docker & Colima Section
+                            Divider()
+                            DockerColimaView()
                         }
                     }
                     .tabItem {
@@ -230,14 +234,8 @@ struct LlamaCPPManagerApp: App {
                     .tabItem {
                         Label("Models", systemImage: "brain.head.profile")
                     }
-
-                    // MARK: - Docker/Colima Tab
-                    DockerColimaView()
-                        .tabItem {
-                            Label("Docker", systemImage: "shippingbox")
-                        }
                 }
-                .frame(minHeight: 400, maxHeight: 600)
+                .frame(minHeight: 700, maxHeight: 900)
 
                 Divider()
 
