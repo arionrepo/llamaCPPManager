@@ -100,7 +100,17 @@ final class DockerService {
             }
         }
 
-        return allContainers
+        // Deduplicate by container ID (same container shouldn't appear twice)
+        var seen = Set<String>()
+        let uniqueContainers = allContainers.filter { container in
+            if seen.contains(container.id) {
+                return false
+            }
+            seen.insert(container.id)
+            return true
+        }
+
+        return uniqueContainers
     }
 
     func startDockerContainer(_ containerName: String, profile: String) async -> Bool {
