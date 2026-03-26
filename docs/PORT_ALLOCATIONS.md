@@ -8,9 +8,10 @@
 
 This document tracks all port allocations for llamaCPPManager and related infrastructure to prevent conflicts and provide clear visibility into resource usage.
 
-## Port Range
+## Port Ranges
 
-**Reserved Range:** 8081-8090 (llamaCPPManager models and infrastructure)
+**Reserved Range 1:** 8081-8090 (llamaCPPManager models and infrastructure)
+**Reserved Range 2:** 9081-9090 (Docker test suite containerized models)
 **Protocol:** HTTP (llama.cpp OpenAI-compatible API)
 **Bind Address:** 127.0.0.1 (localhost only, not exposed externally)
 
@@ -35,11 +36,35 @@ This document tracks all port allocations for llamaCPPManager and related infras
 | 8090 | llm_controller | Model lifecycle orchestration | Active | HTTP /status endpoint |
 | - | cloudflared | Cloudflare tunnel (no local port) | Active | launchd process check |
 
-### External Conflicts Check
+### Docker Test Suite Models (llm-test-suite)
 
-| Port | Project | Purpose | Conflict? |
-|------|---------|---------|-----------|
-| 8080 | xLLMArionComply | Swagger UI HTTP server | ❌ No (different port) |
+**Environment:** Containerized via docker-compose
+**Use Case:** Benchmarking with resource profiles (conservative/balanced/aggressive)
+**Lifecycle:** Sequential - one model at a time (59GB RAM constraint)
+
+| Port | Model Name | Model Size | Docker Container | Balanced Memory |
+|------|------------|-----------|------------------|-----------------|
+| 9081 | phi3 | 3.8B | llm-phi3 | 6.6GB |
+| 9082 | mistral-7b | 7B | llm-mistral7b | 9.0GB |
+| 9083 | hermes-3-llama-8b | 8B | llm-hermes-3 | 10.2GB |
+| 9084 | llama-3.1-8b | 8B | llm-llama-3.1-8b | 10.2GB |
+| 9085 | qwen-coder-7b | 7B | llm-qwen-coder-7b | 8.4GB |
+| 9086 | smollm3 | 1B | llm-smollm3 | 3.0GB |
+| 9087 | llama-4-scout-17b | 17B | llm-llama-4-scout-17b | 21.6GB |
+| 9088 | qwen2.5-32b | 32B | llm-qwen-32b | 38.4GB |
+| 9089 | deepseek-r1-qwen-32b | 32B | llm-deepseek-32b | 38.4GB |
+| 9090 | mistral-small-24b | 24B | llm-mistral-24b | 28.8GB |
+
+**Note:** Ports 9081-9090 are exclusively reserved for Docker test suite use. These are separate from the live llamaCPPManager ports (8081-8087).
+
+### Conflict Matrix
+
+| Range | Component | External Conflicts | Inter-Range Conflicts |
+|-------|-----------|-------------------|----------------------|
+| 8081-8090 | llamaCPPManager | ❌ None (8080 used by xLLMArionComply) | ✅ Separated from 9081-9090 |
+| 9081-9090 | Docker test suite | ❌ None (separate range) | ✅ Separated from 8081-8090 |
+
+**Separation Strategy:** Docker test suite uses 9000+ range to maintain clear isolation from live llamaCPPManager ports. This prevents accidental connection routing and allows both systems to coexist on the same machine.
 
 ## Model Groups
 
@@ -112,7 +137,28 @@ monitoring:
 - **Root Cause:** Models started by llm_controller don't write PID files
 - **Fix Status:** Pending - update status detection to use lsof port-based discovery
 
+## Port Range Isolation Strategy
+
+**Problem:** Running live models on 8081-8090 while simultaneously testing Docker-containerized models would cause port conflicts and connection routing confusion.
+
+**Solution:** Allocate separate port range (9081-9090) for Docker test suite
+- **Live Models:** 8081-8090 (llamaCPPManager, native processes)
+- **Test Models:** 9081-9090 (Docker test suite, containerized via docker-compose)
+- **Separation:** 1000-port offset provides clear logical separation
+
+**Benefits:**
+- No risk of connection routing to wrong instance
+- Test suite can safely run without interfering with live models
+- Clear monitoring and debugging (port number indicates environment)
+- Future extensibility (9091+ available if needed for additional test suites)
+
 ## Changelog
+
+**2026-03-26:** Docker test suite port allocation added
+- Documented 10 Docker containerized models on ports 9081-9090
+- Added Docker test suite section with resource allocations
+- Updated conflict matrix to show port range separation strategy
+- Clarified separation strategy between live and test environments
 
 **2025-10-10:** Initial port allocation document created
 - Documented 7 models on ports 8081-8087
