@@ -291,17 +291,20 @@ struct LlamaCPPManagerApp: App {
 
                             // Control buttons (Docker version)
                             HStack {
-                                Button("Start") { vm.dockerStart(name: row.name) }
+                                Button("Start") { vm.startWithScript(name: row.name, isDocker: true) }
                                     .disabled(row.up)
-                                Button("Stop") { vm.dockerStop(name: row.name) }
+                                Button("Stop") { vm.stop(name: row.name, isDocker: true) }
                                     .disabled(!row.up)
-                                Button("Restart") { vm.dockerRestart(name: row.name) }
+                                Button("Restart") { vm.restart(name: row.name, isDocker: true) }
 
                                 if row.up {
                                     Button("Chat") { vm.openChat(name: row.name) }
                                 }
 
-                                Button("Logs") { vm.dockerLogs(name: row.name) }
+                                Button("Monitor") { vm.toggleMonitoring(name: row.name) }
+                                    .foregroundColor(vm.isMonitored(name: row.name) ? .orange : .blue)
+
+                                Button("Logs") { vm.tailLogs(name: row.name, isDocker: true) }
                             }
                             .buttonStyle(.plain)
                             .font(.caption)
@@ -311,7 +314,7 @@ struct LlamaCPPManagerApp: App {
                     }
                 }
                 HStack {
-                    Button(action: { vm.dockerStartAll() }) {
+                    Button(action: { vm.startAllModels(isDocker: true) }) {
                         Text("Start All Docker Models")
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -319,7 +322,7 @@ struct LlamaCPPManagerApp: App {
                     .buttonStyle(.bordered)
                     .help("Start all Docker containers")
 
-                    Button(action: { vm.dockerStopAll() }) {
+                    Button(action: { vm.stopAllModels(isDocker: true) }) {
                         Text("Stop All Docker Models")
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -621,59 +624,75 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
-    func startWithScript(name: String, mode: String? = nil) {
+    func startWithScript(name: String, mode: String? = nil, isDocker: Bool = false) {
         Task { [weak self] in
             guard let self = self else { return }
 
-            let effectiveMode = mode ?? selectedModes[name] ?? "basic"
+            let result: Int32
+            if isDocker {
+                // Docker containers don't use modes
+                result = await service.run(["docker", "start", name])
+                if result == 0 {
+                    AppLogger.log("Successfully started Docker container: \(name)", level: .info)
+                }
+            } else {
+                // Native models use the start-script command with modes
+                let effectiveMode = mode ?? selectedModes[name] ?? "basic"
+                let command = ["start-script", name, "--mode", effectiveMode]
+                result = await service.run(command)
+                if result == 0 {
+                    AppLogger.log("Successfully started \(name) in \(effectiveMode) mode via script", level: .info)
+                }
+            }
 
-            // Use start-script command to call the working script
-            let command = ["start-script", name, "--mode", effectiveMode]
-
-            let result = await service.run(command)
             if result == 0 {
-                AppLogger.log("Successfully started \(name) in \(effectiveMode) mode via script", level: .info)
                 // Wait for startup
                 try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds
                 refresh()
             } else {
-                AppLogger.log("Failed to start \(name) via script", level: .error)
+                AppLogger.log("Failed to start \(name)", level: .error)
             }
         }
     }
 
-    func stop(name: String) {
+    func stop(name: String, isDocker: Bool = false) {
         Task { [weak self] in
             guard let self = self else { return }
-            let result = await service.run(["stop", name])
+            let command = isDocker ? ["docker", "stop", name] : ["stop", name]
+            let result = await service.run(command)
             if result == 0 {
-                AppLogger.log("Successfully stopped model: \(name)", level: .info)
+                let systemLabel = isDocker ? "Docker container" : "model"
+                AppLogger.log("Successfully stopped \(systemLabel): \(name)", level: .info)
                 refresh()
             } else {
-                AppLogger.log("Failed to stop model: \(name)", level: .error)
+                AppLogger.log("Failed to stop \(name)", level: .error)
             }
         }
     }
 
-    func restart(name: String) {
+    func restart(name: String, isDocker: Bool = false) {
         Task { [weak self] in
             guard let self = self else { return }
-            let result = await service.run(["restart", name])
+            let command = isDocker ? ["docker", "restart", name] : ["restart", name]
+            let result = await service.run(command)
             if result == 0 {
-                AppLogger.log("Successfully restarted model: \(name)", level: .info)
+                let systemLabel = isDocker ? "Docker container" : "model"
+                AppLogger.log("Successfully restarted \(systemLabel): \(name)", level: .info)
                 refresh()
             } else {
-                AppLogger.log("Failed to restart model: \(name)", level: .error)
+                AppLogger.log("Failed to restart \(name)", level: .error)
             }
         }
     }
 
-    func startAllModels() {
+    func startAllModels(isDocker: Bool = false) {
         Task { [weak self] in
             guard let self = self else { return }
-            let result = await service.run(["start", "all"])
+            let command = isDocker ? ["docker", "start", "all"] : ["start", "all"]
+            let result = await service.run(command)
             if result == 0 {
-                AppLogger.log("Successfully started all models", level: .info)
+                let systemLabel = isDocker ? "Docker containers" : "models"
+                AppLogger.log("Successfully started all \(systemLabel)", level: .info)
                 refresh()
             } else {
                 AppLogger.log("Failed to start all models", level: .error)
@@ -681,12 +700,14 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
-    func stopAllModels() {
+    func stopAllModels(isDocker: Bool = false) {
         Task { [weak self] in
             guard let self = self else { return }
-            let result = await service.run(["stop", "all"])
+            let command = isDocker ? ["docker", "stop", "all"] : ["stop", "all"]
+            let result = await service.run(command)
             if result == 0 {
-                AppLogger.log("Successfully stopped all models", level: .info)
+                let systemLabel = isDocker ? "Docker containers" : "models"
+                AppLogger.log("Successfully stopped all \(systemLabel)", level: .info)
                 refresh()
             } else {
                 AppLogger.log("Failed to stop all models", level: .error)
@@ -694,95 +715,25 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
-    func tailLogs(name: String) {
-        // Open log file with system default app (Console.app on macOS)
-        guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
-        let url = URL(fileURLWithPath: path)
-        NSWorkspace.shared.open(url)
-    }
-
-    // MARK: - Docker Model Control Methods
-
-    func dockerStart(name: String) {
-        Task { [weak self] in
-            guard let self = self else { return }
-            let result = await service.run(["docker", "start", name])
-            if result == 0 {
-                AppLogger.log("Successfully started Docker container: \(name)", level: .info)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
-                refresh()
-            } else {
-                AppLogger.log("Failed to start Docker container: \(name)", level: .error)
-            }
-        }
-    }
-
-    func dockerStop(name: String) {
-        Task { [weak self] in
-            guard let self = self else { return }
-            let result = await service.run(["docker", "stop", name])
-            if result == 0 {
-                AppLogger.log("Successfully stopped Docker container: \(name)", level: .info)
-                refresh()
-            } else {
-                AppLogger.log("Failed to stop Docker container: \(name)", level: .error)
-            }
-        }
-    }
-
-    func dockerRestart(name: String) {
-        Task { [weak self] in
-            guard let self = self else { return }
-            let result = await service.run(["docker", "restart", name])
-            if result == 0 {
-                AppLogger.log("Successfully restarted Docker container: \(name)", level: .info)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
-                refresh()
-            } else {
-                AppLogger.log("Failed to restart Docker container: \(name)", level: .error)
-            }
-        }
-    }
-
-    func dockerStartAll() {
-        Task { [weak self] in
-            guard let self = self else { return }
-            let result = await service.run(["docker", "start", "all"])
-            if result == 0 {
-                AppLogger.log("Successfully started all Docker containers", level: .info)
-                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
-                refresh()
-            } else {
-                AppLogger.log("Failed to start all Docker containers", level: .error)
-            }
-        }
-    }
-
-    func dockerStopAll() {
-        Task { [weak self] in
-            guard let self = self else { return }
-            let result = await service.run(["docker", "stop", "all"])
-            if result == 0 {
-                AppLogger.log("Successfully stopped all Docker containers", level: .info)
-                refresh()
-            } else {
-                AppLogger.log("Failed to stop all Docker containers", level: .error)
-            }
-        }
-    }
-
-    func dockerLogs(name: String) {
-        // Open Docker logs in a new window
-        Task { [weak self] in
-            guard let self = self else { return }
-            do {
-                let logs = try await service.dockerLogs(name: name)
-                await MainActor.run {
-                    self.showLogsWindow(title: "Docker Logs - \(name)", content: logs)
+    func tailLogs(name: String, isDocker: Bool = false) {
+        if isDocker {
+            // For Docker containers, fetch logs via CLI and display in a window
+            Task { [weak self] in
+                guard let self = self else { return }
+                do {
+                    let logs = try await service.dockerLogs(name: name)
+                    await MainActor.run {
+                        self.showLogsWindow(title: "Docker Logs: \(name)", content: logs)
+                    }
+                } catch {
+                    AppLogger.log("Failed to fetch Docker logs for \(name): \(error.localizedDescription)", level: .error)
                 }
-            } catch {
-                AppLogger.log("Failed to fetch Docker logs for \(name): \(error.localizedDescription)", level: .error)
             }
+        } else {
+            // Native models: Open log file with system default app (Console.app on macOS)
+            guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
+            let url = URL(fileURLWithPath: path)
+            NSWorkspace.shared.open(url)
         }
     }
 
