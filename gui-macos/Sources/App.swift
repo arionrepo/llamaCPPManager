@@ -126,15 +126,15 @@ struct LlamaCPPManagerApp: App {
                         Label("Infrastructure", systemImage: "server.rack")
                     }
 
-                    // MARK: - Models Tab
+                    // MARK: - Native Models Tab
                     ScrollView {
                         VStack(alignment: .leading, spacing: 6) {
-                Text("Models")
+                Text("Native Models")
                     .font(.headline)
                     .padding(.horizontal, 8)
 
                 if vm.rows.isEmpty {
-                    Text("No models configured")
+                    Text("No native models configured")
                         .padding(.horizontal, 8)
                 } else {
                     ForEach(vm.rows, id: \.name) { row in
@@ -221,26 +221,117 @@ struct LlamaCPPManagerApp: App {
                 }
                 HStack {
                     Button(action: { vm.startAllModels() }) {
-                        Text("Start All Models")
+                        Text("Start All Native Models")
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                     }
                     .buttonStyle(.bordered)
-                    .help("Start all models")
+                    .help("Start all native models")
 
                     Button(action: { vm.stopAllModels() }) {
-                        Text("Stop All Models")
+                        Text("Stop All Native Models")
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                     }
                     .buttonStyle(.bordered)
                     .foregroundColor(.red)
-                    .help("Stop all running models (infrastructure components continue running)")
+                    .help("Stop all running native models")
                 }
                         }
                     }
                     .tabItem {
-                        Label("Models", systemImage: "brain.head.profile")
+                        Label("Native Models", systemImage: "desktopcomputer")
+                    }
+
+                    // MARK: - Docker Models Tab
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                Text("Docker Models")
+                    .font(.headline)
+                    .padding(.horizontal, 8)
+
+                if vm.dockerRows.isEmpty {
+                    Text("No Docker models running")
+                        .padding(.horizontal, 8)
+                } else {
+                    ForEach(vm.dockerRows, id: \.name) { row in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                // Enhanced health indicator
+                                Circle()
+                                    .fill(vm.healthColor(for: row))
+                                    .frame(width: 10, height: 10)
+
+                                VStack(alignment: .leading) {
+                                    Text(row.name)
+                                        .font(.headline)
+                                    Text(vm.healthStatus(for: row))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                VStack(alignment: .trailing) {
+                                    Text("\(row.host):\(row.port)")
+                                        .font(.caption)
+                                    if let ms = row.latency_ms, ms > 0 {
+                                        Text("\(ms) ms")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    if let uptime = row.uptime, !uptime.isEmpty {
+                                        Text("up \(uptime)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+
+                            // Control buttons (Docker version)
+                            HStack {
+                                Button("Start") { vm.dockerStart(name: row.name) }
+                                    .disabled(row.up)
+                                Button("Stop") { vm.dockerStop(name: row.name) }
+                                    .disabled(!row.up)
+                                Button("Restart") { vm.dockerRestart(name: row.name) }
+
+                                if row.up {
+                                    Button("Chat") { vm.openChat(name: row.name) }
+                                }
+
+                                Button("Logs") { vm.dockerLogs(name: row.name) }
+                            }
+                            .buttonStyle(.plain)
+                            .font(.caption)
+                            .padding(.leading, 18)
+                        }
+                        Divider()
+                    }
+                }
+                HStack {
+                    Button(action: { vm.dockerStartAll() }) {
+                        Text("Start All Docker Models")
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Start all Docker containers")
+
+                    Button(action: { vm.dockerStopAll() }) {
+                        Text("Stop All Docker Models")
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundColor(.red)
+                    .help("Stop all Docker containers")
+                }
+                        }
+                    }
+                    .tabItem {
+                        Label("Docker Models", systemImage: "shippingbox")
                     }
                 }
                 .frame(minHeight: 700, maxHeight: 900)
@@ -382,6 +473,7 @@ struct StatusResponse: Codable {
 
 final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
+    @Published var dockerRows: [StatusRow] = []
     @Published var infrastructureRows: [InfrastructureRow] = []
     @Published var loggingConfig: LoggingConfig?
     @Published var selectedModes: [String: String] = [:]  // Model name -> mode
@@ -467,6 +559,15 @@ final class StatusViewModel: ObservableObject {
                 self.rows = response.models
                 self.infrastructureRows = response.infrastructure
                 self.loggingConfig = response.logging
+
+                // Fetch Docker status separately
+                do {
+                    let dockerResponse = try await service.fetchDockerStatus()
+                    self.dockerRows = dockerResponse.models
+                } catch {
+                    // Keep prior Docker rows on error
+                    AppLogger.log("Failed to fetch Docker status: \(error.localizedDescription)", level: .warning)
+                }
             } catch {
                 // Keep prior rows; optionally surface an error row
             }
@@ -598,6 +699,91 @@ final class StatusViewModel: ObservableObject {
         guard let row = rows.first(where: { $0.name == name }), let path = row.log_path else { return }
         let url = URL(fileURLWithPath: path)
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Docker Model Control Methods
+
+    func dockerStart(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["docker", "start", name])
+            if result == 0 {
+                AppLogger.log("Successfully started Docker container: \(name)", level: .info)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
+                refresh()
+            } else {
+                AppLogger.log("Failed to start Docker container: \(name)", level: .error)
+            }
+        }
+    }
+
+    func dockerStop(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["docker", "stop", name])
+            if result == 0 {
+                AppLogger.log("Successfully stopped Docker container: \(name)", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to stop Docker container: \(name)", level: .error)
+            }
+        }
+    }
+
+    func dockerRestart(name: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["docker", "restart", name])
+            if result == 0 {
+                AppLogger.log("Successfully restarted Docker container: \(name)", level: .info)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
+                refresh()
+            } else {
+                AppLogger.log("Failed to restart Docker container: \(name)", level: .error)
+            }
+        }
+    }
+
+    func dockerStartAll() {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["docker", "start", "all"])
+            if result == 0 {
+                AppLogger.log("Successfully started all Docker containers", level: .info)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds for startup
+                refresh()
+            } else {
+                AppLogger.log("Failed to start all Docker containers", level: .error)
+            }
+        }
+    }
+
+    func dockerStopAll() {
+        Task { [weak self] in
+            guard let self = self else { return }
+            let result = await service.run(["docker", "stop", "all"])
+            if result == 0 {
+                AppLogger.log("Successfully stopped all Docker containers", level: .info)
+                refresh()
+            } else {
+                AppLogger.log("Failed to stop all Docker containers", level: .error)
+            }
+        }
+    }
+
+    func dockerLogs(name: String) {
+        // Open Docker logs in a new window
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                let logs = try await service.dockerLogs(name: name)
+                await MainActor.run {
+                    self.showLogsWindow(title: "Docker Logs - \(name)", content: logs)
+                }
+            } catch {
+                AppLogger.log("Failed to fetch Docker logs for \(name): \(error.localizedDescription)", level: .error)
+            }
+        }
     }
 
     // MARK: - Infrastructure Control Methods
@@ -1328,6 +1514,26 @@ final class CLIService {
         }
     }
 
+    func fetchDockerStatus() async throws -> StatusResponse {
+        AppLogger.log("Fetching Docker status from CLI", level: .debug)
+        do {
+            let jsonString = try await runAndCapture(["docker", "status", "--json"])
+            guard let data = jsonString.data(using: .utf8), !data.isEmpty else {
+                AppLogger.log("Empty Docker status response", level: .warning)
+                // Return empty response instead of throwing
+                return StatusResponse(models: [], infrastructure: [], logging: LoggingConfig(enabled: false, max_bytes: 0, backups: 0, timestamps: false))
+            }
+
+            let response = try JSONDecoder().decode(StatusResponse.self, from: data)
+            AppLogger.log("Docker status fetched successfully: \(response.models.count) containers", level: .debug)
+            return response
+        } catch {
+            AppLogger.log("Failed to fetch Docker status: \(error.localizedDescription)", level: .debug)
+            // Return empty response if Docker not available
+            return StatusResponse(models: [], infrastructure: [], logging: LoggingConfig(enabled: false, max_bytes: 0, backups: 0, timestamps: false))
+        }
+    }
+
     func fetchInfrastructureList() async throws -> String {
         return try await runAndCapture(["infra", "list"])
     }
@@ -1452,6 +1658,11 @@ final class CLIService {
             "--max-tokens", String(maxTokens),
             "--temperature", String(temperature)
         ]
+        return try await runAndCapture(args)
+    }
+
+    func dockerLogs(name: String) async throws -> String {
+        let args = ["docker", "logs", name]
         return try await runAndCapture(args)
     }
 }

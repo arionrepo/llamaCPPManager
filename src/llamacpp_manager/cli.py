@@ -25,6 +25,7 @@ from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap,
 from .discovery import find_llama_processes
 from .query import query_model_completion, query_model_chat, list_available_models, ModelQueryError
 from . import infrastructure
+from .docker_manager import DockerManager
 
 
 def parse_env(items: List[str]) -> Dict[str, str]:
@@ -373,6 +374,164 @@ def cmd_infra(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_docker(args: argparse.Namespace) -> int:
+    """
+    Handle Docker container commands for containerized llama.cpp models.
+
+    Supports: start, stop, restart, status, logs
+    """
+    subcommand = getattr(args, "subcommand", None)
+    if not subcommand:
+        print("docker: missing subcommand", file=sys.stderr)
+        return 2
+
+    # Initialize Docker manager
+    docker_mgr = DockerManager()
+
+    try:
+        if subcommand == "start":
+            target = getattr(args, "target", "all")
+            if target == "all":
+                print("Starting all Docker containers...")
+                success = docker_mgr.start_all()
+                if success:
+                    print("All Docker containers started successfully")
+                else:
+                    print("Some containers failed to start", file=sys.stderr)
+                    return 1
+            else:
+                container_name = f"llm-{target}" if not target.startswith("llm-") else target
+                print(f"Starting Docker container: {container_name}...")
+                success = docker_mgr.start(container_name)
+                if success:
+                    status = docker_mgr.status(container_name)
+                    print(f"Container {container_name} started successfully")
+                    print(f"  Port: {status.port}")
+                    print(f"  Status: {status.health_status}")
+                else:
+                    print(f"Failed to start container {container_name}", file=sys.stderr)
+                    return 1
+
+        elif subcommand == "stop":
+            target = getattr(args, "target", "all")
+            if target == "all":
+                print("Stopping all Docker containers...")
+                success = docker_mgr.stop_all()
+                if success:
+                    print("All Docker containers stopped successfully")
+                else:
+                    print("Some containers failed to stop", file=sys.stderr)
+                    return 1
+            else:
+                container_name = f"llm-{target}" if not target.startswith("llm-") else target
+                print(f"Stopping Docker container: {container_name}...")
+                success = docker_mgr.stop(container_name)
+                if success:
+                    print(f"Container {container_name} stopped successfully")
+                else:
+                    print(f"Failed to stop container {container_name}", file=sys.stderr)
+                    return 1
+
+        elif subcommand == "restart":
+            target = getattr(args, "target", None)
+            if not target:
+                print("docker restart: target model name required", file=sys.stderr)
+                return 2
+            container_name = f"llm-{target}" if not target.startswith("llm-") else target
+            print(f"Restarting Docker container: {container_name}...")
+            success = docker_mgr.restart(container_name)
+            if success:
+                status = docker_mgr.status(container_name)
+                print(f"Container {container_name} restarted successfully")
+                print(f"  Port: {status.port}")
+                print(f"  Status: {status.health_status}")
+            else:
+                print(f"Failed to restart container {container_name}", file=sys.stderr)
+                return 1
+
+        elif subcommand == "status":
+            target = getattr(args, "target", None)
+            output_json = getattr(args, "json", False)
+
+            if target is None:
+                # Show all containers
+                if output_json:
+                    print(docker_mgr.to_json())
+                else:
+                    statuses = docker_mgr.status_all()
+                    if not statuses:
+                        print("No Docker containers configured")
+                        return 0
+
+                    print("Docker Container Status:")
+                    print("-" * 80)
+                    for st in statuses:
+                        health_icon = "🟢" if st.health_status == "healthy" else \
+                                     "🟠" if st.health_status == "starting" else "🔴"
+                        print(f"{health_icon} {st.name}")
+                        print(f"   Port: {st.port}")
+                        print(f"   Status: {st.health_status}")
+                        if st.latency_ms:
+                            print(f"   Latency: {st.latency_ms}ms")
+                        if st.pid:
+                            print(f"   PID: {st.pid}")
+            else:
+                # Show specific container
+                container_name = f"llm-{target}" if not target.startswith("llm-") else target
+                st = docker_mgr.status(container_name)
+
+                if output_json:
+                    print(to_json({
+                        "models": [{
+                            "name": st.name,
+                            "port": st.port,
+                            "container_id": st.container_id,
+                            "running": st.running,
+                            "health_status": st.health_status,
+                            "latency_ms": st.latency_ms,
+                            "pid": st.pid
+                        }],
+                        "infrastructure": [],
+                        "logging": {
+                            "enabled": False,
+                            "max_bytes": 0,
+                            "backups": 0,
+                            "timestamps": False
+                        }
+                    }))
+                else:
+                    health_icon = "🟢" if st.health_status == "healthy" else \
+                                 "🟠" if st.health_status == "starting" else "🔴"
+                    print(f"{health_icon} {st.name}")
+                    print(f"   Port: {st.port}")
+                    print(f"   Running: {st.running}")
+                    print(f"   Status: {st.health_status}")
+                    if st.latency_ms:
+                        print(f"   Latency: {st.latency_ms}ms")
+                    if st.pid:
+                        print(f"   PID: {st.pid}")
+
+        elif subcommand == "logs":
+            target = getattr(args, "target", None)
+            if not target:
+                print("docker logs: target model name required", file=sys.stderr)
+                return 2
+            tail = getattr(args, "tail", 50)
+            container_name = f"llm-{target}" if not target.startswith("llm-") else target
+            output = docker_mgr.logs(container_name, tail=tail)
+            print(output)
+
+        else:
+            print(f"unknown docker subcommand: {subcommand}", file=sys.stderr)
+            return 2
+
+        return 0
+
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="llamacpp-manager",
@@ -472,6 +631,32 @@ Examples:
     sp_infra_logs.add_argument("--tail", action="store_true", help="Follow log output (like tail -f)")
     sp_infra_logs.add_argument("--stderr", action="store_true", help="Show stderr instead of stdout")
     sp_infra_logs.set_defaults(func=cmd_infra)
+
+    # docker group - Docker container management
+    sp_docker = sub.add_parser("docker", help="🐳 Manage Docker containers running llama.cpp models")
+    docker_sub = sp_docker.add_subparsers(dest="subcommand", required=True, help="Docker commands")
+
+    sp_docker_start = docker_sub.add_parser("start", help="▶️  Start a Docker container")
+    sp_docker_start.add_argument("target", nargs="?", default="all", help="Model name (e.g., 'phi3') or 'all' (default: all)")
+    sp_docker_start.set_defaults(func=cmd_docker)
+
+    sp_docker_stop = docker_sub.add_parser("stop", help="⏹️  Stop a Docker container")
+    sp_docker_stop.add_argument("target", nargs="?", default="all", help="Model name (e.g., 'phi3') or 'all' (default: all)")
+    sp_docker_stop.set_defaults(func=cmd_docker)
+
+    sp_docker_restart = docker_sub.add_parser("restart", help="🔄 Restart a Docker container")
+    sp_docker_restart.add_argument("target", help="Model name (e.g., 'phi3')")
+    sp_docker_restart.set_defaults(func=cmd_docker)
+
+    sp_docker_status = docker_sub.add_parser("status", help="📊 Show Docker container status")
+    sp_docker_status.add_argument("target", nargs="?", default=None, help="Model name (optional, default: show all)")
+    sp_docker_status.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_docker_status.set_defaults(func=cmd_docker)
+
+    sp_docker_logs = docker_sub.add_parser("logs", help="📜 View logs from Docker container")
+    sp_docker_logs.add_argument("target", help="Model name (e.g., 'phi3')")
+    sp_docker_logs.add_argument("--tail", type=int, default=50, help="Number of log lines to show (default: 50)")
+    sp_docker_logs.set_defaults(func=cmd_docker)
 
     # start/stop/restart commands
     sp_start = sub.add_parser("start", help="▶️  Start model(s) - makes them available at http://localhost:PORT")
