@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [2026.03.26] - 2026-03-26
+- Automated release
+- Includes latest improvements and bug fixes
 ## [1.1.14] - 2025-10-11
 - Automated release
 - Includes latest improvements and bug fixes
