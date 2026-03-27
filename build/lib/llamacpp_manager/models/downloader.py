@@ -366,6 +366,53 @@ CODING_MODELS = {
         "version": "0.3"
     },
 
+    # === GOOGLE GEMMA MODELS ===
+    "gemma-2-27b": {
+        "repo_id": "google/gemma-2-27b-it-GGUF",
+        "filename": "gemma-2-27b-it-Q8_0.gguf",
+        "description": "Gemma 2 27B - Google's powerful reasoning model",
+        "size_gb": 29,
+        "ram_gb": 34,
+        "use_case": "Complex reasoning, analysis, research",
+        "version": "2.0"
+    },
+    "gemma-2-27b-qat": {
+        "repo_id": "google/gemma-2-27b-it-GGUF",
+        "filename": "gemma-2-27b-it-qat-Q6_K.gguf",
+        "description": "Gemma 2 27B QAT - Quantization-aware trained for better quality",
+        "size_gb": 22,
+        "ram_gb": 26,
+        "use_case": "High-quality reasoning with efficient memory use",
+        "version": "2.0-qat"
+    },
+    "gemma-2-9b": {
+        "repo_id": "google/gemma-2-9b-it-GGUF",
+        "filename": "gemma-2-9b-it-Q8_0.gguf",
+        "description": "Gemma 2 9B - Google's balanced model",
+        "size_gb": 9.5,
+        "ram_gb": 13,
+        "use_case": "General tasks, coding, reasoning",
+        "version": "2.0"
+    },
+    "gemma-2-9b-qat": {
+        "repo_id": "google/gemma-2-9b-it-GGUF",
+        "filename": "gemma-2-9b-it-qat-Q6_K.gguf",
+        "description": "Gemma 2 9B QAT - Higher quality quantization",
+        "size_gb": 7,
+        "ram_gb": 10,
+        "use_case": "Efficient reasoning with quality preservation",
+        "version": "2.0-qat"
+    },
+    "gemma-2-2b": {
+        "repo_id": "google/gemma-2-2b-it-GGUF",
+        "filename": "gemma-2-2b-it-Q8_0.gguf",
+        "description": "Gemma 2 2B - Google's tiny efficient model",
+        "size_gb": 2.3,
+        "ram_gb": 4,
+        "use_case": "Lightweight tasks, low resource environments",
+        "version": "2.0"
+    },
+
     # === AGENTIC & TOOL-CALLING MODELS ===
     "hermes-3-llama-8b": {
         "repo_id": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
@@ -597,6 +644,41 @@ MLX_MODELS = {
         "size_gb": 1.0,
         "ram_gb": 2,
         "use_case": "Lightweight tasks on Mac",
+        "version": "2.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === GOOGLE GEMMA MLX MODELS ===
+    "mlx-gemma-2-27b": {
+        "repo_id": "mlx-community/gemma-2-27b-it-4bit",
+        "filename": None,
+        "description": "Gemma 2 27B (MLX 4-bit) - Google's reasoning model for Mac",
+        "size_gb": 15,
+        "ram_gb": 20,
+        "use_case": "Complex reasoning on Apple Silicon",
+        "version": "2.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-gemma-2-9b": {
+        "repo_id": "mlx-community/gemma-2-9b-it-4bit",
+        "filename": None,
+        "description": "Gemma 2 9B (MLX 4-bit) - Google's balanced model for Mac",
+        "size_gb": 5,
+        "ram_gb": 8,
+        "use_case": "General tasks on Apple Silicon",
+        "version": "2.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-gemma-2-2b": {
+        "repo_id": "mlx-community/gemma-2-2b-it-4bit",
+        "filename": None,
+        "description": "Gemma 2 2B (MLX 4-bit) - Google's tiny model for Mac",
+        "size_gb": 1.2,
+        "ram_gb": 3,
+        "use_case": "Lightweight tasks on Apple Silicon",
         "version": "2.0",
         "format": "mlx",
         "requires": "Apple Silicon"

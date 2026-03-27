@@ -281,7 +281,45 @@ CODING_MODELS = {
         "version": "2.5"
     },
 
+    # === ULTRA-TINY MODELS (<500MB) ===
+    "gemma-3-270m": {
+        "repo_id": "google/gemma-3-270m-it-GGUF",
+        "filename": "gemma-3-270m-it-Q8_0.gguf",
+        "description": "Gemma 3 270M - Ultra-lightweight for IoT and browsers",
+        "size_gb": 0.125,
+        "ram_gb": 1,
+        "use_case": "Drafting, IoT devices, browser apps, edge computing",
+        "version": "3.0"
+    },
+
     # === TINY MODELS (<2GB) ===
+    "gemma-3-1b": {
+        "repo_id": "google/gemma-3-1b-it-GGUF",
+        "filename": "gemma-3-1b-it-Q8_0.gguf",
+        "description": "Gemma 3 1B - Compact for basic tasks",
+        "size_gb": 0.8,
+        "ram_gb": 2,
+        "use_case": "Basic chat, summarization, mobile devices",
+        "version": "3.0"
+    },
+    "gemma-3n-2b": {
+        "repo_id": "google/gemma-3n-2b-it-GGUF",
+        "filename": "gemma-3n-2b-it-Q8_0.gguf",
+        "description": "Gemma 3n 2B - Mobile vision and high-speed logic",
+        "size_gb": 2.1,
+        "ram_gb": 4,
+        "use_case": "Mobile vision tasks, fast logical reasoning",
+        "version": "3.0"
+    },
+    "gemma-3n-4b": {
+        "repo_id": "google/gemma-3n-4b-it-GGUF",
+        "filename": "gemma-3n-4b-it-Q8_0.gguf",
+        "description": "Gemma 3n 4B - Enhanced mobile vision capabilities",
+        "size_gb": 4.2,
+        "ram_gb": 6,
+        "use_case": "Mobile vision, high-speed reasoning, image analysis",
+        "version": "3.0"
+    },
     "qwen-0.5b": {
         "repo_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
         "filename": "qwen2.5-0.5b-instruct-q8_0.gguf",
@@ -625,7 +663,53 @@ MLX_MODELS = {
         "requires": "Apple Silicon"
     },
 
+    # === ULTRA-TINY MLX MODELS (<500MB) ===
+    "mlx-gemma-3-270m": {
+        "repo_id": "mlx-community/gemma-3-270m-it-4bit",
+        "filename": None,
+        "description": "Gemma 3 270M (MLX 4-bit) - Ultra-lightweight for Mac",
+        "size_gb": 0.07,
+        "ram_gb": 0.5,
+        "use_case": "Drafting, IoT, browser apps, extreme edge",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
     # === TINY MLX MODELS (<2GB) ===
+    "mlx-gemma-3-1b": {
+        "repo_id": "mlx-community/gemma-3-1b-it-4bit",
+        "filename": None,
+        "description": "Gemma 3 1B (MLX 4-bit) - Compact for basic chat",
+        "size_gb": 0.5,
+        "ram_gb": 1,
+        "use_case": "Basic chat, summarization, mobile devices",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-gemma-3n-2b": {
+        "repo_id": "mlx-community/gemma-3n-2b-it-4bit",
+        "filename": None,
+        "description": "Gemma 3n 2B (MLX 4-bit) - Mobile vision for Mac",
+        "size_gb": 1.1,
+        "ram_gb": 2,
+        "use_case": "Mobile vision, high-speed logic, image tasks",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-gemma-3n-4b": {
+        "repo_id": "mlx-community/gemma-3n-4b-it-4bit",
+        "filename": None,
+        "description": "Gemma 3n 4B (MLX 4-bit) - Enhanced vision on Mac",
+        "size_gb": 2.2,
+        "ram_gb": 4,
+        "use_case": "Mobile vision, image analysis, fast reasoning",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
     "mlx-qwen-0.5b": {
         "repo_id": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
         "filename": None,
