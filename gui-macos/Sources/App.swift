@@ -4,7 +4,7 @@ import Combine
 
 // Version constant - Date-based: YYYY.MM.DD.N (N = build number for that day)
 let APP_VERSION: String = {
-    return "2026.03.25.1"
+    return "2026.03.26"
 }()
 
 import os.log
@@ -288,6 +288,29 @@ struct LlamaCPPManagerApp: App {
                                 }
                             }
                             .padding(.horizontal, 8)
+
+                            // Mode selector (only shown when stopped)
+                            if !row.up {
+                                HStack(spacing: 4) {
+                                    Text("Mode:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Picker("", selection: Binding(
+                                        get: { vm.selectedModes[row.name] ?? "tools" },
+                                        set: { vm.selectedModes[row.name] = $0 }
+                                    )) {
+                                        Text("Basic").tag("basic")
+                                        Text("Tools").tag("tools")
+                                        Text("Performance").tag("performance")
+                                        Text("Extended").tag("extended")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 4)
+                            }
 
                             // Control buttons (Docker version)
                             HStack {
@@ -630,10 +653,12 @@ final class StatusViewModel: ObservableObject {
 
             let result: Int32
             if isDocker {
-                // Docker containers don't use modes
-                result = await service.run(["docker", "start", name])
+                // Docker containers now support modes (recreates container with new mode if changed)
+                let effectiveMode = mode ?? selectedModes[name] ?? "tools"
+                let command = ["docker", "start", name, "--mode", effectiveMode]
+                result = await service.run(command)
                 if result == 0 {
-                    AppLogger.log("Successfully started Docker container: \(name)", level: .info)
+                    AppLogger.log("Successfully started Docker container: \(name) in \(effectiveMode) mode", level: .info)
                 }
             } else {
                 // Native models use the start-script command with modes
@@ -1435,15 +1460,22 @@ final class CLIService {
     func execURL() -> URL? {
         for name in executableNames {
             let url = URL(fileURLWithPath: name)
-            if FileManager.default.isExecutableFile(atPath: url.path) { return url }
+            if FileManager.default.isExecutableFile(atPath: url.path) {
+                AppLogger.log("Using CLI: \(name)", level: .info)
+                return url
+            }
         }
         // Fallback to PATH lookup
         if let path = ProcessInfo.processInfo.environment["PATH"] {
             for dir in path.split(separator: ":") {
                 let url = URL(fileURLWithPath: String(dir)).appendingPathComponent("llamacpp-manager")
-                if FileManager.default.isExecutableFile(atPath: url.path) { return url }
+                if FileManager.default.isExecutableFile(atPath: url.path) {
+                    AppLogger.log("Using CLI from PATH: \(url.path)", level: .info)
+                    return url
+                }
             }
         }
+        AppLogger.log("ERROR: No llamacpp-manager CLI found!", level: .error)
         return nil
     }
 
@@ -1469,6 +1501,10 @@ final class CLIService {
         AppLogger.log("Fetching Docker status from CLI", level: .debug)
         do {
             let jsonString = try await runAndCapture(["docker", "status", "--json"])
+
+            // Log the actual JSON response for debugging
+            AppLogger.log("Docker status JSON response: \(jsonString.prefix(200))...", level: .debug)
+
             guard let data = jsonString.data(using: .utf8), !data.isEmpty else {
                 AppLogger.log("Empty Docker status response", level: .warning)
                 // Return empty response instead of throwing
@@ -1477,9 +1513,15 @@ final class CLIService {
 
             let response = try JSONDecoder().decode(StatusResponse.self, from: data)
             AppLogger.log("Docker status fetched successfully: \(response.models.count) containers", level: .debug)
+
+            // Log first model details
+            if let first = response.models.first {
+                AppLogger.log("First Docker model: \(first.name), up=\(first.up), health=\(first.health_state ?? "nil")", level: .debug)
+            }
+
             return response
         } catch {
-            AppLogger.log("Failed to fetch Docker status: \(error.localizedDescription)", level: .debug)
+            AppLogger.log("Failed to fetch Docker status: \(error.localizedDescription)", level: .error)
             // Return empty response if Docker not available
             return StatusResponse(models: [], infrastructure: [], logging: LoggingConfig(enabled: false, max_bytes: 0, backups: 0, timestamps: false))
         }

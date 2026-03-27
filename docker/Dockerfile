@@ -10,17 +10,15 @@ RUN apk add --no-cache \
     pkgconfig \
     linux-headers
 
-# Build llama.cpp from source for consistent container environment
+# Build llama.cpp from source - use recent version with --jinja support
 WORKDIR /build
 RUN git clone https://github.com/ggerganov/llama.cpp.git . && \
-    git checkout b4226
+    git checkout master
 
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_NATIVE=OFF \
-    -DGGML_STATIC=ON \
-    -DLLAMA_STATIC=ON \
-    -DLLAMA_SERVER_VERBOSE=OFF && \
+    -DBUILD_SHARED_LIBS=ON && \
     cmake --build build --config Release --target llama-server -j$(nproc)
 
 # Runtime stage
@@ -30,6 +28,7 @@ FROM alpine:3.19
 RUN apk add --no-cache \
     libgcc \
     libstdc++ \
+    libgomp \
     ca-certificates \
     curl
 
@@ -37,9 +36,11 @@ RUN apk add --no-cache \
 RUN addgroup -g 1000 llama && \
     adduser -D -s /bin/sh -u 1000 -G llama llama
 
-# Copy binary from builder stage
+# Copy binary and shared libraries from builder stage
 COPY --from=builder /build/build/bin/llama-server /usr/local/bin/llama-server
-RUN chmod +x /usr/local/bin/llama-server
+COPY --from=builder /build/build/bin/*.so* /usr/local/lib/
+RUN chmod +x /usr/local/bin/llama-server && \
+    ldconfig /usr/local/lib || true
 
 # Create directories with proper permissions
 RUN mkdir -p /models /logs && \
