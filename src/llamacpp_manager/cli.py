@@ -917,6 +917,10 @@ Examples:
     sp_models_info.add_argument("model_name", help="Model name")
     sp_models_info.set_defaults(func=cmd_models)
 
+    sp_models_check = models_sub.add_parser("check-updates", help="🔄 Check for model updates")
+    sp_models_check.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_models_check.set_defaults(func=cmd_models)
+
     # status
     sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
     sp_status.add_argument("--json", action="store_true", help="Output as JSON for scripting")
@@ -1323,7 +1327,8 @@ def cmd_models(args: argparse.Namespace) -> int:
     from .models.downloader import (
         ModelDownloader,
         list_available_coding_models,
-        get_coding_model_info
+        get_coding_model_info,
+        check_model_updates
     )
 
     sub = args.subcommand
@@ -1436,6 +1441,37 @@ def cmd_models(args: argparse.Namespace) -> int:
             print("Install huggingface_hub with:")
             print("  pip install huggingface_hub")
             return 2
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    if sub == "check-updates":
+        try:
+            from .models.downloader import check_model_updates
+
+            downloader = ModelDownloader()
+            updates = check_model_updates(downloader)
+
+            if args.json:
+                import json
+                print(json.dumps(updates, indent=2))
+            else:
+                if not updates:
+                    print("✅ All models are up to date!")
+                else:
+                    print("🔄 Updates available:")
+                    print()
+                    for model_name, info in updates.items():
+                        print(f"  {model_name}:")
+                        print(f"    Current version: {info['current']}")
+                        print(f"    Available version: {info['available']}")
+                        print(f"    Size: ~{info['size_gb']} GB")
+                        print()
+                    print("To update, download the new version:")
+                    for model_name in updates:
+                        print(f"  llamacpp-manager models download {model_name}")
+
+            return 0
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2

@@ -47,7 +47,7 @@ struct LlamaCPPManagerApp: App {
     @StateObject private var vm = StatusViewModel()
 
     var body: some Scene {
-        MenuBarExtra("llamaCPP", systemImage: "brain.head.profile") {
+        MenuBarExtra {
             VStack(alignment: .leading, spacing: 6) {
                 // Version header
                 Text("llamaCPP Manager v\(APP_VERSION)")
@@ -414,6 +414,26 @@ struct LlamaCPPManagerApp: App {
             }
             .task { vm.startPolling() }
             .padding(6)
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "brain.head.profile")
+                Circle()
+                    .fill(vm.overallStatusColor)
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .fill(vm.overallStatusColor)
+                            .frame(width: 8, height: 8)
+                            .opacity(vm.isAnyModelRunning ? 0.6 : 0)
+                            .animation(
+                                vm.isAnyModelRunning ?
+                                Animation.easeInOut(duration: 1.0)
+                                    .repeatForever(autoreverses: true) :
+                                .default,
+                                value: vm.isAnyModelRunning
+                            )
+                    )
+            }
         }
         .menuBarExtraStyle(.window)
     }
@@ -518,6 +538,42 @@ final class StatusViewModel: ObservableObject {
     private var preferencesWindow: NSWindow?
     private let preferences = PreferencesManager.shared
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Computed Status Properties
+
+    var isAnyModelRunning: Bool {
+        // Check if any native model is running
+        let nativeRunning = rows.contains { $0.up }
+        // Check if any Docker model is running
+        let dockerRunning = dockerRows.contains { $0.up }
+        return nativeRunning || dockerRunning
+    }
+
+    var hasAnyErrors: Bool {
+        // Check for native model errors (model with PID but not responding)
+        let nativeErrors = rows.contains { row in
+            row.pid != nil && !row.up
+        }
+        // Check for Docker errors
+        let dockerErrors = dockerRows.contains { row in
+            row.health_state == "unhealthy"
+        }
+        // Check infrastructure errors
+        let infraErrors = infrastructureRows.contains { row in
+            row.health_state == "unhealthy" || row.health_state == "failed"
+        }
+        return nativeErrors || dockerErrors || infraErrors
+    }
+
+    var overallStatusColor: Color {
+        if hasAnyErrors {
+            return .red  // Something is wrong
+        } else if isAnyModelRunning {
+            return .green  // Models are running (will blink)
+        } else {
+            return .gray  // All is quiet but ready
+        }
+    }
 
     init() {
         // Observe refresh interval changes
