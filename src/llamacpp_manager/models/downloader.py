@@ -223,6 +223,35 @@ CODING_MODELS = {
         "version": "2.0"
     },
 
+    # === VERY LARGE MODELS (70B+) ===
+    "llama-3.1-70b": {
+        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf",
+        "description": "Llama 3.1 70B - Large scale reasoning",
+        "size_gb": 40,
+        "ram_gb": 45,
+        "use_case": "Complex reasoning, large documents",
+        "version": "3.1"
+    },
+    "mixtral-8x7b": {
+        "repo_id": "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF",
+        "filename": "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf",
+        "description": "Mixtral 8x7B - MoE architecture",
+        "size_gb": 26,
+        "ram_gb": 30,
+        "use_case": "Complex tasks, multi-domain expertise",
+        "version": "0.1"
+    },
+    "qwen-2.5-72b": {
+        "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
+        "filename": "qwen2.5-72b-instruct-q4_k_m.gguf",
+        "description": "Qwen 2.5 72B - Powerful reasoning model",
+        "size_gb": 42,
+        "ram_gb": 48,
+        "use_case": "Advanced reasoning, complex analysis",
+        "version": "2.5"
+    },
+
     # === SMALL CODING MODELS (<10GB) ===
     "qwen-coder-7b": {
         "repo_id": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
@@ -250,6 +279,35 @@ CODING_MODELS = {
         "ram_gb": 4,
         "use_case": "Code completion, simple tasks, edge devices",
         "version": "2.5"
+    },
+
+    # === TINY MODELS (<2GB) ===
+    "qwen-0.5b": {
+        "repo_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+        "filename": "qwen2.5-0.5b-instruct-q8_0.gguf",
+        "description": "Qwen 2.5 0.5B - Extremely lightweight",
+        "size_gb": 0.6,
+        "ram_gb": 2,
+        "use_case": "Autocomplete, very low resource environments",
+        "version": "2.5"
+    },
+    "smollm2-1.7b": {
+        "repo_id": "HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
+        "filename": "smollm2-1.7b-instruct-q8_0.gguf",
+        "description": "SmolLM2 1.7B - Tiny but capable instruction model",
+        "size_gb": 1.8,
+        "ram_gb": 3,
+        "use_case": "Lightweight tasks, edge devices",
+        "version": "2.0"
+    },
+    "tinyllama-1.1b": {
+        "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+        "filename": "tinyllama-1.1b-chat-v1.0.Q8_0.gguf",
+        "description": "TinyLlama 1.1B - Smallest useful model",
+        "size_gb": 1.2,
+        "ram_gb": 2,
+        "use_case": "Extreme low resource, testing",
+        "version": "1.0"
     },
     "codellama-7b": {
         "repo_id": "TheBloke/CodeLlama-7B-Instruct-GGUF",
@@ -298,15 +356,6 @@ CODING_MODELS = {
         "use_case": "Compliance queries, report generation, document analysis",
         "version": "3.1"
     },
-    "llama-3.1-70b": {
-        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.1 70B - Large scale reasoning",
-        "size_gb": 40,
-        "ram_gb": 45,
-        "use_case": "Complex reasoning, large documents",
-        "version": "3.1"
-    },
     "mistral-7b": {
         "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
         "filename": "mistral-7b-instruct-v0.3.Q8_0.gguf",
@@ -315,15 +364,6 @@ CODING_MODELS = {
         "ram_gb": 11,
         "use_case": "General tasks, coding, analysis",
         "version": "0.3"
-    },
-    "mixtral-8x7b": {
-        "repo_id": "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF",
-        "filename": "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf",
-        "description": "Mixtral 8x7B - MoE architecture",
-        "size_gb": 26,
-        "ram_gb": 30,
-        "use_case": "Complex tasks, multi-domain expertise",
-        "version": "0.1"
     },
 
     # === AGENTIC & TOOL-CALLING MODELS ===
@@ -536,6 +576,54 @@ MLX_MODELS = {
         "version": "3.0",
         "format": "mlx",
         "requires": "Apple Silicon"
+    },
+
+    # === TINY MLX MODELS (<2GB) ===
+    "mlx-qwen-0.5b": {
+        "repo_id": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 0.5B (MLX 4-bit) - Ultra-tiny for Mac",
+        "size_gb": 0.3,
+        "ram_gb": 1,
+        "use_case": "Autocomplete, extreme low resource",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-smollm2-1.7b": {
+        "repo_id": "mlx-community/SmolLM2-1.7B-Instruct-4bit",
+        "filename": None,
+        "description": "SmolLM2 1.7B (MLX 4-bit) - Tiny instruction model",
+        "size_gb": 1.0,
+        "ram_gb": 2,
+        "use_case": "Lightweight tasks on Mac",
+        "version": "2.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === LARGE MLX MODELS (70B+) ===
+    "mlx-llama-3.1-70b": {
+        "repo_id": "mlx-community/Meta-Llama-3.1-70B-Instruct-4bit",
+        "filename": None,
+        "description": "Llama 3.1 70B (MLX 4-bit) - Large scale on Mac",
+        "size_gb": 38,
+        "ram_gb": 42,
+        "use_case": "Complex reasoning on Apple Silicon",
+        "version": "3.1",
+        "format": "mlx",
+        "requires": "Apple Silicon (64GB+ RAM recommended)"
+    },
+    "mlx-qwen-2.5-72b": {
+        "repo_id": "mlx-community/Qwen2.5-72B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 2.5 72B (MLX 4-bit) - Powerful on Mac",
+        "size_gb": 39,
+        "ram_gb": 44,
+        "use_case": "Advanced reasoning on Apple Silicon",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon (64GB+ RAM recommended)"
     }
 }
 
