@@ -555,13 +555,10 @@ final class StatusViewModel: ObservableObject {
             row.pid != nil && !row.up
         }
         // Check for Docker errors
-        let dockerErrors = dockerRows.contains { row in
-            row.health_state == "unhealthy"
-        }
-        // Check infrastructure errors
-        let infraErrors = infrastructureRows.contains { row in
-            row.health_state == "unhealthy" || row.health_state == "failed"
-        }
+        let dockerErrors = dockerRows.contains { $0.health_state == "unhealthy" }
+        // Check infrastructure errors - use healthy boolean field
+        let infraErrors = infrastructureRows.contains { !$0.healthy }
+
         return nativeErrors || dockerErrors || infraErrors
     }
 
