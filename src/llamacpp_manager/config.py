@@ -128,6 +128,7 @@ def default_infrastructure_config() -> Dict[str, Any]:
 def default_config() -> Dict[str, Any]:
     return {
         "llama_server_path": DEFAULT_LLAMA_SERVER_PATH,
+        "mlx_python_path": "python3",  # Python with mlx-lm installed (can be venv path)
         "log_dir": str(logs_dir()),
         "timeout_ms": 2000,
         "models": [],
