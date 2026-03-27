@@ -10,14 +10,31 @@ from .logs import rotate_file, open_log_append, open_timestamped_log
 
 
 def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
-    argv: List[str] = [llama_server_path, "-m", spec.model_path]
+    # Discover actual .gguf file if model_path is a directory
+    model_path = spec.model_path
+    expanded_path = Path(model_path).expanduser()
+
+    if expanded_path.is_dir():
+        # Auto-discover .gguf file in directory
+        gguf_files = list(expanded_path.glob("*.gguf"))
+        if not gguf_files:
+            raise RuntimeError(f"No .gguf files found in directory: {expanded_path}")
+        # Use the largest .gguf file (main model)
+        discovered_file = max(gguf_files, key=lambda p: p.stat().st_size)
+        model_path = str(discovered_file)
+        print(f"Auto-discovered model file: {discovered_file.name}")
+    elif not expanded_path.exists():
+        raise RuntimeError(f"Model file not found: {expanded_path}")
+
+    argv: List[str] = [llama_server_path, "-m", model_path]
 
     # Add mode-specific arguments before user-specified args
     mode = getattr(spec, 'mode', 'basic')
     if mode == "tools":
         argv.append("--jinja")
     elif mode == "performance":
-        argv.extend(["--jinja", "--n-parallel", "4", "--batch-size", "512", "--ubatch-size", "512"])
+        # Fixed: Use --parallel (not --n-parallel) to match llama-server syntax
+        argv.extend(["--jinja", "--parallel", "4", "--batch-size", "512", "--ubatch-size", "512"])
     elif mode == "extended":
         argv.extend(["--jinja", "--flash-attn"])
     # basic mode has no extra args

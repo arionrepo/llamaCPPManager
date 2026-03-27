@@ -231,8 +231,8 @@ class DockerManager:
         mode_args = {
             "basic": "",
             "tools": "--jinja",
-            "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
-            "extended": "--jinja --flash-attn",
+            "performance": "--jinja --parallel 4 --batch-size 512 --ubatch-size 512",
+            "extended": "--jinja --flash-attn on",
         }
         return mode_args.get(mode, "--jinja")  # Default to tools mode
 

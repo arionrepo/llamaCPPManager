@@ -36,7 +36,7 @@ def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
         # Fixed: Use --parallel (not --n-parallel) to match llama-server syntax
         argv.extend(["--jinja", "--parallel", "4", "--batch-size", "512", "--ubatch-size", "512"])
     elif mode == "extended":
-        argv.extend(["--jinja", "--flash-attn"])
+        argv.extend(["--jinja", "--flash-attn", "on"])
     # basic mode has no extra args
 
     # Add user-specified args (these can override mode defaults if needed)
