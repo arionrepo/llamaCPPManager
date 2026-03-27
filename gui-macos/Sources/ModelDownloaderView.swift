@@ -10,17 +10,21 @@ struct ModelInfo: Identifiable, Codable {
     let id: String
     let name: String
     let repoId: String
-    let filename: String
+    let filename: String?  // Optional for MLX models
     let sizeGB: Double
     let ramGB: Int
     let useCase: String
     let description: String
+    let format: String?  // "gguf" or "mlx"
+    let version: String?
+    let requires: String?  // Hardware requirements for MLX
     var isDownloaded: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case name, repoId = "repo_id", filename
         case sizeGB = "size_gb", ramGB = "ram_gb"
         case useCase = "use_case", description
+        case format, version, requires
     }
 
     init(from decoder: Decoder) throws {
@@ -28,15 +32,18 @@ struct ModelInfo: Identifiable, Codable {
         self.name = try container.decode(String.self, forKey: .name)
         self.id = self.name
         self.repoId = try container.decode(String.self, forKey: .repoId)
-        self.filename = try container.decode(String.self, forKey: .filename)
+        self.filename = try container.decodeIfPresent(String.self, forKey: .filename)
         self.sizeGB = try container.decode(Double.self, forKey: .sizeGB)
         self.ramGB = try container.decode(Int.self, forKey: .ramGB)
         self.useCase = try container.decode(String.self, forKey: .useCase)
         self.description = try container.decode(String.self, forKey: .description)
+        self.format = try container.decodeIfPresent(String.self, forKey: .format)
+        self.version = try container.decodeIfPresent(String.self, forKey: .version)
+        self.requires = try container.decodeIfPresent(String.self, forKey: .requires)
         self.isDownloaded = false
     }
 
-    init(name: String, repoId: String, filename: String, sizeGB: Double, ramGB: Int, useCase: String, description: String, isDownloaded: Bool = false) {
+    init(name: String, repoId: String, filename: String?, sizeGB: Double, ramGB: Int, useCase: String, description: String, format: String? = nil, version: String? = nil, requires: String? = nil, isDownloaded: Bool = false) {
         self.id = name
         self.name = name
         self.repoId = repoId
@@ -45,6 +52,9 @@ struct ModelInfo: Identifiable, Codable {
         self.ramGB = ramGB
         self.useCase = useCase
         self.description = description
+        self.format = format
+        self.version = version
+        self.requires = requires
         self.isDownloaded = isDownloaded
     }
 }
@@ -66,6 +76,7 @@ struct DownloadProgress: Identifiable {
 final class DownloadViewModel: ObservableObject {
     @Published var availableModels: [ModelInfo] = []
     @Published var downloads: [String: DownloadProgress] = [:]
+    @Published var filterFormat: String = "All Formats"
     @Published var filterSize: String = "All Sizes"
     @Published var filterUseCase: String = "All Use Cases"
     @Published var isLoading: Bool = false
@@ -73,7 +84,8 @@ final class DownloadViewModel: ObservableObject {
 
     private let cliService: CLIService
 
-    let sizeFilters = ["All Sizes", "Small (<10GB)", "Medium (10-20GB)", "Large (>20GB)"]
+    let formatFilters = ["All Formats", "GGUF (llama.cpp)", "MLX (Apple Silicon)"]
+    let sizeFilters = ["All Sizes", "Tiny (<2GB)", "Small (2-10GB)", "Medium (10-25GB)", "Large (25-50GB)", "Very Large (>50GB)"]
     let useCaseFilters = ["All Use Cases", "Agentic AI", "Coding", "Compliance", "General"]
 
     init(cliService: CLIService) {
@@ -192,14 +204,30 @@ final class DownloadViewModel: ObservableObject {
 
     var filteredModels: [ModelInfo] {
         let filtered = availableModels.filter { model in
+            // Format filter
+            let formatMatch: Bool
+            switch filterFormat {
+            case "GGUF (llama.cpp)":
+                formatMatch = model.format == "gguf"
+            case "MLX (Apple Silicon)":
+                formatMatch = model.format == "mlx"
+            default:
+                formatMatch = true
+            }
+
+            // Size filter
             let sizeMatch: Bool
             switch filterSize {
-            case "Small (<10GB)":
-                sizeMatch = model.sizeGB < 10
-            case "Medium (10-20GB)":
-                sizeMatch = model.sizeGB >= 10 && model.sizeGB <= 20
-            case "Large (>20GB)":
-                sizeMatch = model.sizeGB > 20
+            case "Tiny (<2GB)":
+                sizeMatch = model.sizeGB < 2
+            case "Small (2-10GB)":
+                sizeMatch = model.sizeGB >= 2 && model.sizeGB < 10
+            case "Medium (10-25GB)":
+                sizeMatch = model.sizeGB >= 10 && model.sizeGB < 25
+            case "Large (25-50GB)":
+                sizeMatch = model.sizeGB >= 25 && model.sizeGB < 50
+            case "Very Large (>50GB)":
+                sizeMatch = model.sizeGB >= 50
             default:
                 sizeMatch = true
             }
@@ -227,7 +255,7 @@ final class DownloadViewModel: ObservableObject {
                 useCaseMatch = true
             }
 
-            let result = sizeMatch && useCaseMatch
+            let result = formatMatch && sizeMatch && useCaseMatch
 
             // Debug logging
             if !result {
@@ -270,6 +298,14 @@ struct ModelDownloaderView: View {
 
             // Filters
             HStack(spacing: 12) {
+                Picker("Format", selection: $viewModel.filterFormat) {
+                    ForEach(viewModel.formatFilters, id: \.self) { filter in
+                        Text(filter).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 200)
+
                 Picker("Size", selection: $viewModel.filterSize) {
                     ForEach(viewModel.sizeFilters, id: \.self) { filter in
                         Text(filter).tag(filter)
@@ -394,15 +430,50 @@ struct ModelCard: View {
                 }
             }
 
+            // Format and Version badges
+            HStack(spacing: 8) {
+                // Format badge
+                if let format = model.format {
+                    Text(format.uppercased())
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(format == "mlx" ? Color.purple.opacity(0.2) : Color.blue.opacity(0.2))
+                        .foregroundColor(format == "mlx" ? .purple : .blue)
+                        .cornerRadius(4)
+                }
+
+                // Version badge
+                if let version = model.version {
+                    Text("v\(version)")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.gray.opacity(0.2))
+                        .foregroundColor(.secondary)
+                        .cornerRadius(4)
+                }
+            }
+
             // Metadata
             HStack(spacing: 16) {
-                Label("\(String(format: "%.2f", model.sizeGB)) GB", systemImage: "externaldrive")
+                Label("\(String(format: "%.1f", model.sizeGB)) GB", systemImage: "externaldrive")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
                 Label("~\(model.ramGB) GB RAM", systemImage: "memorychip")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            // Requirements (for MLX models)
+            if let requires = model.requires {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                    Text(requires)
+                }
+                .font(.caption2)
+                .foregroundColor(.orange)
             }
 
             // Use case
