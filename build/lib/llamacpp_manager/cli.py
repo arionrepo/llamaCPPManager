@@ -22,6 +22,7 @@ from .config import (
 )
 from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive, port_in_use
 from .process import start_process, stop_process, build_argv
+from .mlx_process import start_mlx_process, build_mlx_argv
 from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 from .discovery import find_llama_processes
@@ -109,6 +110,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             host=args.host,
             port=port,
             mode=args.mode,
+            deployment_type=getattr(args, 'deployment_type', 'native'),
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),
             autostart=args.autostart,
@@ -795,6 +797,8 @@ Examples:
     sp_cfg_add.add_argument("--port", required=True, help="Port number (e.g., 8081) or 'auto' for automatic allocation")
     sp_cfg_add.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="basic",
                             help="Startup mode: basic (minimal), tools (--jinja), performance (optimized), extended (flash-attn)")
+    sp_cfg_add.add_argument("--deployment-type", choices=["native", "container", "mlx"], default="native",
+                            help="Deployment type: native (llama.cpp), container (Docker), mlx (Apple Silicon)")
     sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
     sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
     sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
@@ -1107,14 +1111,19 @@ def _select_models(cfg: Dict[str, Any], target: str) -> List[Dict[str, Any]]:
 def cmd_start(args: argparse.Namespace) -> int:
     cfg = load_config()
     llama_path = cfg.get("llama_server_path")
+    mlx_python_path = cfg.get("mlx_python_path", "python3")
     log_dir = Path(cfg.get("log_dir"))
     logging_config = cfg.get("logging", {})
-    # Validate llama-server binary unless overridden for tests
+    # Validate llama-server binary unless overridden for tests or using MLX
     if not os.environ.get("LLAMACPP_MANAGER_SKIP_BIN_CHECK"):
         lp = Path(llama_path).expanduser()
         if not (lp.exists() and os.access(str(lp), os.X_OK)):
-            print(f"error: llama-server not found or not executable at {lp}. Install via Homebrew: brew install llama.cpp", file=sys.stderr)
-            return 2
+            # Check if we're only starting MLX models
+            selected = _select_models(cfg, args.target)
+            all_mlx = all(m.get("deployment_type") == "mlx" for m in selected)
+            if not all_mlx:
+                print(f"error: llama-server not found or not executable at {lp}. Install via Homebrew: brew install llama.cpp", file=sys.stderr)
+                return 2
     selected = _select_models(cfg, args.target)
     rc = 0
     for m in selected:
@@ -1137,11 +1146,27 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(f"error: refusing to bind non-local host '{spec.host}' without --allow-remote", file=sys.stderr)
             rc = 2
             continue
-        argv = build_argv(llama_path, spec)
+
+        # Route to appropriate runtime based on deployment type
+        is_mlx = spec.deployment_type == "mlx"
+
+        if is_mlx:
+            # MLX models
+            argv = build_mlx_argv(mlx_python_path, spec)
+        else:
+            # Native llama.cpp models
+            argv = build_argv(llama_path, spec)
+
         if args.dry_run:
             print("DRY-RUN:", " ".join(shlex.quote(a) for a in argv))
             continue
+
         if getattr(args, "launchd", False):
+            # TODO: MLX launchd support
+            if is_mlx:
+                print(f"error: launchd not yet supported for MLX models", file=sys.stderr)
+                rc = 2
+                continue
             data = render_plist(llama_path, spec, log_dir=log_dir)
             p = plist_path(spec.name)
             write_plist(p, data)
@@ -1158,9 +1183,18 @@ def cmd_start(args: argparse.Namespace) -> int:
                 print(f"error: port {spec.port} on {spec.host} is already in use; cannot start {spec.name}", file=sys.stderr)
                 rc = 2
                 continue
-            pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
+
+            if is_mlx:
+                # Start MLX model
+                pid = start_mlx_process(mlx_python_path, spec, log_dir, logging_config=logging_config)
+                deployment_info = "mlx"
+            else:
+                # Start native llama.cpp model
+                pid = start_process(llama_path, spec, log_dir, logging_config=logging_config)
+                deployment_info = "native"
+
             write_pid(spec.name, pid)
-            print(f"started {spec.name} pid={pid} port={spec.port}")
+            print(f"started {spec.name} pid={pid} port={spec.port} ({deployment_info})")
     return rc
 
 
