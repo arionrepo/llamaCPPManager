@@ -29,6 +29,7 @@ install_requires = [
     "httpx>=0.25.0",
     "pydantic>=2.0.0",
     "jinja2>=3.1.0",
+    "huggingface_hub>=0.20.0",  # For model downloading
 ]
 
 # Optional dependencies for container/k8s features
