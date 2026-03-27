@@ -83,7 +83,6 @@ def start_mlx_process(
     model_log_config = spec.logging or {}
 
     enabled = model_log_config.get("enabled", log_config.get("enabled", True))
-    timestamps = model_log_config.get("timestamps", log_config.get("timestamps", True))
 
     env = os.environ.copy()
     if spec.env:
@@ -93,16 +92,19 @@ def start_mlx_process(
 
     argv = build_mlx_argv(python_path, spec)
 
-    # Determine log file paths
+    # Configure logging
     if enabled:
-        if timestamps:
-            stdout_file = open_timestamped_log(log_dir, spec.name, "stdout")
-            stderr_file = open_timestamped_log(log_dir, spec.name, "stderr")
-        else:
-            stdout_file = open_log_append(log_dir, spec.name, "stdout")
-            stderr_file = open_log_append(log_dir, spec.name, "stderr")
+        log_path = log_dir / f"{spec.name}.log"
+        from .logs import rotate_file
+        max_bytes = model_log_config.get("max_bytes", log_config.get("max_bytes", 10 * 1024 * 1024))
+        backups = model_log_config.get("backups", log_config.get("backups", 5))
+        rotate_file(log_path, max_bytes=max_bytes, backups=backups)
+
+        # Simple approach - write to same log file for both stdout and stderr
+        log_file = open_log_append(log_path)
+        stdout_file = log_file
+        stderr_file = log_file
     else:
-        # No logging - use devnull
         stdout_file = subprocess.DEVNULL
         stderr_file = subprocess.DEVNULL
 
