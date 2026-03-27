@@ -283,10 +283,10 @@ CODING_MODELS = {
 
     # === ULTRA-TINY MODELS (<500MB) ===
     "gemma-3-270m": {
-        "repo_id": "google/gemma-3-270m-it-GGUF",
+        "repo_id": "unsloth/gemma-3-270m-it-GGUF",
         "filename": "gemma-3-270m-it-Q8_0.gguf",
         "description": "Gemma 3 270M - Ultra-lightweight for IoT and browsers",
-        "size_gb": 0.125,
+        "size_gb": 0.292,
         "ram_gb": 1,
         "use_case": "Drafting, IoT devices, browser apps, edge computing",
         "version": "3.0"
@@ -294,30 +294,39 @@ CODING_MODELS = {
 
     # === TINY MODELS (<2GB) ===
     "gemma-3-1b": {
-        "repo_id": "google/gemma-3-1b-it-GGUF",
+        "repo_id": "unsloth/gemma-3-1b-it-GGUF",
         "filename": "gemma-3-1b-it-Q8_0.gguf",
         "description": "Gemma 3 1B - Compact for basic tasks",
-        "size_gb": 0.8,
+        "size_gb": 1.1,
         "ram_gb": 2,
         "use_case": "Basic chat, summarization, mobile devices",
         "version": "3.0"
     },
-    "gemma-3n-2b": {
-        "repo_id": "google/gemma-3n-2b-it-GGUF",
-        "filename": "gemma-3n-2b-it-Q8_0.gguf",
-        "description": "Gemma 3n 2B - Mobile vision and high-speed logic",
-        "size_gb": 2.1,
-        "ram_gb": 4,
-        "use_case": "Mobile vision tasks, fast logical reasoning",
+    "gemma-3-4b": {
+        "repo_id": "ggml-org/gemma-3-4b-it-GGUF",
+        "filename": "gemma-3-4b-it-Q8_0.gguf",
+        "description": "Gemma 3 4B - Multimodal (text + images)",
+        "size_gb": 4.5,
+        "ram_gb": 7,
+        "use_case": "Multimodal tasks, image + text reasoning, 128K context",
         "version": "3.0"
     },
-    "gemma-3n-4b": {
-        "repo_id": "google/gemma-3n-4b-it-GGUF",
-        "filename": "gemma-3n-4b-it-Q8_0.gguf",
-        "description": "Gemma 3n 4B - Enhanced mobile vision capabilities",
-        "size_gb": 4.2,
-        "ram_gb": 6,
-        "use_case": "Mobile vision, high-speed reasoning, image analysis",
+    "gemma-3-12b": {
+        "repo_id": "unsloth/gemma-3-12b-it-GGUF",
+        "filename": "gemma-3-12b-it-Q8_0.gguf",
+        "description": "Gemma 3 12B - Powerful multimodal model",
+        "size_gb": 13,
+        "ram_gb": 16,
+        "use_case": "Advanced multimodal reasoning, multilingual (140+ languages)",
+        "version": "3.0"
+    },
+    "gemma-3-27b": {
+        "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
+        "filename": "google_gemma-3-27b-it-Q8_0.gguf",
+        "description": "Gemma 3 27B - Large multimodal reasoning",
+        "size_gb": 29,
+        "ram_gb": 34,
+        "use_case": "Complex multimodal analysis, 128K context, multilingual",
         "version": "3.0"
     },
     "qwen-0.5b": {
@@ -668,7 +677,7 @@ MLX_MODELS = {
         "repo_id": "mlx-community/gemma-3-270m-it-4bit",
         "filename": None,
         "description": "Gemma 3 270M (MLX 4-bit) - Ultra-lightweight for Mac",
-        "size_gb": 0.07,
+        "size_gb": 0.15,
         "ram_gb": 0.5,
         "use_case": "Drafting, IoT, browser apps, extreme edge",
         "version": "3.0",
@@ -681,31 +690,42 @@ MLX_MODELS = {
         "repo_id": "mlx-community/gemma-3-1b-it-4bit",
         "filename": None,
         "description": "Gemma 3 1B (MLX 4-bit) - Compact for basic chat",
-        "size_gb": 0.5,
+        "size_gb": 0.6,
         "ram_gb": 1,
         "use_case": "Basic chat, summarization, mobile devices",
         "version": "3.0",
         "format": "mlx",
         "requires": "Apple Silicon"
     },
-    "mlx-gemma-3n-2b": {
-        "repo_id": "mlx-community/gemma-3n-2b-it-4bit",
+    "mlx-gemma-3-4b": {
+        "repo_id": "mlx-community/gemma-3-4b-it-4bit",
         "filename": None,
-        "description": "Gemma 3n 2B (MLX 4-bit) - Mobile vision for Mac",
-        "size_gb": 1.1,
-        "ram_gb": 2,
-        "use_case": "Mobile vision, high-speed logic, image tasks",
+        "description": "Gemma 3 4B (MLX 4-bit) - Multimodal for Mac",
+        "size_gb": 2.4,
+        "ram_gb": 4,
+        "use_case": "Multimodal (text + images), 128K context",
         "version": "3.0",
         "format": "mlx",
         "requires": "Apple Silicon"
     },
-    "mlx-gemma-3n-4b": {
-        "repo_id": "mlx-community/gemma-3n-4b-it-4bit",
+    "mlx-gemma-3-12b": {
+        "repo_id": "mlx-community/gemma-3-12b-it-4bit",
         "filename": None,
-        "description": "Gemma 3n 4B (MLX 4-bit) - Enhanced vision on Mac",
-        "size_gb": 2.2,
-        "ram_gb": 4,
-        "use_case": "Mobile vision, image analysis, fast reasoning",
+        "description": "Gemma 3 12B (MLX 4-bit) - Powerful multimodal for Mac",
+        "size_gb": 6.5,
+        "ram_gb": 10,
+        "use_case": "Advanced multimodal, multilingual (140+ languages)",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-gemma-3-27b": {
+        "repo_id": "mlx-community/gemma-3-27b-it-4bit",
+        "filename": None,
+        "description": "Gemma 3 27B (MLX 4-bit) - Large multimodal for Mac",
+        "size_gb": 14,
+        "ram_gb": 18,
+        "use_case": "Complex multimodal, 128K context, multilingual",
         "version": "3.0",
         "format": "mlx",
         "requires": "Apple Silicon"
