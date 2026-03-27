@@ -252,7 +252,7 @@ def update_model(cfg: Dict[str, Any], name: str, updates: Dict[str, Any]) -> Non
     m.update(spec.to_dict())
 
 
-def find_next_available_port(cfg: Dict[str, Any], start_port: int = 8081) -> int:
+def find_next_available_port(cfg: Dict[str, Any], start_port: int = 8095) -> int:
     """
     Find the next available port number not used by any configured model.
 

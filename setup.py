@@ -30,6 +30,7 @@ install_requires = [
     "pydantic>=2.0.0",
     "jinja2>=3.1.0",
     "huggingface_hub>=0.20.0",  # For model downloading
+    "psutil>=5.9.0",  # For system memory detection (MLX safety)
 ]
 
 # Optional dependencies for container/k8s features
