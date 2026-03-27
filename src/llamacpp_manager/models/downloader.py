@@ -166,34 +166,151 @@ class ModelDownloader:
 # Pre-configured model definitions for easy downloading
 CODING_MODELS = {
     # === LARGE CODING MODELS (25GB+) ===
-    "qwen-coder-32b": {
+    "qwen-coder-32b-q8": {
         "repo_id": "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF",
         "filename": "qwen2.5-coder-32b-instruct-q8_0.gguf",
-        "description": "Qwen 2.5 Coder 32B - Complex refactoring and architecture",
+        "description": "Qwen 2.5 Coder 32B Q8 - Highest quality",
         "size_gb": 35,
         "ram_gb": 40,
         "use_case": "Complex refactoring, architecture design",
-        "version": "2.5"
+        "version": "2.5-q8"
     },
-    "deepseek-coder-33b": {
+    "qwen-coder-32b-q6": {
+        "repo_id": "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-32b-instruct-q6_k.gguf",
+        "description": "Qwen 2.5 Coder 32B Q6 - Good quality, smaller",
+        "size_gb": 27,
+        "ram_gb": 32,
+        "use_case": "Balanced quality/size for complex coding",
+        "version": "2.5-q6"
+    },
+    "qwen-coder-32b-q4": {
+        "repo_id": "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-32b-instruct-q4_k_m.gguf",
+        "description": "Qwen 2.5 Coder 32B Q4 - Fast, lower RAM",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Fast coding assistance with lower resources",
+        "version": "2.5-q4"
+    },
+    "deepseek-coder-33b-q8": {
         "repo_id": "bartowski/DeepSeek-Coder-33B-Instruct-GGUF",
         "filename": "DeepSeek-Coder-33B-Instruct-Q8_0.gguf",
-        "description": "DeepSeek Coder 33B - Advanced code generation",
+        "description": "DeepSeek Coder 33B Q8 - Highest quality Chinese coding model",
         "size_gb": 36,
         "ram_gb": 42,
         "use_case": "Complex code generation, large refactoring",
-        "version": "1.0"
+        "version": "1.0-q8"
+    },
+    "deepseek-coder-33b-q4": {
+        "repo_id": "bartowski/DeepSeek-Coder-33B-Instruct-GGUF",
+        "filename": "DeepSeek-Coder-33B-Instruct-Q4_K_M.gguf",
+        "description": "DeepSeek Coder 33B Q4 - Fast Chinese coding model",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Fast code generation with lower resources",
+        "version": "1.0-q4"
+    },
+    "yi-34b-q8": {
+        "repo_id": "TheBloke/Yi-34B-Chat-GGUF",
+        "filename": "yi-34b-chat.Q8_0.gguf",
+        "description": "Yi 34B Q8 - 01.AI's powerful Chinese model",
+        "size_gb": 37,
+        "ram_gb": 42,
+        "use_case": "Chinese/English bilingual, complex reasoning",
+        "version": "1.0-q8"
+    },
+    "yi-34b-q4": {
+        "repo_id": "TheBloke/Yi-34B-Chat-GGUF",
+        "filename": "yi-34b-chat.Q4_K_M.gguf",
+        "description": "Yi 34B Q4 - Accessible Chinese model",
+        "size_gb": 20,
+        "ram_gb": 25,
+        "use_case": "Bilingual with lower RAM requirements",
+        "version": "1.0-q4"
+    },
+    "chatglm3-6b-q8": {
+        "repo_id": "TheBloke/chatglm3-6B-GGUF",
+        "filename": "chatglm3-6b.Q8_0.gguf",
+        "description": "ChatGLM3 6B Q8 - Tsinghua's bilingual model",
+        "size_gb": 6.5,
+        "ram_gb": 9,
+        "use_case": "Chinese/English chat, efficient bilingual tasks",
+        "version": "3.0-q8"
+    },
+    "chatglm3-6b-q4": {
+        "repo_id": "TheBloke/chatglm3-6B-GGUF",
+        "filename": "chatglm3-6b.Q4_K_M.gguf",
+        "description": "ChatGLM3 6B Q4 - Lightweight bilingual",
+        "size_gb": 3.5,
+        "ram_gb": 6,
+        "use_case": "Fast bilingual chat with low resources",
+        "version": "3.0-q4"
+    },
+    "yi-9b-q8": {
+        "repo_id": "TheBloke/Yi-9B-GGUF",
+        "filename": "yi-9b.Q8_0.gguf",
+        "description": "Yi 9B Q8 - Efficient Chinese model",
+        "size_gb": 9.5,
+        "ram_gb": 13,
+        "use_case": "Bilingual general tasks, good quality",
+        "version": "1.0-q8"
+    },
+    "yi-9b-q4": {
+        "repo_id": "TheBloke/Yi-9B-GGUF",
+        "filename": "yi-9b.Q4_K_M.gguf",
+        "description": "Yi 9B Q4 - Fast bilingual",
+        "size_gb": 5.5,
+        "ram_gb": 8,
+        "use_case": "Fast bilingual tasks, lower resources",
+        "version": "1.0-q4"
     },
 
     # === MEDIUM CODING MODELS (10-25GB) ===
-    "qwen-coder-14b": {
+    "qwen-coder-14b-q8": {
         "repo_id": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
         "filename": "qwen2.5-coder-14b-instruct-q8_0.gguf",
-        "description": "Qwen 2.5 Coder 14B - Code review and test generation",
+        "description": "Qwen 2.5 Coder 14B Q8 - High quality Chinese coding",
         "size_gb": 16,
         "ram_gb": 20,
         "use_case": "Code review, test generation, documentation",
-        "version": "2.5"
+        "version": "2.5-q8"
+    },
+    "qwen-coder-14b-q6": {
+        "repo_id": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-14b-instruct-q6_k.gguf",
+        "description": "Qwen 2.5 Coder 14B Q6 - Balanced",
+        "size_gb": 12,
+        "ram_gb": 16,
+        "use_case": "Efficient code review, good quality",
+        "version": "2.5-q6"
+    },
+    "qwen-coder-14b-q4": {
+        "repo_id": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-14b-instruct-q4_k_m.gguf",
+        "description": "Qwen 2.5 Coder 14B Q4 - Fast, lower RAM",
+        "size_gb": 8.5,
+        "ram_gb": 12,
+        "use_case": "Fast code review with lower resources",
+        "version": "2.5-q4"
+    },
+    "deepseek-r1-qwen-32b-q8": {
+        "repo_id": "bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF",
+        "filename": "DeepSeek-R1-Distill-Qwen-32B-Q8_0.gguf",
+        "description": "DeepSeek R1 Qwen 32B Q8 - Latest reasoning model",
+        "size_gb": 35,
+        "ram_gb": 40,
+        "use_case": "Advanced reasoning, chain-of-thought, Chinese/English",
+        "version": "r1-q8"
+    },
+    "deepseek-r1-qwen-32b-q4": {
+        "repo_id": "bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF",
+        "filename": "DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf",
+        "description": "DeepSeek R1 Qwen 32B Q4 - Accessible reasoning",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Fast reasoning with lower resources",
+        "version": "r1-q4"
     },
     "deepseek-coder-lite": {
         "repo_id": "bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF",
@@ -224,32 +341,59 @@ CODING_MODELS = {
     },
 
     # === VERY LARGE MODELS (70B+) ===
-    "llama-3.1-70b": {
+    "llama-3.1-70b-q8": {
+        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-70B-Instruct-Q8_0.gguf",
+        "description": "Llama 3.1 70B Q8 - Highest quality",
+        "size_gb": 74,
+        "ram_gb": 80,
+        "use_case": "Maximum quality reasoning, large documents",
+        "version": "3.1-q8"
+    },
+    "llama-3.1-70b-q6": {
+        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-70B-Instruct-Q6_K.gguf",
+        "description": "Llama 3.1 70B Q6 - Good quality, manageable size",
+        "size_gb": 57,
+        "ram_gb": 62,
+        "use_case": "Complex reasoning with balanced resources",
+        "version": "3.1-q6"
+    },
+    "llama-3.1-70b-q4": {
         "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
         "filename": "Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.1 70B - Large scale reasoning",
+        "description": "Llama 3.1 70B Q4 - Most accessible 70B",
         "size_gb": 40,
         "ram_gb": 45,
-        "use_case": "Complex reasoning, large documents",
-        "version": "3.1"
+        "use_case": "Complex reasoning with lower RAM requirements",
+        "version": "3.1-q4"
     },
-    "mixtral-8x7b": {
-        "repo_id": "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF",
-        "filename": "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf",
-        "description": "Mixtral 8x7B - MoE architecture",
-        "size_gb": 26,
-        "ram_gb": 30,
-        "use_case": "Complex tasks, multi-domain expertise",
-        "version": "0.1"
+    "qwen-2.5-72b-q8": {
+        "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
+        "filename": "qwen2.5-72b-instruct-q8_0.gguf",
+        "description": "Qwen 2.5 72B Q8 - Highest quality",
+        "size_gb": 76,
+        "ram_gb": 82,
+        "use_case": "Maximum quality advanced reasoning",
+        "version": "2.5-q8"
     },
-    "qwen-2.5-72b": {
+    "qwen-2.5-72b-q6": {
+        "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
+        "filename": "qwen2.5-72b-instruct-q6_k.gguf",
+        "description": "Qwen 2.5 72B Q6 - Balanced quality/size",
+        "size_gb": 59,
+        "ram_gb": 64,
+        "use_case": "Advanced reasoning, manageable resources",
+        "version": "2.5-q6"
+    },
+    "qwen-2.5-72b-q4": {
         "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
         "filename": "qwen2.5-72b-instruct-q4_k_m.gguf",
-        "description": "Qwen 2.5 72B - Powerful reasoning model",
+        "description": "Qwen 2.5 72B Q4 - Most accessible",
         "size_gb": 42,
         "ram_gb": 48,
-        "use_case": "Advanced reasoning, complex analysis",
-        "version": "2.5"
+        "use_case": "Advanced reasoning with lower RAM",
+        "version": "2.5-q4"
     },
 
     # === SMALL CODING MODELS (<10GB) ===
@@ -320,14 +464,41 @@ CODING_MODELS = {
         "use_case": "Advanced multimodal reasoning, multilingual (140+ languages)",
         "version": "3.0"
     },
-    "gemma-3-27b": {
+    "gemma-3-27b-q8": {
         "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
         "filename": "google_gemma-3-27b-it-Q8_0.gguf",
-        "description": "Gemma 3 27B - Large multimodal reasoning",
+        "description": "Gemma 3 27B Q8 - Highest quality quantization",
         "size_gb": 29,
         "ram_gb": 34,
         "use_case": "Complex multimodal analysis, 128K context, multilingual",
-        "version": "3.0"
+        "version": "3.0-q8"
+    },
+    "gemma-3-27b-q6": {
+        "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
+        "filename": "google_gemma-3-27b-it-Q6_K.gguf",
+        "description": "Gemma 3 27B Q6 - Good quality, smaller size",
+        "size_gb": 22,
+        "ram_gb": 26,
+        "use_case": "Balanced quality/size multimodal model",
+        "version": "3.0-q6"
+    },
+    "gemma-3-27b-q4": {
+        "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
+        "filename": "google_gemma-3-27b-it-Q4_K_M.gguf",
+        "description": "Gemma 3 27B Q4 - Smallest, still capable",
+        "size_gb": 16,
+        "ram_gb": 20,
+        "use_case": "Fast inference, lower RAM requirements",
+        "version": "3.0-q4"
+    },
+    "gemma-3-27b-fp16": {
+        "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
+        "filename": "google_gemma-3-27b-it-f16.gguf",
+        "description": "Gemma 3 27B FP16 - Unquantized full precision",
+        "size_gb": 54,
+        "ram_gb": 60,
+        "use_case": "Maximum quality, research, fine-tuning base",
+        "version": "3.0-fp16"
     },
     "qwen-0.5b": {
         "repo_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
