@@ -232,6 +232,11 @@ def update_model(cfg: Dict[str, Any], name: str, updates: Dict[str, Any]) -> Non
         args=list(merged.get("args", []) or []),
         env=dict(merged.get("env", {}) or {}),
         autostart=bool(merged.get("autostart", False)),
+        deployment_type=merged.get("deployment_type", "native"),
+        mode=merged.get("mode", "basic"),
+        group=merged.get("group"),
+        metadata=merged.get("metadata"),
+        logging=merged.get("logging"),
     )
     errs = validate_model(cfg, spec, updating=True)
     if errs:

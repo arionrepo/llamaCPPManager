@@ -11,6 +11,7 @@ from .config import (
     DEFAULT_LLAMA_SERVER_PATH,
     ModelSpec,
     add_model,
+    get_model,
     load_config,
     remove_model,
     save_config,
@@ -149,6 +150,80 @@ def cmd_config(args: argparse.Namespace) -> int:
         except Exception:
             pass
         print(f"Updated model '{args.name}'")
+        return 0
+
+    if sub == "show":
+        m = get_model(cfg, args.name)
+        if not m:
+            print(f"error: model '{args.name}' not found", file=sys.stderr)
+            return 1
+
+        # Build the full command that would be executed
+        spec = ModelSpec(
+            name=m["name"],
+            model_path=m["model_path"],
+            host=m.get("host", "127.0.0.1"),
+            port=int(m["port"]),
+            mode=m.get("mode", "basic"),
+            args=list(m.get("args", []) or []),
+            env=dict(m.get("env", {}) or {}),
+            autostart=bool(m.get("autostart", False)),
+            deployment_type=m.get("deployment_type", "native"),
+        )
+
+        from .process import build_argv
+        llama_path = cfg.get("llama_server_path", "/opt/homebrew/bin/llama-server")
+        argv = build_argv(llama_path, spec)
+
+        if args.json:
+            import json
+            output = {
+                "name": spec.name,
+                "model_path": spec.model_path,
+                "host": spec.host,
+                "port": spec.port,
+                "mode": spec.mode,
+                "deployment_type": spec.deployment_type,
+                "autostart": spec.autostart,
+                "extra_args": spec.args,
+                "env": spec.env,
+                "full_command": argv,
+                "mode_flags": {
+                    "basic": "none",
+                    "tools": "--jinja",
+                    "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                    "extended": "--jinja --flash-attn"
+                }.get(spec.mode, "none")
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print(f"Model: {spec.name}")
+            print(f"Path: {spec.model_path}")
+            print(f"Endpoint: http://{spec.host}:{spec.port}")
+            print(f"Mode: {spec.mode}")
+            print(f"Deployment: {spec.deployment_type}")
+            print(f"Autostart: {spec.autostart}")
+
+            mode_flags = {
+                "basic": "(no mode flags)",
+                "tools": "--jinja",
+                "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                "extended": "--jinja --flash-attn"
+            }
+            print(f"\nMode adds: {mode_flags.get(spec.mode, 'none')}")
+
+            if spec.args:
+                print(f"Extra args: {' '.join(spec.args)}")
+            else:
+                print("Extra args: (none)")
+
+            if spec.env:
+                print("\nEnvironment variables:")
+                for k, v in spec.env.items():
+                    print(f"  {k}={v}")
+
+            print(f"\nFull command that will be executed:")
+            print(" ".join(argv))
         return 0
 
     if sub == "remove":
@@ -640,6 +715,11 @@ Examples:
     sp_cfg_upd.add_argument("--autostart", dest="autostart", action="store_true")
     sp_cfg_upd.add_argument("--no-autostart", dest="autostart", action="store_false")
     sp_cfg_upd.set_defaults(func=cmd_config)
+
+    sp_cfg_show = cfg_sub.add_parser("show", help="🔍 Show detailed model configuration and parameters")
+    sp_cfg_show.add_argument("name", help="Model name to show details for")
+    sp_cfg_show.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_cfg_show.set_defaults(func=cmd_config)
 
     sp_cfg_rm = cfg_sub.add_parser("remove", help="Remove a model entry")
     sp_cfg_rm.add_argument("name")
