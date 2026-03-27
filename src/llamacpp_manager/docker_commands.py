@@ -169,6 +169,8 @@ def status(model_name, output_json):
 
         if output_json:
             # Match GUI StatusRow format
+            health_state = "ok" if st.health_status == "healthy" else st.health_status
+
             click.echo(json.dumps({
                 "models": [{
                     "name": st.name,
@@ -181,7 +183,7 @@ def status(model_name, output_json):
                     "version": None,
                     "mode": "container",
                     "log_path": None,
-                    "health_state": st.health_status,
+                    "health_state": health_state,  # Map "healthy" → "ok"
                     "uptime": None
                 }],
                 "infrastructure": [],

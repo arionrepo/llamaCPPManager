@@ -235,33 +235,37 @@ class DockerManager:
         }
         return mode_args.get(mode, "--jinja")  # Default to tools mode
 
-    def _container_exists(self, container_name: str) -> bool:
+    def _container_exists(self, container_name: str, colima_profile: str = "app") -> bool:
         """
         Check if a container exists (running or stopped).
 
         Args:
             container_name: Container name
+            colima_profile: Colima profile (default: "app")
 
         Returns:
             True if container exists, False otherwise
         """
         exit_code, _, _ = self._run_command(
-            ["docker", "inspect", "--format={{.State.Running}}", container_name]
+            ["docker", "--context", f"colima-{colima_profile}", "inspect", "--format={{.State.Running}}", container_name]
         )
         return exit_code == 0
 
-    def _remove_container(self, container_name: str) -> bool:
+    def _remove_container(self, container_name: str, colima_profile: str = "app") -> bool:
         """
         Remove a container (force remove if running).
 
         Args:
             container_name: Container name
+            colima_profile: Colima profile (default: "app")
 
         Returns:
             True if successful, False otherwise
         """
         logger.info(f"Removing container: {container_name}")
-        exit_code, _, stderr = self._run_command(["docker", "rm", "-f", container_name])
+        exit_code, _, stderr = self._run_command(
+            ["docker", "--context", f"colima-{colima_profile}", "rm", "-f", container_name]
+        )
         if exit_code != 0:
             logger.warning(f"Failed to remove container {container_name}: {stderr}")
             return False
@@ -366,7 +370,7 @@ class DockerManager:
         logger.info(f"Container {container_name} created successfully")
         return True
 
-    def start(self, container_name: str, timeout: int = 120, mode: str = "tools") -> bool:
+    def start(self, container_name: str, timeout: int = 120, mode: str = "tools", colima_profile: str = "app") -> bool:
         """
         Start a Docker container, recreating with specified mode if needed.
 
@@ -374,20 +378,22 @@ class DockerManager:
             container_name: Container name (e.g., "llm-phi3")
             timeout: Timeout in seconds for startup
             mode: Startup mode (basic/tools/performance/extended)
+            colima_profile: Colima profile (default: "app")
 
         Returns:
             True if successful, False otherwise
         """
         print(f"▶️  Starting Docker container: {container_name}")
         print(f"   Mode: {mode}")
-        logger.info(f"Starting Docker container: {container_name} in {mode} mode")
+        print(f"   Profile: {colima_profile}")
+        logger.info(f"Starting Docker container: {container_name} in {mode} mode on {colima_profile}")
 
         # Check if container exists
-        if self._container_exists(container_name):
+        if self._container_exists(container_name, colima_profile):
             print(f"   Container exists, checking mode...")
             # Check current mode from labels
             exit_code, stdout, _ = self._run_command([
-                "docker", "inspect",
+                "docker", "--context", f"colima-{colima_profile}", "inspect",
                 "--format={{index .Config.Labels \"llamacpp-manager.mode\"}}",
                 container_name
             ])
@@ -399,15 +405,17 @@ class DockerManager:
                 print(f"   Mode changed: {current_mode} → {mode}")
                 print(f"   Recreating container...")
                 logger.info(f"Mode changed from {current_mode} to {mode}, recreating container")
-                if not self._remove_container(container_name):
+                if not self._remove_container(container_name, colima_profile):
                     print(f"❌ Failed to remove old container")
                     return False
-                if not self.create_container(container_name, mode):
+                if not self.create_container(container_name, mode, colima_profile=colima_profile):
                     return False
             else:
                 # Same mode or no mode label, just start it
                 print(f"   Starting existing container...")
-                exit_code, _, stderr = self._run_command(["docker", "start", container_name])
+                exit_code, _, stderr = self._run_command(
+                    ["docker", "--context", f"colima-{colima_profile}", "start", container_name]
+                )
                 if exit_code != 0:
                     print(f"❌ Failed to start: {stderr}")
                     logger.error(f"Failed to start container {container_name}: {stderr}")
@@ -416,7 +424,7 @@ class DockerManager:
             # Container doesn't exist, create it
             print(f"   Container doesn't exist, creating...")
             logger.info(f"Container {container_name} doesn't exist, creating it")
-            if not self.create_container(container_name, mode):
+            if not self.create_container(container_name, mode, colima_profile=colima_profile):
                 return False
 
         # Wait for container to be healthy
@@ -447,23 +455,26 @@ class DockerManager:
         logger.warning(f"Container {container_name} did not become healthy within {timeout}s")
         return True  # Still consider it started even if health check slow
 
-    def stop(self, container_name: str, timeout: int = 30) -> bool:
+    def stop(self, container_name: str, timeout: int = 30, colima_profile: str = "app") -> bool:
         """
         Stop a Docker container.
 
         Args:
             container_name: Container name
             timeout: Timeout in seconds for shutdown
+            colima_profile: Colima profile (default: "app")
 
         Returns:
             True if successful, False otherwise
         """
+        print(f"⏹️  Stopping Docker container: {container_name}")
         logger.info(f"Stopping Docker container: {container_name}")
 
         exit_code, stdout, stderr = self._run_command(
-            ["docker", "stop", "--time", str(timeout), container_name]
+            ["docker", "--context", f"colima-{colima_profile}", "stop", "--time", str(timeout), container_name]
         )
         if exit_code != 0:
+            print(f"❌ Failed to stop: {stderr}")
             logger.error(f"Failed to stop container {container_name}: {stderr}")
             return False
 
@@ -598,6 +609,9 @@ class DockerManager:
         # Convert Docker container status to match GUI StatusRow format
         models = []
         for s in statuses:
+            # Map health_status to GUI-expected values
+            health_state = "ok" if s.health_status == "healthy" else s.health_status
+
             models.append({
                 "name": s.name,
                 "pid": s.pid,
@@ -609,7 +623,7 @@ class DockerManager:
                 "version": None,
                 "mode": "container",  # Indicate this is a Docker container
                 "log_path": None,
-                "health_state": s.health_status,  # "health_status" → "health_state"
+                "health_state": health_state,  # Map "healthy" → "ok" for GUI
                 "uptime": None
             })
 

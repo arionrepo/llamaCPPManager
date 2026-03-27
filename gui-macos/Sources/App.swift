@@ -180,8 +180,11 @@ struct LlamaCPPManagerApp: App {
                                         .foregroundColor(.secondary)
 
                                     Picker("", selection: Binding(
-                                        get: { vm.selectedModes[row.name] ?? "tools" },
-                                        set: { vm.selectedModes[row.name] = $0 }
+                                        get: { vm.selectedModes[row.name] ?? "basic" },
+                                        set: { newMode in
+                                            vm.selectedModes[row.name] = newMode
+                                            vm.saveMode(for: row.name, mode: newMode)
+                                        }
                                     )) {
                                         Text("Basic").tag("basic")
                                         Text("Tools").tag("tools")
@@ -297,8 +300,11 @@ struct LlamaCPPManagerApp: App {
                                         .foregroundColor(.secondary)
 
                                     Picker("", selection: Binding(
-                                        get: { vm.selectedModes[row.name] ?? "tools" },
-                                        set: { vm.selectedModes[row.name] = $0 }
+                                        get: { vm.selectedModes[row.name] ?? "basic" },
+                                        set: { newMode in
+                                            vm.selectedModes[row.name] = newMode
+                                            vm.saveMode(for: row.name, mode: newMode)
+                                        }
                                     )) {
                                         Text("Basic").tag("basic")
                                         Text("Tools").tag("tools")
@@ -586,16 +592,57 @@ final class StatusViewModel: ObservableObject {
                 self.infrastructureRows = response.infrastructure
                 self.loggingConfig = response.logging
 
+                // Load saved modes for native models
+                for model in response.models {
+                    if let savedMode = model.mode {
+                        self.selectedModes[model.name] = savedMode
+                    } else {
+                        // Default to basic if not set
+                        self.selectedModes[model.name] = "basic"
+                    }
+                }
+
                 // Fetch Docker status separately
                 do {
                     let dockerResponse = try await service.fetchDockerStatus()
                     self.dockerRows = dockerResponse.models
+
+                    // Load saved modes for Docker models
+                    for model in dockerResponse.models {
+                        if let savedMode = model.mode {
+                            self.selectedModes[model.name] = savedMode
+                        } else {
+                            // Default to basic if not set
+                            self.selectedModes[model.name] = "basic"
+                        }
+                    }
                 } catch {
                     // Keep prior Docker rows on error
                     AppLogger.log("Failed to fetch Docker status: \(error.localizedDescription)", level: .warning)
                 }
             } catch {
                 // Keep prior rows; optionally surface an error row
+            }
+        }
+    }
+
+    // MARK: - Mode Persistence
+
+    func saveMode(for modelName: String, mode: String) {
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            // Update mode in config using CLI
+            let command = ["config", "update", modelName, "--mode", mode]
+            let result = await service.run(command)
+
+            if result == 0 {
+                AppLogger.log("Successfully saved mode '\(mode)' for model: \(modelName)", level: .info)
+                // Mode is already updated in selectedModes by the UI
+            } else {
+                AppLogger.log("Failed to save mode for model: \(modelName)", level: .error)
+                // Refresh to restore actual state
+                refresh()
             }
         }
     }

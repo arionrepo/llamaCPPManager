@@ -87,6 +87,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             model_path=args.model_path,
             host=args.host,
             port=int(args.port),
+            mode=args.mode,
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),
             autostart=args.autostart,
@@ -125,6 +126,8 @@ def cmd_config(args: argparse.Namespace) -> int:
             updates["host"] = args.host
         if args.port:
             updates["port"] = int(args.port)
+        if args.mode:
+            updates["mode"] = args.mode
         if args.extra_args is not None:
             updates["args"] = parse_args_list(args.extra_args)
         if args.env is not None:
@@ -401,7 +404,29 @@ def cmd_docker(args: argparse.Namespace) -> int:
                     return 1
             else:
                 container_name = f"llm-{target}" if not target.startswith("llm-") else target
-                mode = getattr(args, "mode", "tools")
+
+                # Get mode from args or model config
+                cfg = load_config()
+                mode_from_args = getattr(args, "mode", None)
+
+                # Find the model in config to get saved mode
+                model_name = target.replace("llm-", "") if target.startswith("llm-") else target
+                models = cfg.get("models", [])
+                saved_mode = "basic"  # Default if not found
+
+                for model in models:
+                    if model.get("name") == model_name and model.get("deployment_type") == "container":
+                        saved_mode = model.get("mode", "basic")
+                        break
+
+                # Use arg mode if provided, otherwise use saved mode
+                mode = mode_from_args if mode_from_args else saved_mode
+
+                # Update config if mode was explicitly provided
+                if mode_from_args and mode_from_args != saved_mode:
+                    update_model(cfg, model_name, {"mode": mode_from_args})
+                    save_config(cfg)
+
                 print(f"Starting Docker container: {container_name} in {mode} mode...")
                 success = docker_mgr.start(container_name, mode=mode)
                 if success:
@@ -598,6 +623,7 @@ Examples:
     sp_cfg_add.add_argument("model_path", help="Path to .gguf model file")
     sp_cfg_add.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
     sp_cfg_add.add_argument("--port", type=int, required=True, help="Port number (required, e.g., 8081)")
+    sp_cfg_add.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="basic", help="Startup mode (default: basic)")
     sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
     sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
     sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
@@ -608,6 +634,7 @@ Examples:
     sp_cfg_upd.add_argument("--model-path")
     sp_cfg_upd.add_argument("--host")
     sp_cfg_upd.add_argument("--port", type=int)
+    sp_cfg_upd.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], help="Startup mode (basic, tools, performance, extended)")
     sp_cfg_upd.add_argument("--extra-args", help="Replace extra args (single string)")
     sp_cfg_upd.add_argument("--env", nargs="*", help="Replace env vars: KEY=VALUE ... (omit to keep, pass empty to clear)")
     sp_cfg_upd.add_argument("--autostart", dest="autostart", action="store_true")
@@ -915,6 +942,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             env=dict(m.get("env", {}) or {}),
             autostart=bool(m.get("autostart", False)),
             deployment_type=m.get("deployment_type", "native"),
+            mode=m.get("mode", "basic"),
             group=m.get("group"),
             metadata=m.get("metadata"),
             logging=m.get("logging"),

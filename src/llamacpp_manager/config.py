@@ -22,6 +22,7 @@ class ModelSpec:
     env: Optional[Dict[str, str]] = None
     autostart: bool = False
     deployment_type: str = "native"  # "native" or "container"
+    mode: str = "basic"  # "basic", "tools", "performance", or "extended"
     group: Optional[str] = None  # Model group name for mutual exclusion
     metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
     logging: Optional[Dict[str, Any]] = None  # enabled, max_bytes, backups
