@@ -141,6 +141,9 @@ final class DownloadViewModel: ObservableObject {
                 // Start download in background
                 _ = try await cliService.run(["models", "download", name])
 
+                // Automatically configure the model after download
+                _ = try await cliService.run(["config", "add", name, "~/llms/\(name)/", "--port", "auto"])
+
                 // Update model as downloaded
                 await MainActor.run {
                     if let index = availableModels.firstIndex(where: { $0.name == name }) {
@@ -171,11 +174,32 @@ final class DownloadViewModel: ObservableObject {
     }
 
     func showModelInfo(model: ModelInfo) {
-        let infoText = """
+        let downloadLocation = "\(NSHomeDirectory())/llms/\(model.name)/"
+        let isDownloaded = model.isDownloaded ? "✅ Yes" : "❌ No"
+
+        var infoText = """
         Model: \(model.name)
 
+        Downloaded: \(isDownloaded)
+        """
+
+        if model.isDownloaded {
+            infoText += "\nLocation: \(downloadLocation)"
+        }
+
+        infoText += """
+
         Repository: \(model.repoId)
-        Filename: \(model.filename)
+        Filename: \(model.filename ?? "Auto-detected")
+        Format: \(model.format?.uppercased() ?? "GGUF")
+        Version: \(model.version ?? "N/A")
+        """
+
+        if let requires = model.requires {
+            infoText += "\nRequires: \(requires)"
+        }
+
+        infoText += """
 
         Size: \(String(format: "%.1f", model.sizeGB)) GB
         RAM Required: \(model.ramGB) GB

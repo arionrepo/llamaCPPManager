@@ -16,6 +16,7 @@ from .config import (
     remove_model,
     save_config,
     update_model,
+    find_next_available_port,
     list_infrastructure_components,
     get_infrastructure_component,
 )
@@ -83,11 +84,30 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 0
 
     if sub == "add":
+        # Handle automatic port allocation
+        if str(args.port).lower() == "auto":
+            port = find_next_available_port(cfg)
+            print(f"Auto-allocated port: {port}")
+        else:
+            port = int(args.port)
+
+        # Handle automatic model path detection for downloaded models
+        model_path = args.model_path
+        if model_path.startswith("~/llms/") and model_path.endswith("/"):
+            # Try to find the .gguf file in the directory
+            expanded_path = Path(model_path).expanduser()
+            if expanded_path.exists():
+                gguf_files = list(expanded_path.glob("*.gguf"))
+                if gguf_files:
+                    # Use the largest .gguf file
+                    model_path = str(max(gguf_files, key=lambda p: p.stat().st_size))
+                    print(f"Auto-detected model file: {model_path}")
+
         spec = ModelSpec(
             name=args.name,
-            model_path=args.model_path,
+            model_path=model_path,
             host=args.host,
-            port=int(args.port),
+            port=port,
             mode=args.mode,
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),

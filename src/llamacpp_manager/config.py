@@ -246,6 +246,34 @@ def update_model(cfg: Dict[str, Any], name: str, updates: Dict[str, Any]) -> Non
     m.update(spec.to_dict())
 
 
+def find_next_available_port(cfg: Dict[str, Any], start_port: int = 8081) -> int:
+    """
+    Find the next available port number not used by any configured model.
+
+    Args:
+        cfg: Configuration dictionary
+        start_port: Port to start searching from (default: 8081)
+
+    Returns:
+        Next available port number
+
+    Example:
+        cfg = load_config()
+        port = find_next_available_port(cfg)
+        print(f"Use port: {port}")
+    """
+    used_ports = set()
+    for model in cfg.get("models", []):
+        used_ports.add(int(model.get("port", 0)))
+
+    # Find next available port starting from start_port
+    port = start_port
+    while port in used_ports:
+        port += 1
+
+    return port
+
+
 def remove_model(cfg: Dict[str, Any], name: str) -> bool:
     models = cfg.get("models", [])
     for i, m in enumerate(models):
