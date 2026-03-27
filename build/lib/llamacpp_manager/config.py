@@ -22,6 +22,7 @@ class ModelSpec:
     env: Optional[Dict[str, str]] = None
     autostart: bool = False
     deployment_type: str = "native"  # "native" or "container"
+    mode: str = "basic"  # "basic", "tools", "performance", or "extended"
     group: Optional[str] = None  # Model group name for mutual exclusion
     metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
     logging: Optional[Dict[str, Any]] = None  # enabled, max_bytes, backups
@@ -231,6 +232,11 @@ def update_model(cfg: Dict[str, Any], name: str, updates: Dict[str, Any]) -> Non
         args=list(merged.get("args", []) or []),
         env=dict(merged.get("env", {}) or {}),
         autostart=bool(merged.get("autostart", False)),
+        deployment_type=merged.get("deployment_type", "native"),
+        mode=merged.get("mode", "basic"),
+        group=merged.get("group"),
+        metadata=merged.get("metadata"),
+        logging=merged.get("logging"),
     )
     errs = validate_model(cfg, spec, updating=True)
     if errs:

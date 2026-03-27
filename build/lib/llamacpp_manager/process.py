@@ -11,8 +11,21 @@ from .logs import rotate_file, open_log_append, open_timestamped_log
 
 def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
     argv: List[str] = [llama_server_path, "-m", spec.model_path]
+
+    # Add mode-specific arguments before user-specified args
+    mode = getattr(spec, 'mode', 'basic')
+    if mode == "tools":
+        argv.append("--jinja")
+    elif mode == "performance":
+        argv.extend(["--jinja", "--n-parallel", "4", "--batch-size", "512", "--ubatch-size", "512"])
+    elif mode == "extended":
+        argv.extend(["--jinja", "--flash-attn"])
+    # basic mode has no extra args
+
+    # Add user-specified args (these can override mode defaults if needed)
     if spec.args:
         argv.extend(spec.args)
+
     argv.extend(["--host", spec.host, "--port", str(spec.port)])
     return argv
 

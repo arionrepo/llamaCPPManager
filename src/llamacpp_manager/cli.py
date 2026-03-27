@@ -1545,7 +1545,7 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         host = m.get("host", "127.0.0.1")
         port = int(m.get("port"))
         pid = None
-        mode = "stopped"
+        process_source = "stopped"  # Track how process was started (stopped/direct/launchd)
 
         # Try to read PID from file first
         try:
@@ -1553,11 +1553,11 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if process_alive(pid_from_file):
                 # PID file is valid and process exists
                 pid = pid_from_file
-                mode = "direct"
+                process_source = "direct"
             else:
                 # PID file exists but process is dead - fall through to discovery
                 pid = None
-                mode = "stopped"
+                process_source = "stopped"
         except Exception:
             # No PID file - continue to discovery
             pass
@@ -1581,12 +1581,15 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         pass
             if found:
                 pid = found.get("pid")
-                mode = "direct"
+                process_source = "direct"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
 
         # Get uptime if process is running
         from .infrastructure import get_process_uptime
         uptime = get_process_uptime(pid) if pid else None
+
+        # Get startup mode from config (basic/tools/performance/extended)
+        startup_mode = m.get("mode", "basic")
 
         entry = {
             "name": name,
@@ -1597,7 +1600,8 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "latency_ms": health.get("latency_ms"),
             "http_status": health.get("http_status"),
             "version": health.get("version"),
-            "mode": mode,
+            "mode": startup_mode,  # Startup mode from config
+            "process_source": process_source,  # How process was started
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),  # Enhanced health state
             "uptime": uptime,

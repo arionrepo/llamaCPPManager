@@ -11,6 +11,7 @@ from .config import (
     DEFAULT_LLAMA_SERVER_PATH,
     ModelSpec,
     add_model,
+    get_model,
     load_config,
     remove_model,
     save_config,
@@ -87,6 +88,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             model_path=args.model_path,
             host=args.host,
             port=int(args.port),
+            mode=args.mode,
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),
             autostart=args.autostart,
@@ -125,6 +127,8 @@ def cmd_config(args: argparse.Namespace) -> int:
             updates["host"] = args.host
         if args.port:
             updates["port"] = int(args.port)
+        if args.mode:
+            updates["mode"] = args.mode
         if args.extra_args is not None:
             updates["args"] = parse_args_list(args.extra_args)
         if args.env is not None:
@@ -146,6 +150,140 @@ def cmd_config(args: argparse.Namespace) -> int:
         except Exception:
             pass
         print(f"Updated model '{args.name}'")
+        return 0
+
+    if sub == "show":
+        m = get_model(cfg, args.name)
+        if not m:
+            print(f"error: model '{args.name}' not found", file=sys.stderr)
+            return 1
+
+        # Build the full command that would be executed
+        spec = ModelSpec(
+            name=m["name"],
+            model_path=m["model_path"],
+            host=m.get("host", "127.0.0.1"),
+            port=int(m["port"]),
+            mode=m.get("mode", "basic"),
+            args=list(m.get("args", []) or []),
+            env=dict(m.get("env", {}) or {}),
+            autostart=bool(m.get("autostart", False)),
+            deployment_type=m.get("deployment_type", "native"),
+        )
+
+        from .process import build_argv
+        llama_path = cfg.get("llama_server_path", "/opt/homebrew/bin/llama-server")
+        argv = build_argv(llama_path, spec)
+
+        if args.json:
+            import json
+            output = {
+                "name": spec.name,
+                "model_path": spec.model_path,
+                "host": spec.host,
+                "port": spec.port,
+                "mode": spec.mode,
+                "deployment_type": spec.deployment_type,
+                "autostart": spec.autostart,
+                "extra_args": spec.args,
+                "env": spec.env,
+                "full_command": argv,
+                "mode_flags": {
+                    "basic": "none",
+                    "tools": "--jinja",
+                    "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                    "extended": "--jinja --flash-attn"
+                }.get(spec.mode, "none")
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print(f"Model: {spec.name}")
+            print(f"Path: {spec.model_path}")
+            print(f"Endpoint: http://{spec.host}:{spec.port}")
+            print(f"Mode: {spec.mode}")
+            print(f"Deployment: {spec.deployment_type}")
+            print(f"Autostart: {spec.autostart}")
+
+            mode_flags = {
+                "basic": "(no mode flags)",
+                "tools": "--jinja",
+                "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                "extended": "--jinja --flash-attn"
+            }
+            print(f"\nMode adds: {mode_flags.get(spec.mode, 'none')}")
+
+            if spec.args:
+                print(f"Extra args: {' '.join(spec.args)}")
+            else:
+                print("Extra args: (none)")
+
+            if spec.env:
+                print("\nEnvironment variables:")
+                for k, v in spec.env.items():
+                    print(f"  {k}={v}")
+
+            print(f"\nFull command that will be executed:")
+            print(" ".join(argv))
+        return 0
+
+    if sub == "options":
+        print("=== Available Modes ===\n")
+        print("Modes are predefined parameter sets for common use cases:\n")
+        print("  basic       - Minimal mode, no special features")
+        print("  tools       - Enables function calling with --jinja")
+        print("  performance - Optimized for speed:")
+        print("                --jinja --n-parallel 4 --batch-size 512 --ubatch-size 512")
+        print("  extended    - Advanced features with Flash Attention:")
+        print("                --jinja --flash-attn")
+
+        print("\n=== Common llama-server Parameters ===\n")
+        print("Use these with --extra-args when configuring a model:")
+        print()
+        print("Context & Memory:")
+        print("  --ctx-size N         - Context size (default: 512, common: 2048-32768)")
+        print("  --n-gpu-layers N     - Number of layers to offload to GPU (default: 0)")
+        print("  --threads N          - Number of CPU threads (default: system dependent)")
+        print()
+        print("Generation:")
+        print("  --temp T             - Temperature for sampling (default: 0.8)")
+        print("  --top-k N            - Top-k sampling (default: 40)")
+        print("  --top-p P            - Top-p sampling (default: 0.95)")
+        print("  --repeat-penalty P   - Penalize repeat tokens (default: 1.1)")
+        print()
+        print("Performance:")
+        print("  --batch-size N       - Batch size for prompt eval (default: 512)")
+        print("  --ubatch-size N      - Micro-batch size (default: batch-size)")
+        print("  --n-parallel N       - Number of parallel sequences (default: 1)")
+        print("  --cont-batching      - Enable continuous batching")
+        print("  --flash-attn         - Enable Flash Attention (if supported)")
+        print()
+        print("Chat Templates:")
+        print("  --jinja              - Use jinja2 for chat templates (enables tools)")
+        print("  --chat-template STR  - Custom chat template string")
+        print()
+        print("Specialized:")
+        print("  --embeddings         - Enable embeddings endpoint")
+        print("  --reranking          - Enable reranking endpoint")
+        print("  --no-mmap            - Disable memory mapping")
+        print("  --numa isolate       - Pin to NUMA node (better performance)")
+
+        print("\n=== Examples ===\n")
+        print("# Configure high-context model with GPU acceleration:")
+        print('llamacpp-manager config update phi3 --mode tools \\')
+        print('  --extra-args "--ctx-size 8192 --n-gpu-layers 35"')
+        print()
+        print("# Configure for embeddings:")
+        print('llamacpp-manager config update nomic --mode basic \\')
+        print('  --extra-args "--embeddings --pooling mean --ctx-size 8192"')
+        print()
+        print("# High-performance configuration:")
+        print('llamacpp-manager config update mistral --mode performance \\')
+        print('  --extra-args "--n-gpu-layers -1 --cont-batching --numa isolate"')
+        print()
+        print("# Check what will be executed:")
+        print("llamacpp-manager config show phi3")
+        print("llamacpp-manager start phi3 --dry-run")
+
         return 0
 
     if sub == "remove":
@@ -401,7 +539,29 @@ def cmd_docker(args: argparse.Namespace) -> int:
                     return 1
             else:
                 container_name = f"llm-{target}" if not target.startswith("llm-") else target
-                mode = getattr(args, "mode", "tools")
+
+                # Get mode from args or model config
+                cfg = load_config()
+                mode_from_args = getattr(args, "mode", None)
+
+                # Find the model in config to get saved mode
+                model_name = target.replace("llm-", "") if target.startswith("llm-") else target
+                models = cfg.get("models", [])
+                saved_mode = "basic"  # Default if not found
+
+                for model in models:
+                    if model.get("name") == model_name and model.get("deployment_type") == "container":
+                        saved_mode = model.get("mode", "basic")
+                        break
+
+                # Use arg mode if provided, otherwise use saved mode
+                mode = mode_from_args if mode_from_args else saved_mode
+
+                # Update config if mode was explicitly provided
+                if mode_from_args and mode_from_args != saved_mode:
+                    update_model(cfg, model_name, {"mode": mode_from_args})
+                    save_config(cfg)
+
                 print(f"Starting Docker container: {container_name} in {mode} mode...")
                 success = docker_mgr.start(container_name, mode=mode)
                 if success:
@@ -598,6 +758,8 @@ Examples:
     sp_cfg_add.add_argument("model_path", help="Path to .gguf model file")
     sp_cfg_add.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
     sp_cfg_add.add_argument("--port", type=int, required=True, help="Port number (required, e.g., 8081)")
+    sp_cfg_add.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="basic",
+                            help="Startup mode: basic (minimal), tools (--jinja), performance (optimized), extended (flash-attn)")
     sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
     sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
     sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
@@ -608,11 +770,21 @@ Examples:
     sp_cfg_upd.add_argument("--model-path")
     sp_cfg_upd.add_argument("--host")
     sp_cfg_upd.add_argument("--port", type=int)
+    sp_cfg_upd.add_argument("--mode", choices=["basic", "tools", "performance", "extended"],
+                            help="Startup mode: basic (minimal), tools (--jinja), performance (optimized), extended (flash-attn)")
     sp_cfg_upd.add_argument("--extra-args", help="Replace extra args (single string)")
     sp_cfg_upd.add_argument("--env", nargs="*", help="Replace env vars: KEY=VALUE ... (omit to keep, pass empty to clear)")
     sp_cfg_upd.add_argument("--autostart", dest="autostart", action="store_true")
     sp_cfg_upd.add_argument("--no-autostart", dest="autostart", action="store_false")
     sp_cfg_upd.set_defaults(func=cmd_config)
+
+    sp_cfg_show = cfg_sub.add_parser("show", help="🔍 Show detailed model configuration and parameters")
+    sp_cfg_show.add_argument("name", help="Model name to show details for")
+    sp_cfg_show.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_cfg_show.set_defaults(func=cmd_config)
+
+    sp_cfg_options = cfg_sub.add_parser("options", help="📚 Show available modes and parameters")
+    sp_cfg_options.set_defaults(func=cmd_config)
 
     sp_cfg_rm = cfg_sub.add_parser("remove", help="Remove a model entry")
     sp_cfg_rm.add_argument("name")
@@ -744,6 +916,10 @@ Examples:
     sp_models_info = models_sub.add_parser("info", help="ℹ️  Show information about a model")
     sp_models_info.add_argument("model_name", help="Model name")
     sp_models_info.set_defaults(func=cmd_models)
+
+    sp_models_check = models_sub.add_parser("check-updates", help="🔄 Check for model updates")
+    sp_models_check.add_argument("--json", action="store_true", help="Output as JSON")
+    sp_models_check.set_defaults(func=cmd_models)
 
     # status
     sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
@@ -915,6 +1091,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             env=dict(m.get("env", {}) or {}),
             autostart=bool(m.get("autostart", False)),
             deployment_type=m.get("deployment_type", "native"),
+            mode=m.get("mode", "basic"),
             group=m.get("group"),
             metadata=m.get("metadata"),
             logging=m.get("logging"),
@@ -1150,7 +1327,8 @@ def cmd_models(args: argparse.Namespace) -> int:
     from .models.downloader import (
         ModelDownloader,
         list_available_coding_models,
-        get_coding_model_info
+        get_coding_model_info,
+        check_model_updates
     )
 
     sub = args.subcommand
@@ -1267,6 +1445,37 @@ def cmd_models(args: argparse.Namespace) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
 
+    if sub == "check-updates":
+        try:
+            from .models.downloader import check_model_updates
+
+            downloader = ModelDownloader()
+            updates = check_model_updates(downloader)
+
+            if args.json:
+                import json
+                print(json.dumps(updates, indent=2))
+            else:
+                if not updates:
+                    print("✅ All models are up to date!")
+                else:
+                    print("🔄 Updates available:")
+                    print()
+                    for model_name, info in updates.items():
+                        print(f"  {model_name}:")
+                        print(f"    Current version: {info['current']}")
+                        print(f"    Available version: {info['available']}")
+                        print(f"    Size: ~{info['size_gb']} GB")
+                        print()
+                    print("To update, download the new version:")
+                    for model_name in updates:
+                        print(f"  llamacpp-manager models download {model_name}")
+
+            return 0
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
     if sub == "info":
         try:
             model_name = args.model_name
@@ -1336,7 +1545,7 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         host = m.get("host", "127.0.0.1")
         port = int(m.get("port"))
         pid = None
-        mode = "stopped"
+        process_source = "stopped"  # Track how process was started (stopped/direct/launchd)
 
         # Try to read PID from file first
         try:
@@ -1344,11 +1553,11 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if process_alive(pid_from_file):
                 # PID file is valid and process exists
                 pid = pid_from_file
-                mode = "direct"
+                process_source = "direct"
             else:
                 # PID file exists but process is dead - fall through to discovery
                 pid = None
-                mode = "stopped"
+                process_source = "stopped"
         except Exception:
             # No PID file - continue to discovery
             pass
@@ -1372,12 +1581,15 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         pass
             if found:
                 pid = found.get("pid")
-                mode = "direct"
+                process_source = "direct"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
 
         # Get uptime if process is running
         from .infrastructure import get_process_uptime
         uptime = get_process_uptime(pid) if pid else None
+
+        # Get startup mode from config (basic/tools/performance/extended)
+        startup_mode = m.get("mode", "basic")
 
         entry = {
             "name": name,
@@ -1388,7 +1600,8 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "latency_ms": health.get("latency_ms"),
             "http_status": health.get("http_status"),
             "version": health.get("version"),
-            "mode": mode,
+            "mode": startup_mode,  # Startup mode from config
+            "process_source": process_source,  # How process was started
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),  # Enhanced health state
             "uptime": uptime,
