@@ -1364,12 +1364,17 @@ def cmd_models(args: argparse.Namespace) -> int:
                         model_dict = {
                             "name": name,
                             "repo_id": info["repo_id"],
-                            "filename": info["filename"],
+                            "filename": info.get("filename"),
                             "description": info["description"],
                             "size_gb": info["size_gb"],
                             "ram_gb": info["ram_gb"],
-                            "use_case": info["use_case"]
+                            "use_case": info["use_case"],
+                            "format": info.get("format", "gguf"),
+                            "version": info.get("version", "1.0")
                         }
+                        # Add requires field for MLX models
+                        if info.get("requires"):
+                            model_dict["requires"] = info["requires"]
                         models_list.append(model_dict)
                     print(json.dumps(models_list, indent=2))
                 else:

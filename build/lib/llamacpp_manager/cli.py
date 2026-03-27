@@ -689,7 +689,22 @@ def cmd_docker(args: argparse.Namespace) -> int:
                 print("docker create: target model name required", file=sys.stderr)
                 return 2
             container_name = f"llm-{target}" if not target.startswith("llm-") else target
-            mode = getattr(args, "mode", "tools")
+
+            # Get mode from args or model config
+            mode_from_args = getattr(args, "mode", None)
+            model_name = target.replace("llm-", "") if target.startswith("llm-") else target
+
+            # Find model in config to get saved mode
+            cfg = load_config()
+            models = cfg.get("models", [])
+            saved_mode = "basic"
+            for model in models:
+                if model.get("name") == model_name and model.get("deployment_type") == "container":
+                    saved_mode = model.get("mode", "basic")
+                    break
+
+            # Use arg mode if provided, otherwise use saved mode
+            mode = mode_from_args if mode_from_args else saved_mode
             model_path = getattr(args, "model_path", None)
 
             print(f"Creating Docker container: {container_name} in {mode} mode...")
@@ -833,7 +848,7 @@ Examples:
 
     sp_docker_start = docker_sub.add_parser("start", help="▶️  Start a Docker container")
     sp_docker_start.add_argument("target", nargs="?", default="all", help="Model name (e.g., 'phi3') or 'all' (default: all)")
-    sp_docker_start.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="tools", help="Startup mode (default: tools)")
+    sp_docker_start.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], help="Startup mode (uses saved mode if not specified)")
     sp_docker_start.set_defaults(func=cmd_docker)
 
     sp_docker_stop = docker_sub.add_parser("stop", help="⏹️  Stop a Docker container")
@@ -856,7 +871,7 @@ Examples:
 
     sp_docker_create = docker_sub.add_parser("create", help="🔧 Create a new Docker container")
     sp_docker_create.add_argument("target", help="Model name (e.g., 'phi3')")
-    sp_docker_create.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="tools", help="Startup mode (default: tools)")
+    sp_docker_create.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], help="Startup mode (uses saved mode if not specified)")
     sp_docker_create.add_argument("--model-path", help="Path to model file (optional, auto-detected from config)")
     sp_docker_create.set_defaults(func=cmd_docker)
 
