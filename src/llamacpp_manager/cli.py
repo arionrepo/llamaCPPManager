@@ -689,7 +689,22 @@ def cmd_docker(args: argparse.Namespace) -> int:
                 print("docker create: target model name required", file=sys.stderr)
                 return 2
             container_name = f"llm-{target}" if not target.startswith("llm-") else target
-            mode = getattr(args, "mode", "tools")
+
+            # Get mode from args or model config
+            mode_from_args = getattr(args, "mode", None)
+            model_name = target.replace("llm-", "") if target.startswith("llm-") else target
+
+            # Find model in config to get saved mode
+            cfg = load_config()
+            models = cfg.get("models", [])
+            saved_mode = "basic"
+            for model in models:
+                if model.get("name") == model_name and model.get("deployment_type") == "container":
+                    saved_mode = model.get("mode", "basic")
+                    break
+
+            # Use arg mode if provided, otherwise use saved mode
+            mode = mode_from_args if mode_from_args else saved_mode
             model_path = getattr(args, "model_path", None)
 
             print(f"Creating Docker container: {container_name} in {mode} mode...")
@@ -833,7 +848,7 @@ Examples:
 
     sp_docker_start = docker_sub.add_parser("start", help="▶️  Start a Docker container")
     sp_docker_start.add_argument("target", nargs="?", default="all", help="Model name (e.g., 'phi3') or 'all' (default: all)")
-    sp_docker_start.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="tools", help="Startup mode (default: tools)")
+    sp_docker_start.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], help="Startup mode (uses saved mode if not specified)")
     sp_docker_start.set_defaults(func=cmd_docker)
 
     sp_docker_stop = docker_sub.add_parser("stop", help="⏹️  Stop a Docker container")
@@ -856,7 +871,7 @@ Examples:
 
     sp_docker_create = docker_sub.add_parser("create", help="🔧 Create a new Docker container")
     sp_docker_create.add_argument("target", help="Model name (e.g., 'phi3')")
-    sp_docker_create.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="tools", help="Startup mode (default: tools)")
+    sp_docker_create.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], help="Startup mode (uses saved mode if not specified)")
     sp_docker_create.add_argument("--model-path", help="Path to model file (optional, auto-detected from config)")
     sp_docker_create.set_defaults(func=cmd_docker)
 
@@ -904,6 +919,7 @@ Examples:
 
     sp_models_list = models_sub.add_parser("list", help="📋 List downloaded models")
     sp_models_list.add_argument("--available", action="store_true", help="Show available pre-configured models")
+    sp_models_list.add_argument("--format", choices=["gguf", "mlx", "all"], default="all", help="Filter by model format (default: all)")
     sp_models_list.add_argument("--json", action="store_true", help="Output in JSON format")
     sp_models_list.set_defaults(func=cmd_models)
 
@@ -1336,7 +1352,9 @@ def cmd_models(args: argparse.Namespace) -> int:
     if sub == "list":
         try:
             if args.available:
-                models = list_available_coding_models()
+                # Get format filter (convert "all" to None for the function)
+                format_filter = None if args.format == "all" else args.format
+                models = list_available_coding_models(format_filter=format_filter)
 
                 if args.json:
                     # Output as JSON array
@@ -1356,16 +1374,35 @@ def cmd_models(args: argparse.Namespace) -> int:
                     print(json.dumps(models_list, indent=2))
                 else:
                     # Show available pre-configured models
-                    print("Available Coding Models:")
-                    print()
-                    for name, info in models.items():
-                        print(f"  {name}")
-                        print(f"    Description: {info['description']}")
-                        print(f"    Size: ~{info['size_gb']} GB")
-                        print(f"    RAM needed: ~{info['ram_gb']} GB")
-                        print(f"    Use case: {info['use_case']}")
+                    # Separate GGUF and MLX models
+                    gguf_models = {k: v for k, v in models.items() if v.get('format') == 'gguf'}
+                    mlx_models = {k: v for k, v in models.items() if v.get('format') == 'mlx'}
+
+                    if gguf_models:
+                        print("=== GGUF Models (llama.cpp compatible) ===")
                         print()
+                        for name, info in gguf_models.items():
+                            print(f"  {name}")
+                            print(f"    Description: {info['description']}")
+                            print(f"    Size: ~{info['size_gb']} GB")
+                            print(f"    RAM needed: ~{info['ram_gb']} GB")
+                            print(f"    Use case: {info['use_case']}")
+                            print()
+
+                    if mlx_models:
+                        print("=== MLX Models (Apple Silicon optimized) ===")
+                        print()
+                        for name, info in mlx_models.items():
+                            print(f"  {name}")
+                            print(f"    Description: {info['description']}")
+                            print(f"    Size: ~{info['size_gb']} GB (4-bit quantized)")
+                            print(f"    RAM needed: ~{info['ram_gb']} GB")
+                            print(f"    Use case: {info['use_case']}")
+                            print(f"    Requires: {info['requires']}")
+                            print()
+
                     print(f"Download with: llamacpp-manager models download <name>")
+                    print(f"Filter: --format gguf|mlx|all")
             else:
                 # Show downloaded models
                 downloader = ModelDownloader()

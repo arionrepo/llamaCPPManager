@@ -27,6 +27,7 @@ class DockerContainerStatus:
     health_status: str  # "healthy", "unhealthy", "starting", "down"
     latency_ms: Optional[int]
     pid: Optional[int]
+    mode: str = "basic"  # Startup mode: basic, tools, performance, extended
 
 
 class DockerManager:
@@ -544,6 +545,14 @@ class DockerManager:
         )
         container_id = stdout.strip() if exit_code == 0 else None
 
+        # Get mode from container labels
+        exit_code, stdout, _ = self._run_command([
+            "docker", "--context", f"colima-{colima_profile}", "inspect",
+            "--format={{index .Config.Labels \"llamacpp-manager.mode\"}}",
+            container_name
+        ])
+        mode = stdout.strip() if exit_code == 0 and stdout.strip() else "basic"
+
         return DockerContainerStatus(
             name=container_name,
             port=port,
@@ -551,7 +560,8 @@ class DockerManager:
             running=is_running,
             health_status=health_status,
             latency_ms=latency_ms,
-            pid=pid
+            pid=pid,
+            mode=mode
         )
 
     def status_all(self) -> List[DockerContainerStatus]:
@@ -621,7 +631,7 @@ class DockerManager:
                 "latency_ms": s.latency_ms,
                 "http_status": 200 if s.health_status == "healthy" else None,
                 "version": None,
-                "mode": "container",  # Indicate this is a Docker container
+                "mode": s.mode,  # Startup mode from container labels
                 "log_path": None,
                 "health_state": health_state,  # Map "healthy" → "ok" for GUI
                 "uptime": None

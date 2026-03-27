@@ -405,13 +405,147 @@ CODING_MODELS = {
     }
 }
 
+# MLX models optimized for Apple Silicon (M1/M2/M3/M4)
+MLX_MODELS = {
+    # === LARGE MLX CODING MODELS ===
+    "mlx-qwen-coder-32b": {
+        "repo_id": "mlx-community/Qwen2.5-Coder-32B-Instruct-4bit",
+        "filename": None,  # MLX uses directory structure
+        "description": "Qwen 2.5 Coder 32B (MLX 4-bit) - Optimized for Apple Silicon",
+        "size_gb": 18,
+        "ram_gb": 22,
+        "use_case": "Complex refactoring on Apple Silicon",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon (M1/M2/M3/M4)"
+    },
+    "mlx-deepseek-coder-33b": {
+        "repo_id": "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx",
+        "filename": None,
+        "description": "DeepSeek Coder 33B (MLX 4-bit) - Fast on Apple Silicon",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Advanced code generation on Mac",
+        "version": "2.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === MEDIUM MLX CODING MODELS ===
+    "mlx-qwen-coder-14b": {
+        "repo_id": "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 2.5 Coder 14B (MLX 4-bit) - Efficient on Apple Silicon",
+        "size_gb": 8,
+        "ram_gb": 12,
+        "use_case": "Code review, test generation on Mac",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-codellama-13b": {
+        "repo_id": "mlx-community/CodeLlama-13b-Instruct-hf-4bit-mlx",
+        "filename": None,
+        "description": "CodeLlama 13B (MLX 4-bit) - Meta's coding model for Mac",
+        "size_gb": 7.5,
+        "ram_gb": 10,
+        "use_case": "Code completion on Apple Silicon",
+        "version": "1.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === SMALL MLX CODING MODELS ===
+    "mlx-qwen-coder-7b": {
+        "repo_id": "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 2.5 Coder 7B (MLX 4-bit) - Lightweight for Mac",
+        "size_gb": 4,
+        "ram_gb": 6,
+        "use_case": "Agentic workflows on Apple Silicon",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-qwen-coder-3b": {
+        "repo_id": "mlx-community/Qwen2.5-Coder-3B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 2.5 Coder 3B (MLX 4-bit) - Ultra-efficient",
+        "size_gb": 2,
+        "ram_gb": 4,
+        "use_case": "Quick tasks on MacBook Air/lower RAM",
+        "version": "2.5",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-codellama-7b": {
+        "repo_id": "mlx-community/CodeLlama-7b-Instruct-hf-4bit-mlx",
+        "filename": None,
+        "description": "CodeLlama 7B (MLX 4-bit) - Compact for Mac",
+        "size_gb": 4,
+        "ram_gb": 6,
+        "use_case": "Code completion on Apple Silicon",
+        "version": "1.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === GENERAL PURPOSE MLX MODELS ===
+    "mlx-llama-3.1-8b": {
+        "repo_id": "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
+        "filename": None,
+        "description": "Llama 3.1 8B (MLX 4-bit) - Fast on Apple Silicon",
+        "size_gb": 4.5,
+        "ram_gb": 7,
+        "use_case": "General tasks optimized for Mac",
+        "version": "3.1",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-mistral-7b": {
+        "repo_id": "mlx-community/Mistral-7B-Instruct-v0.3-4bit",
+        "filename": None,
+        "description": "Mistral 7B v0.3 (MLX 4-bit) - Efficient on Mac",
+        "size_gb": 4,
+        "ram_gb": 6,
+        "use_case": "General tasks on Apple Silicon",
+        "version": "0.3",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-phi-3-mini": {
+        "repo_id": "mlx-community/Phi-3-mini-4k-instruct-4bit",
+        "filename": None,
+        "description": "Phi-3 Mini (MLX 4-bit) - Microsoft's tiny model",
+        "size_gb": 1.5,
+        "ram_gb": 3,
+        "use_case": "Edge devices, MacBook Air",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === AGENTIC MLX MODELS ===
+    "mlx-hermes-3-llama-8b": {
+        "repo_id": "mlx-community/Hermes-3-Llama-3.1-8B-4bit",
+        "filename": None,
+        "description": "Hermes 3 Llama 8B (MLX 4-bit) - Agentic workflows on Mac",
+        "size_gb": 4.5,
+        "ram_gb": 7,
+        "use_case": "Multi-agent systems on Apple Silicon",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    }
+}
+
 
 def get_coding_model_info(model_name: str) -> Optional[Dict[str, Any]]:
     """
-    Get pre-configured info for a coding model.
+    Get pre-configured info for a coding model (GGUF or MLX).
 
     Args:
-        model_name: Name like "qwen-coder-32b"
+        model_name: Name like "qwen-coder-32b" or "mlx-qwen-coder-7b"
 
     Returns:
         Model info dict or None if not found
@@ -421,22 +555,42 @@ def get_coding_model_info(model_name: str) -> Optional[Dict[str, Any]]:
         print(f"Description: {info['description']}")
         print(f"Size: {info['size_gb']} GB")
     """
-    return CODING_MODELS.get(model_name)
+    # Check GGUF models first, then MLX
+    return CODING_MODELS.get(model_name) or MLX_MODELS.get(model_name)
 
 
-def list_available_coding_models() -> Dict[str, Dict[str, Any]]:
+def list_available_coding_models(format_filter: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """
     List all available pre-configured coding models.
+
+    Args:
+        format_filter: Filter by format ("gguf", "mlx", or None for all)
 
     Returns:
         Dictionary of model names to info
 
     Example:
+        # All models
         models = list_available_coding_models()
-        for name, info in models.items():
-            print(f"{name}: {info['description']}")
+
+        # Only GGUF models (for llama.cpp)
+        gguf_models = list_available_coding_models(format_filter="gguf")
+
+        # Only MLX models (for Apple Silicon)
+        mlx_models = list_available_coding_models(format_filter="mlx")
     """
-    return CODING_MODELS.copy()
+    all_models = {}
+
+    # Add GGUF models (for llama.cpp)
+    if format_filter is None or format_filter == "gguf":
+        for name, info in CODING_MODELS.items():
+            all_models[name] = {**info, "format": "gguf"}
+
+    # Add MLX models (for Apple Silicon)
+    if format_filter is None or format_filter == "mlx":
+        all_models.update(MLX_MODELS)
+
+    return all_models
 
 
 def check_model_updates(downloader: Optional['ModelDownloader'] = None) -> Dict[str, Dict[str, Any]]:
