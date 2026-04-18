@@ -115,3 +115,18 @@ git commit --no-verify -m "message"
 ## Contact
 
 Questions: libor@arionetworks.com
+
+---
+
+## File Reservation
+
+File reservation is required before first write.
+
+- If `/Users/liborballaty/.codex/memories/AGENT-WORK-QUEUE.md` exists, use it as the authoritative coordination queue before editing any file.
+- If the global queue is unavailable, use the repo-local fallback queue when the repo defines one.
+- Use `queuectl reserve`, `queuectl verify`, `queuectl renew`, and `queuectl release` when queue tooling is available.
+- Claim the exact files you will modify before the first write.
+- Do not edit shared or canonical files without an active claim.
+- Keep claims narrow, short-lived, and limited to actual write scope.
+- If a required file is already claimed, do not overlap edits; continue with disjoint work if possible and re-check later.
+
