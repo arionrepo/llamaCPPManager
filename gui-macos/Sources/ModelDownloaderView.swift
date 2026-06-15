@@ -457,7 +457,10 @@ final class DownloadViewModel: ObservableObject {
 
         AppLogger.log("filteredModels count: \(filtered.count)", level: .debug)
 
-        return filtered
+        // Pin actively downloading models to the top, preserve catalog order otherwise
+        let downloading = filtered.filter { downloads[$0.name] != nil }
+        let rest = filtered.filter { downloads[$0.name] == nil }
+        return downloading + rest
     }
 }
 
