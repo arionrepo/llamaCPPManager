@@ -183,8 +183,35 @@ struct LlamaCPPManagerApp: App {
                             }
                             .padding(.horizontal, 8)
 
-                            // Mode picker (show when stopped)
-                            if !row.up {
+                            // Startup progress (shows download / loading status)
+                            if let progress = vm.startupProgress[row.name] {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                            .frame(width: 14, height: 14)
+                                        Text(progress.status)
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                        if let detail = progress.detail {
+                                            Text("(\(detail))")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                    }
+                                    if let pct = progress.progress {
+                                        ProgressView(value: pct)
+                                            .progressViewStyle(.linear)
+                                            .frame(height: 4)
+                                    }
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 4)
+                            }
+
+                            // Mode picker (show when stopped and not starting)
+                            if !row.up && vm.startupProgress[row.name] == nil {
                                 HStack(spacing: 4) {
                                     Text("Mode:")
                                         .font(.caption)
@@ -212,7 +239,7 @@ struct LlamaCPPManagerApp: App {
                             // Control buttons
                             HStack {
                                 Button("Start") { vm.startWithScript(name: row.name, mode: vm.selectedModes[row.name]) }
-                                    .disabled(row.up)
+                                    .disabled(row.up || vm.startupProgress[row.name] != nil)
                                 Button("Stop") { vm.stop(name: row.name) }
                                     .disabled(!row.up)
                                 Button("Restart") { vm.restart(name: row.name) }
@@ -314,8 +341,35 @@ struct LlamaCPPManagerApp: App {
                             }
                             .padding(.horizontal, 8)
 
-                            // Mode selector (only shown when stopped)
-                            if !row.up {
+                            // Startup progress (shows download / loading status)
+                            if let progress = vm.startupProgress[row.name] {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                            .frame(width: 14, height: 14)
+                                        Text(progress.status)
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                        if let detail = progress.detail {
+                                            Text("(\(detail))")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                    }
+                                    if let pct = progress.progress {
+                                        ProgressView(value: pct)
+                                            .progressViewStyle(.linear)
+                                            .frame(height: 4)
+                                    }
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 4)
+                            }
+
+                            // Mode selector (only shown when stopped and not starting)
+                            if !row.up && vm.startupProgress[row.name] == nil {
                                 HStack(spacing: 4) {
                                     Text("Mode:")
                                         .font(.caption)
@@ -343,7 +397,7 @@ struct LlamaCPPManagerApp: App {
                             // Control buttons (Docker version)
                             HStack {
                                 Button("Start") { vm.startWithScript(name: row.name, isDocker: true) }
-                                    .disabled(row.up)
+                                    .disabled(row.up || vm.startupProgress[row.name] != nil)
                                 Button("Stop") { vm.stop(name: row.name, isDocker: true) }
                                     .disabled(!row.up)
                                 Button("Restart") { vm.restart(name: row.name, isDocker: true) }
@@ -546,12 +600,23 @@ struct StatusResponse: Codable {
     let logging: LoggingConfig
 }
 
+// MARK: - Model Startup Progress
+
+struct ModelStartupProgress: Equatable {
+    var status: String          // e.g., "Starting...", "Downloading model files...", "Loading model..."
+    var progress: Double?       // 0.0 to 1.0, nil if unknown
+    var detail: String?         // e.g., "5/11 files", "1.2 GB / 18 GB"
+    var startedAt: Date
+}
+
 final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
     @Published var dockerRows: [StatusRow] = []
     @Published var infrastructureRows: [InfrastructureRow] = []
     @Published var loggingConfig: LoggingConfig?
     @Published var selectedModes: [String: String] = [:]  // Model name -> mode
+    @Published var startupProgress: [String: ModelStartupProgress] = [:]
+    private var logMonitorTasks: [String: Task<Void, Never>] = [:]
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
@@ -772,12 +837,22 @@ final class StatusViewModel: ObservableObject {
     }
 
     func startWithScript(name: String, mode: String? = nil, isDocker: Bool = false) {
+        // Set initial startup progress (visible immediately in UI)
+        startupProgress[name] = ModelStartupProgress(
+            status: "Starting...",
+            progress: nil,
+            detail: nil,
+            startedAt: Date()
+        )
+
+        // Start monitoring the log file for progress
+        startLogMonitor(for: name)
+
         Task { [weak self] in
             guard let self = self else { return }
 
             let result: Int32
             if isDocker {
-                // Docker containers now support modes (recreates container with new mode if changed)
                 let effectiveMode = mode ?? selectedModes[name] ?? "tools"
                 let command = ["docker", "start", name, "--mode", effectiveMode]
                 result = await service.run(command)
@@ -785,7 +860,6 @@ final class StatusViewModel: ObservableObject {
                     AppLogger.log("Successfully started Docker container: \(name) in \(effectiveMode) mode", level: .info)
                 }
             } else {
-                // Native models use the start-script command with modes
                 let effectiveMode = mode ?? selectedModes[name] ?? "basic"
                 let command = ["start-script", name, "--mode", effectiveMode]
                 result = await service.run(command)
@@ -795,13 +869,147 @@ final class StatusViewModel: ObservableObject {
             }
 
             if result == 0 {
-                // Wait for startup
-                try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 refresh()
             } else {
                 AppLogger.log("Failed to start \(name)", level: .error)
+                // Clear progress on failure
+                await MainActor.run {
+                    self.startupProgress.removeValue(forKey: name)
+                    self.stopLogMonitor(for: name)
+                }
             }
         }
+    }
+
+    // MARK: - Startup Log Monitoring
+
+    private func startLogMonitor(for name: String) {
+        stopLogMonitor(for: name)  // ensure no duplicates
+
+        let task = Task { [weak self] in
+            // Log path used by both MLX and native models
+            let logPath = "\(NSHomeDirectory())/Library/Logs/llamaCPPManager/\(name).log"
+
+            // Poll every 1 second for log changes
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self = self else { return }
+
+                // Stop monitoring if the model is up
+                let isUp = await MainActor.run { () -> Bool in
+                    let nativeUp = self.rows.first(where: { $0.name == name })?.up ?? false
+                    let dockerUp = self.dockerRows.first(where: { $0.name == name })?.up ?? false
+                    return nativeUp || dockerUp
+                }
+
+                if isUp {
+                    await MainActor.run {
+                        self.startupProgress.removeValue(forKey: name)
+                        self.stopLogMonitor(for: name)
+                    }
+                    return
+                }
+
+                // Auto-clear if startup is taking too long (>10 minutes)
+                let elapsed = await MainActor.run { () -> TimeInterval in
+                    guard let started = self.startupProgress[name]?.startedAt else { return 0 }
+                    return Date().timeIntervalSince(started)
+                }
+                if elapsed > 600 {
+                    await MainActor.run {
+                        self.startupProgress.removeValue(forKey: name)
+                        self.stopLogMonitor(for: name)
+                    }
+                    return
+                }
+
+                // Read tail of log file
+                if let progress = self.parseStartupLog(path: logPath, modelName: name) {
+                    await MainActor.run {
+                        if var existing = self.startupProgress[name] {
+                            existing.status = progress.status
+                            existing.progress = progress.progress
+                            existing.detail = progress.detail
+                            self.startupProgress[name] = existing
+                        }
+                    }
+                }
+            }
+        }
+        logMonitorTasks[name] = task
+    }
+
+    private func stopLogMonitor(for name: String) {
+        logMonitorTasks[name]?.cancel()
+        logMonitorTasks.removeValue(forKey: name)
+    }
+
+    private func extractNumbers(from text: String) -> [Int] {
+        var result: [Int] = []
+        var current = ""
+        for ch in text {
+            if ch.isNumber {
+                current.append(ch)
+            } else {
+                if let n = Int(current) { result.append(n) }
+                current = ""
+            }
+        }
+        if let n = Int(current) { result.append(n) }
+        return result
+    }
+
+    private func parseStartupLog(path: String, modelName: String) -> ModelStartupProgress? {
+        guard let data = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        let lines = data.split(separator: "\n").suffix(50).map(String.init)
+
+        var latest = ModelStartupProgress(
+            status: "Starting...",
+            progress: nil,
+            detail: nil,
+            startedAt: Date()
+        )
+
+        for line in lines {
+            // MLX download progress: "Fetching 11 files:   9%|...| 1/11 [...]"
+            if line.contains("Fetching") && line.contains("files:") {
+                let numbers = extractNumbers(from: line)
+                if numbers.count >= 4 {
+                    // [totalFiles, percent, currentFile, totalFiles_again]
+                    let percent = Double(numbers[1]) / 100.0
+                    latest.status = "Downloading model files..."
+                    latest.progress = percent
+                    latest.detail = "\(numbers[2])/\(numbers[3]) files"
+                }
+            }
+            // MLX server ready: "Starting httpd at..." or similar
+            else if line.contains("Starting httpd") || line.contains("Running on http") || line.contains("Uvicorn running") {
+                latest.status = "Server ready, performing health check..."
+                latest.progress = 0.95
+            }
+            // Model loading (llama.cpp)
+            else if line.contains("llm_load_tensors") || line.contains("loading model") || line.contains("load_tensors:") {
+                latest.status = "Loading model into memory..."
+                latest.progress = 0.85
+            }
+            // llama.cpp warmup
+            else if line.contains("warming up") || line.contains("system_info:") {
+                latest.status = "Warming up..."
+                latest.progress = 0.9
+            }
+            // Downloading from HuggingFace
+            else if line.contains("HTTP Request") && line.contains("safetensors") {
+                if latest.progress == nil {
+                    latest.status = "Downloading from HuggingFace..."
+                }
+            }
+            // Errors
+            else if line.lowercased().contains("error") && !line.contains("favicon") {
+                latest.status = "Issue detected (see logs)"
+            }
+        }
+        return latest
     }
 
     func stop(name: String, isDocker: Bool = false) {

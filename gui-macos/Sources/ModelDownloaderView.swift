@@ -92,6 +92,7 @@ final class DownloadViewModel: ObservableObject {
     @Published var filterFormat: String = "All Formats"
     @Published var filterSize: String = "All Sizes"
     @Published var filterUseCase: String = "All Use Cases"
+    @Published var searchText: String = ""
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var catalogFetchedAt: String?
@@ -282,6 +283,19 @@ final class DownloadViewModel: ObservableObject {
 
     var filteredModels: [ModelInfo] {
         let filtered = availableModels.filter { model in
+            // Search filter (name or description)
+            let searchMatch: Bool
+            if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                searchMatch = true
+            } else {
+                let query = searchText.lowercased()
+                searchMatch = model.name.lowercased().contains(query) ||
+                              model.description.lowercased().contains(query) ||
+                              model.useCase.lowercased().contains(query) ||
+                              model.repoId.lowercased().contains(query)
+            }
+            if !searchMatch { return false }
+
             // Format filter
             let formatMatch: Bool
             switch filterFormat {
@@ -402,6 +416,23 @@ struct ModelDownloaderView: View {
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
+
+            // Search box
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search by name, description, or repo...", text: $viewModel.searchText)
+                    .textFieldStyle(.roundedBorder)
+                if !viewModel.searchText.isEmpty {
+                    Button(action: { viewModel.searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
 
             // Filters
             HStack(spacing: 12) {
