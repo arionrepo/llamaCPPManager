@@ -123,12 +123,13 @@ final class DockerService {
 
     // MARK: - Docker Container Management
 
-    func getDockerContainers(showAllProfiles: Bool = false) async -> [DockerContainer] {
-        // Get Colima profiles and query containers from each (optionally from all, not just running)
+    func getDockerContainers() async -> [DockerContainer] {
+        // Get Colima profiles and query containers from RUNNING profiles only
+        // Stopped profiles have no Docker context, so containers cannot be queried
         let profiles = await getColimaProfiles()
         var allContainers: [DockerContainer] = []
 
-        let profilesToQuery = showAllProfiles ? profiles : profiles.filter { $0.isRunning }
+        let profilesToQuery = profiles.filter { $0.isRunning }
 
         for profile in profilesToQuery {
             do {

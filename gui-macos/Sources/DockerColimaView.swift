@@ -11,7 +11,6 @@ class DockerColimaViewModel: ObservableObject {
     @Published var dockerContainers: [DockerContainer] = []
     @Published var containerStats: [String: (cpu: Double, memory: String)] = [:]
     @Published var isLoading = false
-    @Published var showAllProfiles = false
 
     private let dockerService = DockerService()
     private var refreshTask: Task<Void, Never>?
@@ -33,13 +32,13 @@ class DockerColimaViewModel: ObservableObject {
     func refresh() async {
         isLoading = true
         async let profiles = dockerService.getColimaProfiles()
-        async let containers = dockerService.getDockerContainers(showAllProfiles: showAllProfiles)
+        async let containers = dockerService.getDockerContainers()
         async let stats = dockerService.getContainerStats()
 
         colimaProfiles = await profiles
         dockerContainers = await containers
         containerStats = await stats
-        AppLogger.log("ViewModel refresh: got \(dockerContainers.count) containers (showAllProfiles: \(showAllProfiles))", level: .debug)
+        AppLogger.log("ViewModel refresh: got \(dockerContainers.count) containers from running profiles", level: .debug)
         isLoading = false
     }
 
@@ -93,6 +92,10 @@ struct DockerColimaView: View {
     @State private var newProfileCpus = ""
     @State private var newProfileMemory = ""
     @State private var newProfileDisk = ""
+
+    private var groupedContainers: [String: [DockerContainer]] {
+        Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
+    }
 
     var body: some View {
         ScrollView {
@@ -185,28 +188,10 @@ struct DockerColimaView: View {
                 Divider()
 
                 // MARK: - Docker Containers Section
-                HStack {
-                    Text("DOCKER CONTAINERS")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Text(viewModel.showAllProfiles ? "All" : "Running")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-
-                        Toggle("", isOn: $viewModel.showAllProfiles)
-                            .onChange(of: viewModel.showAllProfiles) { _ in
-                                Task { await viewModel.refresh() }
-                            }
-                            .labelsHidden()
-                            .scaleEffect(0.8)
-                    }
-                    .padding(.horizontal, 8)
-                }
+                Text("DOCKER CONTAINERS")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
 
                 if viewModel.colimaProfiles.isEmpty {
                     Text("No Colima profiles found")
@@ -214,10 +199,7 @@ struct DockerColimaView: View {
                         .foregroundColor(.secondary)
                         .padding(.leading, 8)
                 } else {
-                    // Group containers by Colima profile
-                    let groupedContainers = Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
-
-                    // Show all profiles, even those with no containers
+                    // Show all profiles
                     ForEach(viewModel.colimaProfiles.sorted { $0.name < $1.name }) { profile in
                         HStack {
                             Text(profile.name.uppercased())
@@ -229,15 +211,21 @@ struct DockerColimaView: View {
 
                             Text("\(groupedContainers[profile.name]?.count ?? 0) containers")
                                 .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(profile.isRunning ? .secondary : .orange)
                         }
                         .padding(.leading, 8)
                         .padding(.top, 8)
                         .padding(.trailing, 8)
 
                         let profileContainers = groupedContainers[profile.name] ?? []
-                        if profileContainers.isEmpty {
-                            Text("No containers in this profile")
+                        if !profile.isRunning {
+                            Text("Profile is not running")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                                .padding(.leading, 16)
+                                .padding(.vertical, 4)
+                        } else if profileContainers.isEmpty {
+                            Text("No containers configured in this profile")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .padding(.leading, 16)
