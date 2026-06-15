@@ -352,6 +352,29 @@ struct ModelDownloaderView: View {
     @StateObject var viewModel: DownloadViewModel
     @Environment(\.dismiss) var dismiss
 
+    private func formatRelativeTime(_ isoTimestamp: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: isoTimestamp) else {
+            return "unknown"
+        }
+
+        let now = Date()
+        let seconds = now.timeIntervalSince(date)
+
+        if seconds < 60 {
+            return "just now"
+        } else if seconds < 3600 {
+            let minutes = Int(seconds / 60)
+            return minutes == 1 ? "1 minute ago" : "\(minutes) minutes ago"
+        } else if seconds < 86400 {
+            let hours = Int(seconds / 3600)
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        } else {
+            let days = Int(seconds / 86400)
+            return days == 1 ? "1 day ago" : "\(days) days ago"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -640,28 +663,5 @@ struct ModelCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
-    }
-
-    private func formatRelativeTime(_ isoTimestamp: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        guard let date = formatter.date(from: isoTimestamp) else {
-            return "unknown"
-        }
-
-        let now = Date()
-        let seconds = now.timeIntervalSince(date)
-
-        if seconds < 60 {
-            return "just now"
-        } else if seconds < 3600 {
-            let minutes = Int(seconds / 60)
-            return minutes == 1 ? "1 minute ago" : "\(minutes) minutes ago"
-        } else if seconds < 86400 {
-            let hours = Int(seconds / 3600)
-            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
-        } else {
-            let days = Int(seconds / 86400)
-            return days == 1 ? "1 day ago" : "\(days) days ago"
-        }
     }
 }
