@@ -181,38 +181,137 @@ final class DownloadViewModel: ObservableObject {
     }
 
     func downloadModel(name: String) {
-        // Initialize download progress
+        // Find expected size from catalog
+        let expectedGB = availableModels.first(where: { $0.name == name })?.sizeGB ?? 0
+        let expectedBytes = Int64(expectedGB * 1_073_741_824)  // GB -> bytes
+
         downloads[name] = DownloadProgress(
             id: name,
             bytesDownloaded: 0,
-            totalBytes: 0,
+            totalBytes: expectedBytes,
             speedMBps: 0.0,
             etaSeconds: 0,
-            status: "Starting..."
+            status: "Starting download..."
         )
 
+        let modelDir = "\(NSHomeDirectory())/llms/\(name)"
+
+        // Background polling task — monitors directory size while download runs
+        let pollTask = Task { @MainActor in
+            var lastBytes: Int64 = 0
+            var lastTime = Date()
+
+            while !Task.isCancelled && downloads[name] != nil {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { break }
+
+                let bytes = directorySize(path: modelDir)
+                let now = Date()
+                let elapsed = now.timeIntervalSince(lastTime)
+                let speedBps = elapsed > 0 ? Double(bytes - lastBytes) / elapsed : 0
+                let speedMBps = speedBps / 1_048_576.0
+
+                let etaSec: Int
+                if speedBps > 0 && expectedBytes > bytes {
+                    etaSec = Int(Double(expectedBytes - bytes) / speedBps)
+                } else {
+                    etaSec = 0
+                }
+
+                let status: String
+                if bytes == 0 {
+                    status = "Connecting to HuggingFace..."
+                } else if expectedBytes > 0 && bytes >= expectedBytes {
+                    status = "Finalizing..."
+                } else {
+                    status = "Downloading..."
+                }
+
+                if var prog = self.downloads[name] {
+                    prog.bytesDownloaded = bytes
+                    prog.speedMBps = speedMBps
+                    prog.etaSeconds = etaSec
+                    prog.status = status
+                    self.downloads[name] = prog
+                }
+
+                lastBytes = bytes
+                lastTime = now
+            }
+        }
+
+        // Main download task — runs the CLI and waits for completion
         Task {
             do {
-                // Start download in background
-                _ = try await cliService.run(["models", "download", name])
+                _ = try await cliService.runAndCapture(["models", "download", name])
+                pollTask.cancel()
 
-                // Automatically configure the model after download
-                _ = try await cliService.run(["config", "add", name, "~/llms/\(name)/", "--port", "auto"])
-
-                // Update model as downloaded
                 await MainActor.run {
                     if let index = availableModels.firstIndex(where: { $0.name == name }) {
                         availableModels[index].isDownloaded = true
                     }
                     downloads.removeValue(forKey: name)
                 }
+
+                // Configure the model after download
+                _ = try? await cliService.runAndCapture(["config", "add", name, "~/llms/\(name)/", "--port", "auto"])
+            } catch CLIError.commandFailed(_, let exitCode, let stderr) {
+                pollTask.cancel()
+                await MainActor.run {
+                    errorMessage = friendlyDownloadError(name: name, exitCode: exitCode, stderr: stderr)
+                    downloads.removeValue(forKey: name)
+                }
             } catch {
+                pollTask.cancel()
                 await MainActor.run {
                     errorMessage = "Failed to download \(name): \(error.localizedDescription)"
                     downloads.removeValue(forKey: name)
                 }
             }
         }
+    }
+
+    private func friendlyDownloadError(name: String, exitCode: Int32, stderr: String) -> String {
+        let lower = stderr.lowercased()
+
+        if lower.contains("404") || lower.contains("entrynotfound") || lower.contains("not found") {
+            return "❌ \(name): File not found on HuggingFace. The model entry in the catalog may be incorrect or the model was removed. Try refreshing the catalog or check the HuggingFace page directly."
+        }
+        if lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") || lower.contains("gated") {
+            return "🔒 \(name): This model requires authentication. Set HF_TOKEN environment variable with a HuggingFace token that has access to this model."
+        }
+        if lower.contains("connection") || lower.contains("timeout") || lower.contains("network") {
+            return "🌐 \(name): Network error. Check your internet connection and try again."
+        }
+        if lower.contains("no space") || lower.contains("disk full") {
+            return "💾 \(name): Not enough disk space. Free up space and try again."
+        }
+        if lower.contains("permission") || lower.contains("denied") {
+            return "🚫 \(name): Permission denied. Check write access to ~/llms/."
+        }
+
+        // Generic with last line of stderr as hint
+        let lastLine = stderr.split(separator: "\n").last.map(String.init) ?? ""
+        let detail = lastLine.isEmpty ? "" : "\nDetail: \(lastLine.prefix(200))"
+        return "Failed to download \(name) (exit \(exitCode))\(detail)"
+    }
+
+    private func directorySize(path: String) -> Int64 {
+        let url = URL(fileURLWithPath: path)
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+               values.isRegularFile == true {
+                total += Int64(values.fileSize ?? 0)
+            }
+        }
+        return total
     }
 
     func configureDownloadedModel(name: String) {
@@ -555,6 +654,15 @@ struct ModelDownloaderView: View {
     }
 }
 
+// Helper to format ETA from seconds
+private func formatETA(_ seconds: Int) -> String {
+    if seconds < 60 { return "\(seconds)s" }
+    if seconds < 3600 { return "\(seconds / 60)m \(seconds % 60)s" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    return "\(h)h \(m)m"
+}
+
 struct ModelCard: View {
     let model: ModelInfo
     @ObservedObject var viewModel: DownloadViewModel
@@ -661,7 +769,10 @@ struct ModelCard: View {
                 } else if let progress = viewModel.downloads[model.name] {
                     // Show download progress
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 14, height: 14)
                             ProgressView(value: progress.percentComplete)
                                 .progressViewStyle(.linear)
                             Text("\(Int(progress.percentComplete * 100))%")
@@ -670,9 +781,33 @@ struct ModelCard: View {
                                 .frame(width: 40, alignment: .trailing)
                         }
 
-                        Text(progress.status)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        HStack {
+                            Text(progress.status)
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            Spacer()
+                            if progress.bytesDownloaded > 0 {
+                                let downloaded = ByteCountFormatter.string(fromByteCount: progress.bytesDownloaded, countStyle: .file)
+                                let total = ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file)
+                                Text("\(downloaded) / \(total)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if progress.speedMBps > 0.1 {
+                            HStack {
+                                Text(String(format: "%.1f MB/s", progress.speedMBps))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                if progress.etaSeconds > 0 {
+                                    Text("ETA: \(formatETA(progress.etaSeconds))")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
                     }
                 } else {
                     Button("Download") {

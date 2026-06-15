@@ -943,7 +943,7 @@ CODING_MODELS = {
     },
     "diffusiongemma-26b": {
         "repo_id": "unsloth/diffusiongemma-26B-A4B-it-GGUF",
-        "filename": "diffusiongemma-26b-a4b-it-Q4_K_M.gguf",
+        "filename": "diffusiongemma-26B-A4B-it-Q4_K_M.gguf",
         "description": "DiffusionGemma 26B MoE - Image generation + text",
         "size_gb": 16,
         "ram_gb": 20,
