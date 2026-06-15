@@ -558,6 +558,7 @@ final class StatusViewModel: ObservableObject {
     private var windowDelegates: [String: ChatWindowDelegate] = [:]
     private var monitoredModels: Set<String> = []
     private var modelDownloaderWindow: NSWindow?
+    private var modelDownloaderDelegate: ModelDownloaderWindowDelegate?
     private var preferencesWindow: NSWindow?
     private let preferences = PreferencesManager.shared
     private var cancellables = Set<AnyCancellable>()
@@ -1042,10 +1043,10 @@ final class StatusViewModel: ObservableObject {
         modelDownloaderWindow = window
 
         // Set up window delegate to clean up when closed
-        let delegate = ModelDownloaderWindowDelegate { [weak self] in
+        modelDownloaderDelegate = ModelDownloaderWindowDelegate { [weak self] in
             self?.modelDownloaderWindow = nil
         }
-        window.delegate = delegate
+        window.delegate = modelDownloaderDelegate
     }
 
     // MARK: - Enhanced Health Status Methods
