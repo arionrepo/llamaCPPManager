@@ -225,59 +225,107 @@ CODING_MODELS = {
         "use_case": "Fast code generation with lower resources",
         "version": "1.0-q4"
     },
-    "yi-34b-q8": {
-        "repo_id": "TheBloke/Yi-34B-Chat-GGUF",
-        "filename": "yi-34b-chat.Q8_0.gguf",
-        "description": "Yi 34B Q8 - 01.AI's powerful Chinese model",
-        "size_gb": 37,
-        "ram_gb": 42,
-        "use_case": "Chinese/English bilingual, complex reasoning",
-        "version": "1.0-q8"
-    },
-    "yi-34b-q4": {
-        "repo_id": "TheBloke/Yi-34B-Chat-GGUF",
-        "filename": "yi-34b-chat.Q4_K_M.gguf",
-        "description": "Yi 34B Q4 - Accessible Chinese model",
-        "size_gb": 20,
-        "ram_gb": 25,
-        "use_case": "Bilingual with lower RAM requirements",
-        "version": "1.0-q4"
-    },
-    "chatglm3-6b-q8": {
-        "repo_id": "TheBloke/chatglm3-6B-GGUF",
-        "filename": "chatglm3-6b.Q8_0.gguf",
-        "description": "ChatGLM3 6B Q8 - Tsinghua's bilingual model",
-        "size_gb": 6.5,
-        "ram_gb": 9,
-        "use_case": "Chinese/English chat, efficient bilingual tasks",
+
+    # === QWEN 3 FAMILY (Latest Generation) ===
+    "qwen3-32b-q8": {
+        "repo_id": "Qwen/Qwen3-32B-GGUF",
+        "filename": "qwen3-32b-instruct-q8_0.gguf",
+        "description": "Qwen 3 32B Q8 - Latest generation, highest quality",
+        "size_gb": 35,
+        "ram_gb": 40,
+        "use_case": "Complex reasoning, code generation, large documents",
         "version": "3.0-q8"
     },
-    "chatglm3-6b-q4": {
-        "repo_id": "TheBloke/chatglm3-6B-GGUF",
-        "filename": "chatglm3-6b.Q4_K_M.gguf",
-        "description": "ChatGLM3 6B Q4 - Lightweight bilingual",
-        "size_gb": 3.5,
-        "ram_gb": 6,
-        "use_case": "Fast bilingual chat with low resources",
+    "qwen3-32b-q4": {
+        "repo_id": "Qwen/Qwen3-32B-GGUF",
+        "filename": "qwen3-32b-instruct-q4_k_m.gguf",
+        "description": "Qwen 3 32B Q4 - Balanced quality/size",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Fast reasoning with lower resources",
         "version": "3.0-q4"
     },
-    "yi-9b-q8": {
-        "repo_id": "TheBloke/Yi-9B-GGUF",
-        "filename": "yi-9b.Q8_0.gguf",
-        "description": "Yi 9B Q8 - Efficient Chinese model",
-        "size_gb": 9.5,
-        "ram_gb": 13,
-        "use_case": "Bilingual general tasks, good quality",
-        "version": "1.0-q8"
+    "qwen3-14b-q8": {
+        "repo_id": "Qwen/Qwen3-14B-GGUF",
+        "filename": "qwen3-14b-instruct-q8_0.gguf",
+        "description": "Qwen 3 14B Q8 - Mid-range capability",
+        "size_gb": 16,
+        "ram_gb": 20,
+        "use_case": "Code review, reasoning, documentation",
+        "version": "3.0-q8"
     },
-    "yi-9b-q4": {
-        "repo_id": "TheBloke/Yi-9B-GGUF",
-        "filename": "yi-9b.Q4_K_M.gguf",
-        "description": "Yi 9B Q4 - Fast bilingual",
-        "size_gb": 5.5,
+    "qwen3-14b-q4": {
+        "repo_id": "Qwen/Qwen3-14B-GGUF",
+        "filename": "qwen3-14b-instruct-q4_k_m.gguf",
+        "description": "Qwen 3 14B Q4 - Efficient mid-range",
+        "size_gb": 8.5,
+        "ram_gb": 12,
+        "use_case": "Fast code review with lower resources",
+        "version": "3.0-q4"
+    },
+    "qwen3-8b-q8": {
+        "repo_id": "Qwen/Qwen3-8B-GGUF",
+        "filename": "qwen3-8b-instruct-q8_0.gguf",
+        "description": "Qwen 3 8B Q8 - Capable compact model",
+        "size_gb": 9.2,
+        "ram_gb": 12,
+        "use_case": "General coding, chat, quick reasoning",
+        "version": "3.0-q8"
+    },
+    "qwen3-8b-q4": {
+        "repo_id": "Qwen/Qwen3-8B-GGUF",
+        "filename": "qwen3-8b-instruct-q4_k_m.gguf",
+        "description": "Qwen 3 8B Q4 - Lightweight capable",
+        "size_gb": 5.0,
         "ram_gb": 8,
-        "use_case": "Fast bilingual tasks, lower resources",
-        "version": "1.0-q4"
+        "use_case": "Fast tasks, edge devices",
+        "version": "3.0-q4"
+    },
+    "qwen3-4b": {
+        "repo_id": "Qwen/Qwen3-4B-GGUF",
+        "filename": "qwen3-4b-instruct-q4_k_m.gguf",
+        "description": "Qwen 3 4B - Ultra-compact",
+        "size_gb": 2.5,
+        "ram_gb": 4,
+        "use_case": "Mobile, edge inference, IoT devices",
+        "version": "3.0"
+    },
+    "qwen3-1.7b": {
+        "repo_id": "Qwen/Qwen3-1.7B-GGUF",
+        "filename": "qwen3-1.7b-instruct-q8_0.gguf",
+        "description": "Qwen 3 1.7B - Tiny but capable",
+        "size_gb": 1.83,
+        "ram_gb": 3,
+        "use_case": "Lightweight tasks, extreme resource constraints",
+        "version": "3.0"
+    },
+    "qwen3-0.6b": {
+        "repo_id": "Qwen/Qwen3-0.6B-GGUF",
+        "filename": "qwen3-0.6b-instruct-q8_0.gguf",
+        "description": "Qwen 3 0.6B - Minimal footprint",
+        "size_gb": 0.639,
+        "ram_gb": 1.5,
+        "use_case": "Autocomplete, ultra-low resource devices",
+        "version": "3.0"
+    },
+    "qwen3.5-27b": {
+        "repo_id": "unsloth/Qwen3.5-27B-GGUF",
+        "filename": "Qwen3.5-27B-Instruct-Q8_0.gguf",
+        "description": "Qwen 3.5 27B - Advanced mid-range model",
+        "size_gb": 29,
+        "ram_gb": 34,
+        "use_case": "Complex analysis, advanced reasoning",
+        "version": "3.5"
+    },
+    "qwen3.6-35b-moe": {
+        "repo_id": "unsloth/Qwen3.6-35B-A3B-GGUF",
+        "filename": "Qwen3.6-35B-A3B-Instruct-Q4_K_M.gguf",
+        "description": "Qwen 3.6 35B MoE - Latest MoE architecture",
+        "size_gb": 21,
+        "ram_gb": 28,
+        "use_case": "Efficient large-model inference, expert selection",
+        "version": "3.6",
+        "note": "Mixture of Experts (MoE) - specialized routing"
     },
 
     # === MEDIUM CODING MODELS (10-25GB) ===
@@ -335,15 +383,6 @@ CODING_MODELS = {
         "use_case": "Quick debugging, code explanation, documentation",
         "version": "2.0"
     },
-    "codellama-13b": {
-        "repo_id": "TheBloke/CodeLlama-13B-Instruct-GGUF",
-        "filename": "codellama-13b-instruct.Q8_0.gguf",
-        "description": "CodeLlama 13B - Meta's specialized coding model",
-        "size_gb": 14,
-        "ram_gb": 18,
-        "use_case": "Code completion, debugging, explanation",
-        "version": "1.0"
-    },
     "starcoder2-15b": {
         "repo_id": "bartowski/starcoder2-15b-instruct-v0.1-GGUF",
         "filename": "starcoder2-15b-instruct-v0.1-Q8_0.gguf",
@@ -355,32 +394,32 @@ CODING_MODELS = {
     },
 
     # === VERY LARGE MODELS (70B+) ===
-    "llama-3.1-70b-q8": {
-        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-70B-Instruct-Q8_0.gguf",
-        "description": "Llama 3.1 70B Q8 - Highest quality",
-        "size_gb": 74,
-        "ram_gb": 80,
+    "llama-3.3-70b-q8": {
+        "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
+        "filename": "Llama-3.3-70B-Instruct-Q8_0.gguf",
+        "description": "Llama 3.3 70B Q8 - Latest 70B, highest quality",
+        "size_gb": 75,
+        "ram_gb": 82,
         "use_case": "Maximum quality reasoning, large documents",
-        "version": "3.1-q8"
+        "version": "3.3-q8"
     },
-    "llama-3.1-70b-q6": {
-        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-70B-Instruct-Q6_K.gguf",
-        "description": "Llama 3.1 70B Q6 - Good quality, manageable size",
-        "size_gb": 57,
-        "ram_gb": 62,
+    "llama-3.3-70b-q6": {
+        "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
+        "filename": "Llama-3.3-70B-Instruct-Q6_K.gguf",
+        "description": "Llama 3.3 70B Q6 - Good quality, manageable size",
+        "size_gb": 58,
+        "ram_gb": 64,
         "use_case": "Complex reasoning with balanced resources",
-        "version": "3.1-q6"
+        "version": "3.3-q6"
     },
-    "llama-3.1-70b-q4": {
-        "repo_id": "bartowski/Meta-Llama-3.1-70B-Instruct-GGUF",
-        "filename": "Meta-Llama-3.1-70B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.1 70B Q4 - Most accessible 70B",
-        "size_gb": 40,
-        "ram_gb": 45,
+    "llama-3.3-70b-q4": {
+        "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
+        "filename": "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
+        "description": "Llama 3.3 70B Q4 - Most accessible 70B model",
+        "size_gb": 41,
+        "ram_gb": 48,
         "use_case": "Complex reasoning with lower RAM requirements",
-        "version": "3.1-q4"
+        "version": "3.3-q4"
     },
     "qwen-2.5-72b-q8": {
         "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
@@ -532,24 +571,6 @@ CODING_MODELS = {
         "use_case": "Lightweight tasks, edge devices",
         "version": "2.0"
     },
-    "tinyllama-1.1b": {
-        "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-        "filename": "tinyllama-1.1b-chat-v1.0.Q8_0.gguf",
-        "description": "TinyLlama 1.1B - Smallest useful model",
-        "size_gb": 1.2,
-        "ram_gb": 2,
-        "use_case": "Extreme low resource, testing",
-        "version": "1.0"
-    },
-    "codellama-7b": {
-        "repo_id": "TheBloke/CodeLlama-7B-Instruct-GGUF",
-        "filename": "codellama-7b-instruct.Q8_0.gguf",
-        "description": "CodeLlama 7B - Compact Meta coding model",
-        "size_gb": 7.5,
-        "ram_gb": 10,
-        "use_case": "Code completion, basic debugging",
-        "version": "1.0"
-    },
     "starcoder2-7b": {
         "repo_id": "bartowski/starcoder2-7b-GGUF",
         "filename": "starcoder2-7b-Q8_0.gguf",
@@ -588,17 +609,71 @@ CODING_MODELS = {
         "use_case": "Compliance queries, report generation, document analysis",
         "version": "3.1"
     },
-    "mistral-7b": {
-        "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
-        "filename": "mistral-7b-instruct-v0.3.Q8_0.gguf",
-        "description": "Mistral 7B v0.3 - Efficient and capable",
-        "size_gb": 8,
-        "ram_gb": 11,
-        "use_case": "General tasks, coding, analysis",
-        "version": "0.3"
+
+    # === GEMMA 4 FAMILY (Latest, requires recent llama.cpp) ===
+    "gemma-4-31b": {
+        "repo_id": "unsloth/gemma-4-31B-it-GGUF",
+        "filename": "gemma-4-31b-it-Q8_0.gguf",
+        "description": "Gemma 4 31B Dense - Latest Google model",
+        "size_gb": 33,
+        "ram_gb": 40,
+        "use_case": "Advanced reasoning, multilingual analysis",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture support"
+    },
+    "gemma-4-26b-moe": {
+        "repo_id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+        "filename": "gemma-4-26b-a4b-it-Q4_K_M.gguf",
+        "description": "Gemma 4 26B MoE - Mixture of Experts model",
+        "size_gb": 16.8,
+        "ram_gb": 22,
+        "use_case": "Efficient large-model inference with expert routing",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture and MoE support",
+        "note": "Mixture of Experts (MoE) - selective expert activation"
+    },
+    "gemma-4-26b-moe-q8": {
+        "repo_id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+        "filename": "gemma-4-26b-a4b-it-Q8_0.gguf",
+        "description": "Gemma 4 26B MoE Q8 - Highest quality MoE",
+        "size_gb": 26.9,
+        "ram_gb": 32,
+        "use_case": "Maximum quality expert model inference",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture and MoE support"
+    },
+    "gemma-4-12b-q8": {
+        "repo_id": "ggml-org/gemma-4-12B-it-GGUF",
+        "filename": "gemma-4-12b-it-Q8_0.gguf",
+        "description": "Gemma 4 12B Q8 - Compact Google model",
+        "size_gb": 12.7,
+        "ram_gb": 16,
+        "use_case": "General tasks, instruction following, analysis",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture support"
+    },
+    "gemma-4-12b-q4": {
+        "repo_id": "ggml-org/gemma-4-12B-it-GGUF",
+        "filename": "gemma-4-12b-it-Q4_K_M.gguf",
+        "description": "Gemma 4 12B Q4 - Efficient 12B model",
+        "size_gb": 7.38,
+        "ram_gb": 10,
+        "use_case": "Lightweight reasoning with good quality",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture support"
+    },
+    "gemma-4-edge-4b": {
+        "repo_id": "ggml-org/gemma-4-E4B-it-GGUF",
+        "filename": "gemma-4-e4b-it-Q4_K_M.gguf",
+        "description": "Gemma 4 Edge 4B - Ultra-compact model",
+        "size_gb": 5.34,
+        "ram_gb": 7,
+        "use_case": "Edge devices, mobile, resource-constrained inference",
+        "version": "4.0",
+        "requires": "Recent llama.cpp with gemma4_unified architecture support"
     },
 
-    # === GOOGLE GEMMA MODELS ===
+    # === GOOGLE GEMMA 2 MODELS ===
     "gemma-2-27b": {
         "repo_id": "google/gemma-2-27b-it-GGUF",
         "filename": "gemma-2-27b-it-Q8_0.gguf",
@@ -645,6 +720,45 @@ CODING_MODELS = {
         "version": "2.0"
     },
 
+    # === MISTRAL MODELS ===
+    "mistral-small-3.2-24b": {
+        "repo_id": "bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF",
+        "filename": "mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q8_0.gguf",
+        "description": "Mistral Small 3.2 24B - Multimodal, latest Mistral",
+        "size_gb": 25,
+        "ram_gb": 30,
+        "use_case": "Multimodal tasks, image + text analysis, reasoning",
+        "version": "3.2",
+        "note": "Multimodal support (text + images)"
+    },
+    "mistral-small-3.2-24b-q4": {
+        "repo_id": "bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF",
+        "filename": "mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf",
+        "description": "Mistral Small 3.2 24B Q4 - Efficient multimodal",
+        "size_gb": 14.3,
+        "ram_gb": 18,
+        "use_case": "Fast multimodal inference with lower memory",
+        "version": "3.2"
+    },
+    "mistral-ministral-14b": {
+        "repo_id": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
+        "filename": "Ministral-3-14B-Instruct-2512-Q8_0.gguf",
+        "description": "Mistral Ministral 14B - Official compact model",
+        "size_gb": 14,
+        "ram_gb": 18,
+        "use_case": "General purpose, coding, reasoning",
+        "version": "3.0"
+    },
+    "mistral-ministral-3b": {
+        "repo_id": "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+        "filename": "Ministral-3-3B-Instruct-2512-Q8_0.gguf",
+        "description": "Mistral Ministral 3B - Ultra-compact official",
+        "size_gb": 3.5,
+        "ram_gb": 5,
+        "use_case": "Lightweight tasks, mobile devices",
+        "version": "3.0"
+    },
+
     # === AGENTIC & TOOL-CALLING MODELS ===
     "hermes-3-llama-8b": {
         "repo_id": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF",
@@ -663,6 +777,61 @@ CODING_MODELS = {
         "ram_gb": 11,
         "use_case": "Function calling, tool use, API integration",
         "version": "3.2"
+    },
+
+    # === REASONING MODELS ===
+    "qwen-qwq-32b": {
+        "repo_id": "bartowski/Qwen_QwQ-32B-GGUF",
+        "filename": "Qwen_QwQ-32B-Q8_0.gguf",
+        "description": "Qwen QwQ 32B - Advanced reasoning model",
+        "size_gb": 35,
+        "ram_gb": 40,
+        "use_case": "Complex reasoning, chain-of-thought, problem solving",
+        "version": "1.0"
+    },
+    "qwen-qwq-32b-q4": {
+        "repo_id": "bartowski/Qwen_QwQ-32B-GGUF",
+        "filename": "Qwen_QwQ-32B-Q4_K_M.gguf",
+        "description": "Qwen QwQ 32B Q4 - Efficient reasoning",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Fast reasoning with lower resources",
+        "version": "1.0"
+    },
+
+    # === VERY LARGE SPECIALIZED MODELS (requires high-end hardware) ===
+    "kimi-k2.6-moe": {
+        "repo_id": "bartowski/moonshotai_Kimi-K2.6-GGUF",
+        "filename": "moonshotai_Kimi-K2.6-Q4_K_M.gguf",
+        "description": "Kimi K2.6 1T MoE - Ultra-large Mixture of Experts",
+        "size_gb": 585,
+        "ram_gb": 640,
+        "use_case": "Research, extreme scale reasoning (REQUIRES DEDICATED SERVER)",
+        "version": "1.0",
+        "requires": "Dedicated server with 640GB+ RAM, network storage recommended",
+        "note": "1 trillion parameter model - experimental, extreme hardware demands"
+    },
+    "minimax-m3-moe": {
+        "repo_id": "unsloth/MiniMax-M3-GGUF",
+        "filename": "MiniMax-M3-Q4_K_M.gguf",
+        "description": "MiniMax M3 428B MoE - Extremely large model",
+        "size_gb": 256,
+        "ram_gb": 300,
+        "use_case": "Large-scale reasoning, research (EXPERIMENTAL)",
+        "version": "1.0",
+        "requires": "Custom llama.cpp build (PR #24523), 300GB+ RAM",
+        "note": "Experimental - requires custom llama.cpp fork"
+    },
+    "diffusiongemma-26b": {
+        "repo_id": "unsloth/diffusiongemma-26B-A4B-it-GGUF",
+        "filename": "diffusiongemma-26b-a4b-it-Q4_K_M.gguf",
+        "description": "DiffusionGemma 26B MoE - Image generation + text",
+        "size_gb": 16,
+        "ram_gb": 20,
+        "use_case": "Multimodal generation (text + image synthesis)",
+        "version": "1.0",
+        "requires": "llama-diffusion-cli binary (not standard llama-server)",
+        "note": "Specialized binary required - see documentation"
     },
 
     # === REASONING & ANALYSIS MODELS ===
@@ -684,23 +853,32 @@ CODING_MODELS = {
         "use_case": "Analysis, chat, reasoning tasks",
         "version": "2.5"
     },
-    "phi-3-medium": {
-        "repo_id": "microsoft/Phi-3-medium-128k-instruct-gguf",
-        "filename": "Phi-3-medium-128k-instruct-Q8_0.gguf",
-        "description": "Phi-3 Medium - Microsoft's efficient model",
-        "size_gb": 14,
-        "ram_gb": 18,
-        "use_case": "Long context tasks, document analysis",
-        "version": "3.0"
+    "phi-4-14b": {
+        "repo_id": "microsoft/phi-4-gguf",
+        "filename": "phi-4-Q8_0.gguf",
+        "description": "Phi-4 14B Q8 - Microsoft's latest efficient model",
+        "size_gb": 15.6,
+        "ram_gb": 20,
+        "use_case": "High-quality reasoning, long context, edge deployment",
+        "version": "4.0"
     },
-    "phi-3-mini": {
-        "repo_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
-        "filename": "Phi-3-mini-4k-instruct-q4.gguf",
-        "description": "Phi-3 Mini - Tiny but capable",
-        "size_gb": 2.5,
-        "ram_gb": 4,
-        "use_case": "Edge devices, quick tasks",
-        "version": "3.0"
+    "phi-4-14b-q4": {
+        "repo_id": "microsoft/phi-4-gguf",
+        "filename": "phi-4-Q4_K_M.gguf",
+        "description": "Phi-4 14B Q4 - Compact Phi-4 for lower resources",
+        "size_gb": 9,
+        "ram_gb": 12,
+        "use_case": "Balanced quality/size for edge devices",
+        "version": "4.0"
+    },
+    "phi-4-mini-3.8b": {
+        "repo_id": "bartowski/microsoft_Phi-4-mini-instruct-GGUF",
+        "filename": "microsoft_Phi-4-mini-instruct-Q8_0.gguf",
+        "description": "Phi-4 Mini 3.8B - Ultra-efficient Phi-4",
+        "size_gb": 4.0,
+        "ram_gb": 6,
+        "use_case": "Quick tasks, mobile devices, low-resource inference",
+        "version": "4.0"
     },
 
     # === SPECIALIZED MODELS ===
@@ -726,6 +904,127 @@ CODING_MODELS = {
 
 # MLX models optimized for Apple Silicon (M1/M2/M3/M4)
 MLX_MODELS = {
+    # === QWEN3 MLX MODELS (Latest) ===
+    "mlx-qwen3-32b": {
+        "repo_id": "mlx-community/Qwen3-32B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 3 32B (MLX 4-bit) - Latest generation for Mac",
+        "size_gb": 18,
+        "ram_gb": 22,
+        "use_case": "Complex reasoning on Apple Silicon",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon (M1/M2/M3/M4+)"
+    },
+    "mlx-qwen3-8b": {
+        "repo_id": "mlx-community/Qwen3-8B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 3 8B (MLX 4-bit) - Capable compact",
+        "size_gb": 4.5,
+        "ram_gb": 6,
+        "use_case": "General coding on Apple Silicon",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-qwen3-4b": {
+        "repo_id": "mlx-community/Qwen3-4B-Instruct-4bit",
+        "filename": None,
+        "description": "Qwen 3 4B (MLX 4-bit) - Ultra-compact",
+        "size_gb": 2.3,
+        "ram_gb": 4,
+        "use_case": "Mobile, edge inference on Mac",
+        "version": "3.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-qwen3.6-35b-moe": {
+        "repo_id": "unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit",
+        "filename": None,
+        "description": "Qwen 3.6 35B MoE (MLX) - Advanced MoE on Mac",
+        "size_gb": 19,
+        "ram_gb": 24,
+        "use_case": "Efficient large-model inference on Apple Silicon",
+        "version": "3.6",
+        "format": "mlx",
+        "requires": "Apple Silicon (M2 Pro/Max recommended)",
+        "note": "Mixture of Experts with Dynamic quantization (unsloth)"
+    },
+
+    # === GEMMA 4 MLX MODELS ===
+    "mlx-gemma4-31b": {
+        "repo_id": "mlx-community/gemma-4-31b-it-4bit",
+        "filename": None,
+        "description": "Gemma 4 31B (MLX 4-bit) - Latest Google for Mac",
+        "size_gb": 16,
+        "ram_gb": 20,
+        "use_case": "Advanced reasoning on Apple Silicon",
+        "version": "4.0",
+        "format": "mlx",
+        "requires": "Apple Silicon (M2 Pro/Max recommended)"
+    },
+    "mlx-gemma4-26b-moe": {
+        "repo_id": "mlx-community/gemma-4-26B-A4B-it-4bit",
+        "filename": None,
+        "description": "Gemma 4 26B MoE (MLX 4-bit) - Efficient MoE for Mac",
+        "size_gb": 13,
+        "ram_gb": 16,
+        "use_case": "Expert-routed inference on Apple Silicon",
+        "version": "4.0",
+        "format": "mlx",
+        "requires": "Apple Silicon",
+        "note": "Mixture of Experts"
+    },
+    "mlx-gemma4-12b": {
+        "repo_id": "mlx-community/gemma-4-12b-it-4bit",
+        "filename": None,
+        "description": "Gemma 4 12B (MLX 4-bit) - Compact latest Google",
+        "size_gb": 6.5,
+        "ram_gb": 8,
+        "use_case": "General tasks on Apple Silicon",
+        "version": "4.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+
+    # === MISTRAL & PHI MLX MODELS ===
+    "mlx-phi4-14b": {
+        "repo_id": "mlx-community/phi-4-4bit",
+        "filename": None,
+        "description": "Phi-4 14B (MLX 4-bit) - Latest Microsoft for Mac",
+        "size_gb": 8,
+        "ram_gb": 10,
+        "use_case": "Efficient reasoning on Apple Silicon",
+        "version": "4.0",
+        "format": "mlx",
+        "requires": "Apple Silicon"
+    },
+    "mlx-mistral-small-3.2-24b": {
+        "repo_id": "mlx-community/Mistral-Small-3.1-24B-Instruct-2503-4bit",
+        "filename": None,
+        "description": "Mistral Small 3.2 24B (MLX 4-bit) - Latest Mistral",
+        "size_gb": 13,
+        "ram_gb": 16,
+        "use_case": "Advanced tasks on Apple Silicon",
+        "version": "3.2",
+        "format": "mlx",
+        "requires": "Apple Silicon",
+        "note": "Multimodal support"
+    },
+
+    # === LLAMA 3.3 MLX MODELS ===
+    "mlx-llama-3.3-70b": {
+        "repo_id": "mlx-community/Llama-3.3-70B-Instruct-4bit",
+        "filename": None,
+        "description": "Llama 3.3 70B (MLX 4-bit) - Latest 70B for Mac",
+        "size_gb": 38,
+        "ram_gb": 44,
+        "use_case": "Complex reasoning on Apple Silicon",
+        "version": "3.3",
+        "format": "mlx",
+        "requires": "Apple Silicon (64GB+ RAM recommended)"
+    },
+
     # === LARGE MLX CODING MODELS ===
     "mlx-qwen-coder-32b": {
         "repo_id": "mlx-community/Qwen2.5-Coder-32B-Instruct-4bit",
