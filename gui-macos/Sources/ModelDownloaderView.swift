@@ -73,6 +73,19 @@ struct DownloadProgress: Identifiable {
     }
 }
 
+// Wrapper for catalog response with metadata
+struct CatalogResponse: Codable {
+    let models: [ModelInfo]
+    let catalog_fetched_at: String?
+    let catalog_source: String?
+
+    enum CodingKeys: String, CodingKey {
+        case models
+        case catalog_fetched_at = "catalog_fetched_at"
+        case catalog_source = "catalog_source"
+    }
+}
+
 final class DownloadViewModel: ObservableObject {
     @Published var availableModels: [ModelInfo] = []
     @Published var downloads: [String: DownloadProgress] = [:]
@@ -81,6 +94,8 @@ final class DownloadViewModel: ObservableObject {
     @Published var filterUseCase: String = "All Use Cases"
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    @Published var catalogFetchedAt: String?
+    @Published var catalogSource: String?
 
     private let cliService: CLIService
 
@@ -92,20 +107,37 @@ final class DownloadViewModel: ObservableObject {
         self.cliService = cliService
     }
 
-    func fetchAvailableModels() {
+    func fetchAvailableModels(refresh: Bool = false) {
         isLoading = true
         errorMessage = nil
 
         Task { @MainActor in
             do {
-                let output = try await cliService.runAndCapture(["models", "list", "--available", "--json"])
+                var args = ["models", "list", "--available", "--json"]
+                if refresh {
+                    args.append("--refresh")
+                }
+
+                let output = try await cliService.runAndCapture(args)
                 let data = output.data(using: .utf8) ?? Data()
                 do {
-                    var models = try JSONDecoder().decode([ModelInfo].self, from: data)
-                    for i in 0..<models.count {
-                        models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                    // Try to decode as new format first (with metadata)
+                    if let catalogResponse = try? JSONDecoder().decode(CatalogResponse.self, from: data) {
+                        var models = catalogResponse.models
+                        for i in 0..<models.count {
+                            models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                        }
+                        self.availableModels = models
+                        self.catalogFetchedAt = catalogResponse.catalog_fetched_at
+                        self.catalogSource = catalogResponse.catalog_source
+                    } else {
+                        // Fallback to old format (array only)
+                        var models = try JSONDecoder().decode([ModelInfo].self, from: data)
+                        for i in 0..<models.count {
+                            models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                        }
+                        self.availableModels = models
                     }
-                    self.availableModels = models
                 } catch {
                     throw CLIError.parseError(cmd: "models list --available --json", raw: output)
                 }
@@ -328,6 +360,18 @@ struct ModelDownloaderView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
+                if viewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.75)
+                }
+                Button(action: {
+                    viewModel.fetchAvailableModels(refresh: true)
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh catalog from HuggingFace")
+                .disabled(viewModel.isLoading)
                 Button("Close") {
                     dismiss()
                 }
@@ -364,9 +408,23 @@ struct ModelDownloaderView: View {
 
                 Spacer()
 
-                Text("\(viewModel.filteredModels.count) models")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(viewModel.filteredModels.count) models")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+
+                    if let fetchedAt = viewModel.catalogFetchedAt {
+                        Text("Updated: \(formatRelativeTime(fetchedAt))")
+                            .foregroundColor(.secondary)
+                            .font(.caption2)
+                    }
+
+                    if let source = viewModel.catalogSource {
+                        Text("Source: \(source.uppercased())")
+                            .foregroundColor(.secondary)
+                            .font(.caption2)
+                    }
+                }
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -582,5 +640,28 @@ struct ModelCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
         )
+    }
+
+    private func formatRelativeTime(_ isoTimestamp: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: isoTimestamp) else {
+            return "unknown"
+        }
+
+        let now = Date()
+        let seconds = now.timeIntervalSince(date)
+
+        if seconds < 60 {
+            return "just now"
+        } else if seconds < 3600 {
+            let minutes = Int(seconds / 60)
+            return minutes == 1 ? "1 minute ago" : "\(minutes) minutes ago"
+        } else if seconds < 86400 {
+            let hours = Int(seconds / 3600)
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        } else {
+            let days = Int(seconds / 86400)
+            return days == 1 ? "1 day ago" : "\(days) days ago"
+        }
     }
 }
