@@ -3,6 +3,7 @@ import os
 import shlex
 import subprocess
 import sys
+import traceback
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
@@ -773,6 +774,8 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("--version", action="version", version=f"llamacpp-manager {__version__}")
+    p.add_argument("-v", "--verbose", action="store_true", default=False,
+                   help="Show full tracebacks on errors")
     p.add_argument("--config-dir", help="Override configuration directory (e.g., ~/my-llama-config)")
     p.add_argument("--log-dir", help="Override logs directory (e.g., ~/my-llama-logs)")
     sub = p.add_subparsers(dest="command", required=True, help="Available commands")
@@ -1483,7 +1486,9 @@ def cmd_models(args: argparse.Namespace) -> int:
 
             return 0
         except Exception as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"error ({type(e).__name__}): {e}", file=sys.stderr)
+            if getattr(args, "verbose", False):
+                traceback.print_exc(file=sys.stderr)
             return 2
 
     if sub == "download":
@@ -1532,13 +1537,17 @@ def cmd_models(args: argparse.Namespace) -> int:
             return 0
 
         except ImportError as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"error (ImportError): {e}", file=sys.stderr)
+            if getattr(args, "verbose", False):
+                traceback.print_exc(file=sys.stderr)
             print()
             print("Install huggingface_hub with:")
             print("  pip install huggingface_hub")
             return 2
         except Exception as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"error ({type(e).__name__}): {e}", file=sys.stderr)
+            if getattr(args, "verbose", False):
+                traceback.print_exc(file=sys.stderr)
             return 2
 
     if sub == "check-updates":
@@ -1569,7 +1578,9 @@ def cmd_models(args: argparse.Namespace) -> int:
 
             return 0
         except Exception as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"error ({type(e).__name__}): {e}", file=sys.stderr)
+            if getattr(args, "verbose", False):
+                traceback.print_exc(file=sys.stderr)
             return 2
 
     if sub == "info":
@@ -1613,7 +1624,9 @@ def cmd_models(args: argparse.Namespace) -> int:
             return 0
 
         except Exception as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"error ({type(e).__name__}): {e}", file=sys.stderr)
+            if getattr(args, "verbose", False):
+                traceback.print_exc(file=sys.stderr)
             return 2
 
     print("unknown models subcommand", file=sys.stderr)
@@ -1687,6 +1700,17 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         # Get startup mode from config (basic/tools/performance/extended)
         startup_mode = m.get("mode", "basic")
 
+        # Infer format from model path
+        model_path = str(m.get("model_path", "")).lower()
+        if ".mlx" in model_path:
+            format_type = "mlx"
+        elif ".gguf" in model_path:
+            format_type = "gguf"
+        elif "moe" in model_path:
+            format_type = "moe"
+        else:
+            format_type = "unknown"
+
         entry = {
             "name": name,
             "pid": pid,
@@ -1697,6 +1721,7 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "http_status": health.get("http_status"),
             "version": health.get("version"),
             "mode": startup_mode,  # Startup mode from config
+            "format": format_type,  # Model format: gguf, mlx, moe
             "process_source": process_source,  # How process was started
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),  # Enhanced health state

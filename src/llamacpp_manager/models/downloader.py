@@ -102,7 +102,21 @@ class ModelDownloader:
             return downloaded_path
 
         except Exception as e:
-            raise RuntimeError(f"Failed to download model: {e}")
+            err_type = type(e).__name__
+            err_msg = str(e)
+
+            if "401" in err_msg or "403" in err_msg or "authentication" in err_msg.lower():
+                hint = " (auth error — run `huggingface-cli login` if repo is gated)"
+            elif "404" in err_msg or "not found" in err_msg.lower() or "RepositoryNotFound" in err_type or "EntryNotFound" in err_type:
+                hint = f" (not found — verify repo_id='{repo_id}' and filename='{filename}')"
+            elif "disk" in err_msg.lower() or "no space" in err_msg.lower() or "OSError" in err_type:
+                hint = " (disk error — check available space and write permissions)"
+            elif "timeout" in err_msg.lower() or "connection" in err_msg.lower():
+                hint = " (network error — check connectivity)"
+            else:
+                hint = ""
+
+            raise RuntimeError(f"Failed to download model ({err_type}): {err_msg}{hint}") from e
 
     def list_downloaded_models(self) -> Dict[str, Dict[str, Any]]:
         """

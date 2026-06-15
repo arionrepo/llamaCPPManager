@@ -145,9 +145,20 @@ struct LlamaCPPManagerApp: App {
                                     .fill(vm.healthColor(for: row))
                                     .frame(width: 10, height: 10)
 
-                                VStack(alignment: .leading) {
-                                    Text(row.name)
-                                        .font(.headline)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 8) {
+                                        Text(row.name)
+                                            .font(.headline)
+                                        if let format = row.format {
+                                            Text(format.uppercased())
+                                                .font(.caption2)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(vm.formatBadgeColor(format))
+                                                .foregroundColor(.white)
+                                                .cornerRadius(3)
+                                        }
+                                    }
                                     Text(vm.healthStatus(for: row))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -265,9 +276,20 @@ struct LlamaCPPManagerApp: App {
                                     .fill(vm.healthColor(for: row))
                                     .frame(width: 10, height: 10)
 
-                                VStack(alignment: .leading) {
-                                    Text(row.name)
-                                        .font(.headline)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 8) {
+                                        Text(row.name)
+                                            .font(.headline)
+                                        if let format = row.format {
+                                            Text(format.uppercased())
+                                                .font(.caption2)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(vm.formatBadgeColor(format))
+                                                .foregroundColor(.white)
+                                                .cornerRadius(3)
+                                        }
+                                    }
                                     Text(vm.healthStatus(for: row))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -449,12 +471,13 @@ struct StatusRow: Codable {
     let http_status: Int?
     let version: String?
     let mode: String?
+    let format: String?  // Model format: gguf, mlx, moe
     let log_path: String?
     let health_state: String?
     let uptime: String?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, pid, host, port, up, latency_ms, http_status, version, mode, log_path, health_state, uptime
+        case name, pid, host, port, up, latency_ms, http_status, version, mode, format, log_path, health_state, uptime
     }
 }
 
@@ -1057,6 +1080,19 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
+    func formatBadgeColor(_ format: String) -> Color {
+        switch format.lowercased() {
+        case "gguf":
+            return .blue
+        case "mlx":
+            return .purple
+        case "moe":
+            return .orange
+        default:
+            return .gray
+        }
+    }
+
     func isMonitored(name: String) -> Bool {
         return monitoredModels.contains(name)
     }
@@ -1548,6 +1584,26 @@ final class StatusViewModel: ObservableObject {
     }
 }
 
+// MARK: - CLI Error Types
+
+enum CLIError: Error, LocalizedError {
+    case notFound
+    case commandFailed(cmd: String, exitCode: Int32, stderr: String)
+    case parseError(cmd: String, raw: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notFound:
+            return "CLI not found. Check that llamacpp-manager is installed: pip install -e ."
+        case .commandFailed(let cmd, let exitCode, let stderr):
+            let detail = stderr.isEmpty ? "no stderr output" : stderr
+            return "Command failed (exit \(exitCode)) [\(cmd)]: \(detail)"
+        case .parseError(let cmd, let raw):
+            return "Command succeeded but returned unexpected output [\(cmd)]. Raw: \(raw.prefix(200))"
+        }
+    }
+}
+
 final class CLIService {
     // Configure preferred executable lookup or rely on PATH
     private let executableNames = [
@@ -1711,21 +1767,44 @@ final class CLIService {
     }
 
     func runAndCapture(_ args: [String]) async throws -> String {
+        let cmd = args.joined(separator: " ")
+        AppLogger.log("runAndCapture: \(cmd)", level: .debug)
+
         let url = try requireExec()
         let process = Process()
         process.executableURL = url
         process.arguments = args
-        let pipe = Pipe()
-        process.standardOutput = pipe
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError  = stderrPipe
+
         try process.run()
         process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? "[]"
+
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+        let exitCode = process.terminationStatus
+
+        if !stderr.isEmpty {
+            AppLogger.log("runAndCapture stderr [\(cmd)]: \(stderr)", level: .warning)
+        }
+        if exitCode != 0 {
+            AppLogger.log("runAndCapture failed [\(cmd)] exit=\(exitCode): \(stderr)", level: .error)
+            throw CLIError.commandFailed(cmd: cmd, exitCode: exitCode, stderr: stderr)
+        }
+
+        AppLogger.log("runAndCapture success [\(cmd)]", level: .debug)
+        return stdout
     }
 
     private func requireExec() throws -> URL {
         if let url = execURL() { return url }
-        throw NSError(domain: "CLIService", code: 1, userInfo: [NSLocalizedDescriptionKey: "llamacpp-manager not found in PATH or common locations"])
+        AppLogger.log("requireExec: CLI not found in any search path", level: .error)
+        throw CLIError.notFound
     }
 
     func configDirURL() -> URL? {
