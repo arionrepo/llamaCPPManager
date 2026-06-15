@@ -12,7 +12,7 @@ struct ModelInfo: Identifiable, Codable {
     let repoId: String
     let filename: String?  // Optional for MLX models
     let sizeGB: Double
-    let ramGB: Int
+    let ramGB: Double  // Can be int or float (e.g., 13.5 for some MLX models)
     let useCase: String
     let description: String
     let format: String?  // "gguf" or "mlx"
@@ -34,7 +34,7 @@ struct ModelInfo: Identifiable, Codable {
         self.repoId = try container.decode(String.self, forKey: .repoId)
         self.filename = try container.decodeIfPresent(String.self, forKey: .filename)
         self.sizeGB = try container.decode(Double.self, forKey: .sizeGB)
-        self.ramGB = try container.decode(Int.self, forKey: .ramGB)
+        self.ramGB = try container.decode(Double.self, forKey: .ramGB)
         self.useCase = try container.decode(String.self, forKey: .useCase)
         self.description = try container.decode(String.self, forKey: .description)
         self.format = try container.decodeIfPresent(String.self, forKey: .format)
@@ -43,7 +43,7 @@ struct ModelInfo: Identifiable, Codable {
         self.isDownloaded = false
     }
 
-    init(name: String, repoId: String, filename: String?, sizeGB: Double, ramGB: Int, useCase: String, description: String, format: String? = nil, version: String? = nil, requires: String? = nil, isDownloaded: Bool = false) {
+    init(name: String, repoId: String, filename: String?, sizeGB: Double, ramGB: Double, useCase: String, description: String, format: String? = nil, version: String? = nil, requires: String? = nil, isDownloaded: Bool = false) {
         self.id = name
         self.name = name
         self.repoId = repoId
@@ -100,19 +100,27 @@ final class DownloadViewModel: ObservableObject {
             do {
                 let output = try await cliService.runAndCapture(["models", "list", "--available", "--json"])
                 let data = output.data(using: .utf8) ?? Data()
-
-                // Parse JSON array of models
-                var models = try JSONDecoder().decode([ModelInfo].self, from: data)
-
-                // Check which models are downloaded
-                for i in 0..<models.count {
-                    models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                do {
+                    var models = try JSONDecoder().decode([ModelInfo].self, from: data)
+                    for i in 0..<models.count {
+                        models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                    }
+                    self.availableModels = models
+                } catch {
+                    throw CLIError.parseError(cmd: "models list --available --json", raw: output)
                 }
-
-                self.availableModels = models
+            } catch CLIError.notFound {
+                self.errorMessage = "CLI not found. Install with: pip install -e . in the llamaCPPManager directory."
+            } catch CLIError.commandFailed(let cmd, let exitCode, let stderr) {
+                let detail = stderr.isEmpty ? "no stderr output" : stderr
+                self.errorMessage = "Command failed (exit \(exitCode)): \(detail)"
+                AppLogger.log("fetchAvailableModels commandFailed [\(cmd)] exit=\(exitCode): \(stderr)", level: .error)
+            } catch CLIError.parseError(_, let raw) {
+                self.errorMessage = "CLI returned unexpected output. Check Console.app → com.llamacpp.manager for details. Raw: \(raw.prefix(200))"
+                AppLogger.log("fetchAvailableModels parseError — raw output: \(raw.prefix(500))", level: .error)
             } catch {
-                self.errorMessage = "Failed to fetch models: \(error.localizedDescription)"
-                self.availableModels = []
+                self.errorMessage = "Unexpected error: \(error.localizedDescription)"
+                AppLogger.log("fetchAvailableModels error: \(error)", level: .error)
             }
             isLoading = false
         }
@@ -281,20 +289,14 @@ final class DownloadViewModel: ObservableObject {
 
             let result = formatMatch && sizeMatch && useCaseMatch
 
-            // Debug logging
             if !result {
-                print("Filtered out model: \(model.name)")
-                print("  Size: \(model.sizeGB) GB (filter: \(filterSize))")
-                print("  Use Case: \(model.useCase) (filter: \(filterUseCase))")
-                print("  Size Match: \(sizeMatch)")
-                print("  Use Case Match: \(useCaseMatch)")
+                AppLogger.log("Filter excluded '\(model.name)': size=\(model.sizeGB)GB filter=\(filterSize), useCase=\(model.useCase) filter=\(filterUseCase)", level: .debug)
             }
 
             return result
         }
 
-        // Log total count of filtered models
-        print("Total filtered models: \(filtered.count)")
+        AppLogger.log("filteredModels count: \(filtered.count)", level: .debug)
 
         return filtered
     }
@@ -359,13 +361,24 @@ struct ModelDownloaderView: View {
 
             // Error message
             if let error = viewModel.errorMessage {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.orange)
                     Text(error)
                         .foregroundColor(.orange)
                         .font(.caption)
+                        .textSelection(.enabled)
+                        .lineLimit(nil)
                     Spacer()
+                    Button(action: {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(error, forType: .string)
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy error message")
                     Button("Dismiss") {
                         viewModel.errorMessage = nil
                     }
@@ -374,6 +387,7 @@ struct ModelDownloaderView: View {
                 }
                 .padding()
                 .background(Color.orange.opacity(0.1))
+                .cornerRadius(6)
             }
 
             // Models list
