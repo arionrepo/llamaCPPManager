@@ -95,7 +95,28 @@ def cmd_config(args: argparse.Namespace) -> int:
 
         # Handle automatic model path detection for downloaded models
         model_path = args.model_path
-        if model_path.startswith("~/llms/") and model_path.endswith("/"):
+        deployment_type = getattr(args, 'deployment_type', 'native')
+
+        # Auto-detect MLX models by name prefix or by presence of MLX catalog entry
+        is_mlx_by_name = args.name.startswith("mlx-")
+        if is_mlx_by_name and deployment_type == "native":
+            # Check if this is in the MLX catalog
+            try:
+                from .models.downloader import MLX_MODELS
+                if args.name in MLX_MODELS:
+                    deployment_type = "mlx"
+                    # Use the HF repo_id from the catalog for MLX models
+                    if model_path.startswith("~/llms/") or not model_path:
+                        model_path = MLX_MODELS[args.name]["repo_id"]
+                        print(f"Auto-configured as MLX model: {model_path}")
+                else:
+                    # Name starts with mlx- but not in catalog — still treat as MLX
+                    deployment_type = "mlx"
+                    print(f"Auto-detected MLX deployment from name prefix")
+            except ImportError:
+                pass
+
+        if model_path.startswith("~/llms/") and model_path.endswith("/") and deployment_type != "mlx":
             # Try to find the .gguf file in the directory
             expanded_path = Path(model_path).expanduser()
             if expanded_path.exists():
@@ -111,7 +132,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             host=args.host,
             port=port,
             mode=args.mode,
-            deployment_type=getattr(args, 'deployment_type', 'native'),
+            deployment_type=deployment_type,
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),
             autostart=args.autostart,
@@ -194,9 +215,15 @@ def cmd_config(args: argparse.Namespace) -> int:
             deployment_type=m.get("deployment_type", "native"),
         )
 
-        from .process import build_argv
-        llama_path = cfg.get("llama_server_path", "/opt/homebrew/bin/llama-server")
-        argv = build_argv(llama_path, spec)
+        # Route to correct argv builder based on deployment type
+        if spec.deployment_type == "mlx":
+            from .mlx_process import build_mlx_argv
+            mlx_python_path = cfg.get("mlx_python_path", "python3")
+            argv = build_mlx_argv(mlx_python_path, spec)
+        else:
+            from .process import build_argv
+            llama_path = cfg.get("llama_server_path", "/opt/homebrew/bin/llama-server")
+            argv = build_argv(llama_path, spec)
 
         if args.json:
             import json
