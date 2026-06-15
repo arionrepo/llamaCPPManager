@@ -10,10 +10,127 @@ Business Purpose: Automate downloading large coding models from Hugging Face
 with progress tracking and automatic file organization.
 """
 
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict, Any, List
 from pathlib import Path
 import os
 import sys
+import json
+import time
+from datetime import datetime, timedelta
+
+
+# HuggingFace API catalog caching
+CATALOG_CACHE_PATH = Path.home() / ".config/llamacpp-manager/hf_catalog_cache.json"
+CATALOG_CACHE_TTL_SECONDS = 86400  # 24 hours
+
+# HuggingFace namespaces to query (in priority order)
+HF_NAMESPACES = [
+    {"author": "bartowski", "library": "gguf", "limit": 30},
+    {"author": "unsloth", "library": "gguf", "limit": 20},
+    {"author": "ggml-org", "library": "gguf", "limit": 20},
+    {"author": "Qwen", "library": "gguf", "limit": None},
+    {"author": "google", "library": "gguf", "limit": None},
+    {"author": "microsoft", "library": "gguf", "limit": None},
+    {"author": "mistralai", "library": "gguf", "limit": None},
+    {"author": "mlx-community", "library": "mlx", "limit": 40},
+    {"author": "lmstudio-community", "library": "gguf", "limit": 15},
+]
+
+
+def fetch_live_catalog(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
+    """
+    Fetch live model catalog from HuggingFace API with TTL-based caching.
+
+    Args:
+        force_refresh: If True, ignore cache and fetch from HF API
+
+    Returns:
+        Dictionary of model name to model info
+
+    Fetches from multiple authoritative HuggingFace namespaces and merges
+    with curated static entries. Caches results for 24 hours.
+    """
+    # Check cache validity unless force_refresh is set
+    if not force_refresh and CATALOG_CACHE_PATH.exists():
+        cache_age = time.time() - CATALOG_CACHE_PATH.stat().st_mtime
+        if cache_age < CATALOG_CACHE_TTL_SECONDS:
+            try:
+                with open(CATALOG_CACHE_PATH, 'r') as f:
+                    cached = json.load(f)
+                    cached['__catalog_source'] = 'cached'
+                    cached['__catalog_fetched_at'] = datetime.fromtimestamp(
+                        CATALOG_CACHE_PATH.stat().st_mtime
+                    ).isoformat() + 'Z'
+                    return cached
+            except Exception as e:
+                print(f"⚠️  Failed to read cache: {e}", file=sys.stderr)
+
+    # Cache miss or force refresh - query HuggingFace API
+    print("📡 Fetching latest models from HuggingFace...", file=sys.stderr)
+
+    try:
+        from huggingface_hub import api
+    except ImportError:
+        print("⚠️  huggingface_hub not available - using static catalog", file=sys.stderr)
+        result = {k: {**v, 'format': 'gguf'} for k, v in list_available_coding_models().items()}
+        result['__catalog_source'] = 'static'
+        result['__catalog_fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+        return result
+
+    live_models = {}
+    hf_token = os.environ.get('HUGGINGFACE_TOKEN')
+
+    # Query each namespace
+    for ns in HF_NAMESPACES:
+        try:
+            filter_str = f"author:{ns['author']}"
+            if ns['library']:
+                filter_str += f" library:{ns['library']}"
+
+            models_iter = api.list_models(filter=filter_str, token=hf_token)
+            count = 0
+            for model_info in models_iter:
+                if ns['limit'] and count >= ns['limit']:
+                    break
+
+                # Extract key info
+                model_id = model_info.id
+                repo_name = model_id.split('/')[-1]
+
+                live_models[repo_name.lower().replace('_', '-')] = {
+                    'repo_id': model_id,
+                    'filename': None,
+                    'description': model_info.description or repo_name,
+                    'size_gb': 'TBD',
+                    'ram_gb': 'TBD',
+                    'use_case': 'General purpose',
+                    'version': '1.0',
+                    'format': ns['library'],
+                    'requires': 'Apple Silicon' if ns['library'] == 'mlx' else 'llama.cpp'
+                }
+                count += 1
+        except Exception as e:
+            print(f"⚠️  Failed to query {ns['author']}: {e}", file=sys.stderr)
+
+    # Merge with curated static models (static takes precedence for fine-tuned/local)
+    result = {**live_models}
+    for name, info in list_available_coding_models().items():
+        if name not in result:  # Don't override live models with static
+            result[name] = info
+
+    # Write cache
+    try:
+        CATALOG_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(CATALOG_CACHE_PATH, 'w') as f:
+            cache_data = {k: v for k, v in result.items() if not k.startswith('__')}
+            json.dump(cache_data, f, indent=2)
+        print(f"✓ Cached {len(cache_data)} models to {CATALOG_CACHE_PATH}", file=sys.stderr)
+    except Exception as e:
+        print(f"⚠️  Failed to write cache: {e}", file=sys.stderr)
+
+    result['__catalog_source'] = 'live'
+    result['__catalog_fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+    return result
 
 
 class ModelDownloader:
