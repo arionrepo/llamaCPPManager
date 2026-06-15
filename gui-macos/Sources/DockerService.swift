@@ -82,14 +82,55 @@ final class DockerService {
         }
     }
 
+    func createColimaProfile(name: String, cpus: Int? = nil, memory: String? = nil, disk: String? = nil) async -> Bool {
+        do {
+            var args = ["create", name]
+
+            if let cpus = cpus {
+                args.append("--cpu")
+                args.append(String(cpus))
+            }
+
+            if let memory = memory {
+                args.append("--memory")
+                args.append(memory)
+            }
+
+            if let disk = disk {
+                args.append("--disk")
+                args.append(disk)
+            }
+
+            _ = try await runCommand("colima", args: args)
+            AppLogger.log("Created Colima profile: \(name)", level: .info)
+            return true
+        } catch {
+            AppLogger.log("Failed to create Colima profile \(name): \(error)", level: .error)
+            return false
+        }
+    }
+
+    func deleteColimaProfile(_ profile: String) async -> Bool {
+        do {
+            _ = try await runCommand("colima", args: ["delete", profile, "-f"])
+            AppLogger.log("Deleted Colima profile: \(profile)", level: .info)
+            return true
+        } catch {
+            AppLogger.log("Failed to delete Colima profile \(profile): \(error)", level: .error)
+            return false
+        }
+    }
+
     // MARK: - Docker Container Management
 
-    func getDockerContainers() async -> [DockerContainer] {
-        // Get all running Colima profiles and query containers from each
+    func getDockerContainers(showAllProfiles: Bool = false) async -> [DockerContainer] {
+        // Get Colima profiles and query containers from each (optionally from all, not just running)
         let profiles = await getColimaProfiles()
         var allContainers: [DockerContainer] = []
 
-        for profile in profiles where profile.isRunning {
+        let profilesToQuery = showAllProfiles ? profiles : profiles.filter { $0.isRunning }
+
+        for profile in profilesToQuery {
             do {
                 // Use colima-specific Docker context
                 let output = try await runCommand("docker", args: ["--context", "colima-\(profile.name)", "ps", "-a", "--format", "{{.ID}}|{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}"])

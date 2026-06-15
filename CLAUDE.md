@@ -67,6 +67,16 @@ Ask the user to confirm they see the changes before proceeding.
 
 ## Python CLI Development
 
+### CLI is pipx-installed (non-editable)
+
+The `llamacpp-manager` CLI is installed via pipx from this local source directory, but **not in editable mode**. Source changes in `src/llamacpp_manager/` are NOT live until reinstalled:
+
+```bash
+pipx reinstall llamacpp-manager
+```
+
+A PostToolUse hook in `.claude/settings.json` injects a reminder whenever a file under `src/llamacpp_manager/` is edited.
+
 ### Testing After Changes
 
 Always run regression tests:

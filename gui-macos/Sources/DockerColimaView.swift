@@ -39,6 +39,7 @@ class DockerColimaViewModel: ObservableObject {
         colimaProfiles = await profiles
         dockerContainers = await containers
         containerStats = await stats
+        AppLogger.log("ViewModel refresh: got \(dockerContainers.count) containers (showAllProfiles: \(showAllProfiles))", level: .debug)
         isLoading = false
     }
 
@@ -207,8 +208,8 @@ struct DockerColimaView: View {
                     .padding(.horizontal, 8)
                 }
 
-                if viewModel.dockerContainers.isEmpty {
-                    Text("No containers found")
+                if viewModel.colimaProfiles.isEmpty {
+                    Text("No Colima profiles found")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.leading, 8)
@@ -216,69 +217,88 @@ struct DockerColimaView: View {
                     // Group containers by Colima profile
                     let groupedContainers = Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
 
-                    ForEach(groupedContainers.keys.sorted(), id: \.self) { profile in
-                        Text(profile.uppercased())
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                            .padding(.leading, 8)
-                            .padding(.top, 4)
-
-                        ForEach(groupedContainers[profile] ?? []) { container in
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(container.isRunning ? Color.blue : Color.gray)
-                                .frame(width: 8, height: 8)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(container.name)
-                                    .font(.system(.body, design: .monospaced))
-                                    .fontWeight(.medium)
-
-                                Text("\(container.image) [ID: \(container.id.prefix(12))]")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-
-                                if let stats = viewModel.containerStats[container.name] {
-                                    Text("CPU: \(stats.cpu, specifier: "%.1f")% | MEM: \(stats.memory)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                    // Show all profiles, even those with no containers
+                    ForEach(viewModel.colimaProfiles.sorted { $0.name < $1.name }) { profile in
+                        HStack {
+                            Text(profile.name.uppercased())
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
 
                             Spacer()
 
-                            Text(container.isRunning ? "Running" : "Stopped")
+                            Text("\(groupedContainers[profile.name]?.count ?? 0) containers")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.leading, 8)
+                        .padding(.top, 8)
+                        .padding(.trailing, 8)
+
+                        let profileContainers = groupedContainers[profile.name] ?? []
+                        if profileContainers.isEmpty {
+                            Text("No containers in this profile")
                                 .font(.caption)
-                                .foregroundColor(container.isRunning ? .blue : .secondary)
-                                .frame(minWidth: 60, alignment: .trailing)
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 16)
+                                .padding(.vertical, 4)
+                        } else {
+                            ForEach(profileContainers) { container in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(container.isRunning ? Color.blue : Color.gray)
+                                        .frame(width: 8, height: 8)
 
-                            HStack(spacing: 4) {
-                                if container.isRunning {
-                                    Button("Stop") {
-                                        Task { await viewModel.stopContainer(name: container.name, profile: container.colimaProfile) }
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(container.name)
+                                            .font(.system(.body, design: .monospaced))
+                                            .fontWeight(.medium)
 
-                                    Button("Restart") {
-                                        Task { await viewModel.restartContainer(name: container.name, profile: container.colimaProfile) }
+                                        Text("\(container.image) [ID: \(container.id.prefix(12))]")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+
+                                        if let stats = viewModel.containerStats[container.name] {
+                                            Text("CPU: \(stats.cpu, specifier: "%.1f")% | MEM: \(stats.memory)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption)
-                                } else {
-                                    Button("Start") {
-                                        Task { await viewModel.startContainer(name: container.name, profile: container.colimaProfile) }
+
+                                    Spacer()
+
+                                    Text(container.isRunning ? "Running" : "Stopped")
+                                        .font(.caption)
+                                        .foregroundColor(container.isRunning ? .blue : .secondary)
+                                        .frame(minWidth: 60, alignment: .trailing)
+
+                                    HStack(spacing: 4) {
+                                        if container.isRunning {
+                                            Button("Stop") {
+                                                Task { await viewModel.stopContainer(name: container.name, profile: container.colimaProfile) }
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .font(.caption)
+
+                                            Button("Restart") {
+                                                Task { await viewModel.restartContainer(name: container.name, profile: container.colimaProfile) }
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .font(.caption)
+                                        } else {
+                                            Button("Start") {
+                                                Task { await viewModel.startContainer(name: container.name, profile: container.colimaProfile) }
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .font(.caption)
+                                        }
                                     }
-                                    .buttonStyle(.borderless)
-                                    .font(.caption)
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                             }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                    }
                     }
                 }
 
