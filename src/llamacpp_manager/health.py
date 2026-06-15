@@ -82,8 +82,11 @@ def check_endpoint(host: str, port: int, timeout_ms: int = 2000) -> Dict[str, An
                 body = r["body"].decode("utf-8", errors="ignore").lower()
 
                 # Determine health state based on response
+                # Normalize body by removing whitespace for status check
+                # (MLX server returns {"status": "ok"}, llama.cpp returns {"status":"ok"})
+                normalized = body.replace(" ", "").replace("\n", "").replace("\t", "")
                 if http_status == 200:
-                    if '"status":"ok"' in body or "models" in body:
+                    if '"status":"ok"' in normalized or "models" in body:
                         health_state = "ok"
                     elif "loading" in body or "initializing" in body:
                         health_state = "starting"

@@ -72,7 +72,7 @@ def query_model_completion(
     }
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=timeout, trust_env=False) as client:
             if stream:
                 return _stream_completion(client, url, payload)
             else:
@@ -123,7 +123,7 @@ def query_model_chat(
     }
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=timeout, trust_env=False) as client:
             if stream:
                 return _stream_chat(client, url, payload)
             else:

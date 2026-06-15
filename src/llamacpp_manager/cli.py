@@ -1272,6 +1272,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
             print(f"launchd stopped {name}")
         else:
             # Try PID file approach first (legacy)
+            pid_file_handled = False
             try:
                 pid = read_pid(name)
 
@@ -1300,13 +1301,28 @@ def cmd_stop(args: argparse.Namespace) -> int:
                 stop_process(pid)
                 remove_pid(name)
                 print(f"stopped {name} pid={pid}")
+                pid_file_handled = True
                 continue
             except FileNotFoundError:
-                # No PID file - try ModelManager instead
+                # No PID file - try ModelManager / port fallback
                 pass
+            except (ProcessLookupError, OSError) as e:
+                # PID file is stale (process already gone) - clean up and try fallback
+                if "No such process" in str(e) or isinstance(e, ProcessLookupError):
+                    try:
+                        remove_pid(name)
+                    except Exception:
+                        pass
+                    # Fall through to ModelManager / port fallback below
+                else:
+                    print(f"error stopping {name}: {e}", file=sys.stderr)
+                    rc = 2
+                    continue
             except Exception as e:
-                print(f"error stopping {name}: {e}", file=sys.stderr)
-                rc = 2
+                # Other unexpected errors - try fallback before giving up
+                pass
+
+            if pid_file_handled:
                 continue
 
             # Use ModelManager as fallback
