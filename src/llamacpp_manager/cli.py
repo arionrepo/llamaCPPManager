@@ -947,6 +947,7 @@ Examples:
     sp_models_list = models_sub.add_parser("list", help="📋 List downloaded models")
     sp_models_list.add_argument("--available", action="store_true", help="Show available pre-configured models")
     sp_models_list.add_argument("--format", choices=["gguf", "mlx", "all"], default="all", help="Filter by model format (default: all)")
+    sp_models_list.add_argument("--refresh", action="store_true", help="Force refresh catalog from HuggingFace API (bypasses 24-hour cache)")
     sp_models_list.add_argument("--json", action="store_true", help="Output in JSON format")
     sp_models_list.set_defaults(func=cmd_models)
 
@@ -1401,7 +1402,9 @@ def cmd_models(args: argparse.Namespace) -> int:
         ModelDownloader,
         list_available_coding_models,
         get_coding_model_info,
-        check_model_updates
+        check_model_updates,
+        fetch_live_catalog,
+        CATALOG_CACHE_PATH
     )
 
     sub = args.subcommand
@@ -1409,12 +1412,24 @@ def cmd_models(args: argparse.Namespace) -> int:
     if sub == "list":
         try:
             if args.available:
-                # Get format filter (convert "all" to None for the function)
+                # Fetch live catalog with optional force refresh
+                force_refresh = getattr(args, "refresh", False)
+                if force_refresh and CATALOG_CACHE_PATH.exists():
+                    CATALOG_CACHE_PATH.unlink()
+
+                models = fetch_live_catalog(force_refresh=force_refresh)
+
+                # Extract catalog metadata
+                catalog_source = models.pop('__catalog_source', 'static')
+                catalog_fetched_at = models.pop('__catalog_fetched_at', None)
+
+                # Get format filter (convert "all" to None for filtering)
                 format_filter = None if args.format == "all" else args.format
-                models = list_available_coding_models(format_filter=format_filter)
+                if format_filter:
+                    models = {k: v for k, v in models.items() if v.get('format') == format_filter}
 
                 if args.json:
-                    # Output as JSON array
+                    # Output as JSON array with metadata
                     import json
                     models_list = []
                     for name, info in models.items():
@@ -1433,7 +1448,14 @@ def cmd_models(args: argparse.Namespace) -> int:
                         if info.get("requires"):
                             model_dict["requires"] = info["requires"]
                         models_list.append(model_dict)
-                    print(json.dumps(models_list, indent=2))
+
+                    # Add metadata to output
+                    output = {
+                        "models": models_list,
+                        "catalog_fetched_at": catalog_fetched_at,
+                        "catalog_source": catalog_source
+                    }
+                    print(json.dumps(output, indent=2))
                 else:
                     # Show available pre-configured models
                     # Separate GGUF and MLX models
@@ -1702,12 +1724,25 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         # Infer format from model path
         model_path = str(m.get("model_path", "")).lower()
-        if ".mlx" in model_path:
-            format_type = "mlx"
-        elif ".gguf" in model_path:
+        if ".gguf" in model_path:
             format_type = "gguf"
+        elif "mlx" in model_path:
+            format_type = "mlx"
         elif "moe" in model_path:
             format_type = "moe"
+        elif model_path and Path(model_path).expanduser().exists():
+            # Probe filesystem for ambiguous paths (directory without "mlx" / "gguf" in name)
+            p = Path(model_path).expanduser()
+            if p.is_dir():
+                files = list(p.glob("*"))
+                if any(".gguf" in f.name.lower() for f in files):
+                    format_type = "gguf"
+                elif any(f.name.lower().endswith(".safetensors") or "mlx" in f.name.lower() for f in files):
+                    format_type = "mlx"
+                else:
+                    format_type = "unknown"
+            else:
+                format_type = "unknown"
         else:
             format_type = "unknown"
 
