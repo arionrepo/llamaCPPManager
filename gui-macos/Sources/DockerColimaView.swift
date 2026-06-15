@@ -11,6 +11,7 @@ class DockerColimaViewModel: ObservableObject {
     @Published var dockerContainers: [DockerContainer] = []
     @Published var containerStats: [String: (cpu: Double, memory: String)] = [:]
     @Published var isLoading = false
+    @Published var showAllProfiles = false
 
     private let dockerService = DockerService()
     private var refreshTask: Task<Void, Never>?
@@ -32,7 +33,7 @@ class DockerColimaViewModel: ObservableObject {
     func refresh() async {
         isLoading = true
         async let profiles = dockerService.getColimaProfiles()
-        async let containers = dockerService.getDockerContainers()
+        async let containers = dockerService.getDockerContainers(showAllProfiles: showAllProfiles)
         async let stats = dockerService.getContainerStats()
 
         colimaProfiles = await profiles
@@ -70,10 +71,27 @@ class DockerColimaViewModel: ObservableObject {
         _ = await dockerService.restartDockerContainer(name, profile: profile)
         await refresh()
     }
+
+    func createProfile(name: String, cpus: Int? = nil, memory: String? = nil, disk: String? = nil) async {
+        _ = await dockerService.createColimaProfile(name: name, cpus: cpus, memory: memory, disk: disk)
+        await refresh()
+    }
+
+    func deleteProfile(name: String) async {
+        _ = await dockerService.deleteColimaProfile(name)
+        await refresh()
+    }
 }
 
 struct DockerColimaView: View {
     @StateObject private var viewModel = DockerColimaViewModel()
+    @State private var showCreateSheet = false
+    @State private var showDeleteConfirm = false
+    @State private var profileToDelete: String?
+    @State private var newProfileName = ""
+    @State private var newProfileCpus = ""
+    @State private var newProfileMemory = ""
+    @State private var newProfileDisk = ""
 
     var body: some View {
         ScrollView {
@@ -127,6 +145,14 @@ struct DockerColimaView: View {
                                     .buttonStyle(.borderless)
                                     .font(.caption)
                                 }
+
+                                Button("Delete") {
+                                    profileToDelete = profile.name
+                                    showDeleteConfirm = true
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                                .foregroundColor(.red)
                             }
                         }
                         .padding(.horizontal, 8)
@@ -137,6 +163,12 @@ struct DockerColimaView: View {
                 HStack(spacing: 8) {
                     Button("Restart Active") {
                         Task { await viewModel.restartColima() }
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+
+                    Button("New Profile") {
+                        showCreateSheet = true
                     }
                     .buttonStyle(.bordered)
                     .font(.caption)
@@ -152,10 +184,28 @@ struct DockerColimaView: View {
                 Divider()
 
                 // MARK: - Docker Containers Section
-                Text("DOCKER CONTAINERS")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
+                HStack {
+                    Text("DOCKER CONTAINERS")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Text(viewModel.showAllProfiles ? "All" : "Running")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        Toggle("", isOn: $viewModel.showAllProfiles)
+                            .onChange(of: viewModel.showAllProfiles) { _ in
+                                Task { await viewModel.refresh() }
+                            }
+                            .labelsHidden()
+                            .scaleEffect(0.8)
+                    }
+                    .padding(.horizontal, 8)
+                }
 
                 if viewModel.dockerContainers.isEmpty {
                     Text("No containers found")
@@ -252,6 +302,84 @@ struct DockerColimaView: View {
         }
         .onDisappear {
             viewModel.stopPolling()
+        }
+        .confirmationDialog("Delete Profile", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                if let profile = profileToDelete {
+                    Task { await viewModel.deleteProfile(name: profile) }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to delete '\(profileToDelete ?? "")'? This cannot be undone.")
+        }
+        .sheet(isPresented: $showCreateSheet) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Create Colima Profile")
+                    .font(.headline)
+                    .padding(.bottom, 8)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Profile Name")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    TextField("e.g., default", text: $newProfileName)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("CPUs (optional)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    TextField("Uses default if empty", text: $newProfileCpus)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Memory (optional)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    TextField("e.g., 4G", text: $newProfileMemory)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Disk (optional)")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    TextField("e.g., 60G", text: $newProfileDisk)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(.vertical, 8)
+
+                HStack(spacing: 12) {
+                    Button("Cancel") {
+                        showCreateSheet = false
+                        newProfileName = ""
+                        newProfileCpus = ""
+                        newProfileMemory = ""
+                        newProfileDisk = ""
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Create") {
+                        let cpus = Int(newProfileCpus)
+                        Task {
+                            await viewModel.createProfile(
+                                name: newProfileName,
+                                cpus: cpus,
+                                memory: newProfileMemory.isEmpty ? nil : newProfileMemory,
+                                disk: newProfileDisk.isEmpty ? nil : newProfileDisk
+                            )
+                            showCreateSheet = false
+                            newProfileName = ""
+                            newProfileCpus = ""
+                            newProfileMemory = ""
+                            newProfileDisk = ""
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.top, 12)
+
+                Spacer()
+            }
+            .padding(16)
         }
     }
 }
