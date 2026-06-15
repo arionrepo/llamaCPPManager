@@ -127,10 +127,24 @@ final class DownloadViewModel: ObservableObject {
     }
 
     private func checkIfDownloaded(modelName: String) async -> Bool {
-        // Check if model directory exists in ~/llms/
+        // Check if model directory exists and contains at least one .gguf file
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         let modelDir = homeDir.appendingPathComponent("llms").appendingPathComponent(modelName)
-        return FileManager.default.fileExists(atPath: modelDir.path)
+
+        // First check if directory exists
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: modelDir.path, isDirectory: &isDir),
+              isDir.boolValue else {
+            return false
+        }
+
+        // Then check for .gguf files in the directory
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(atPath: modelDir.path)
+            return contents.contains { $0.lowercased().hasSuffix(".gguf") }
+        } catch {
+            return false
+        }
     }
 
     func downloadModel(name: String) {
