@@ -1564,10 +1564,13 @@ def cmd_models(args: argparse.Namespace) -> int:
             # Check if this is a pre-configured model
             model_info = get_coding_model_info(model_name)
 
+            is_mlx = False
+
             if model_info:
                 # Use pre-configured settings
                 repo_id = args.repo or model_info["repo_id"]
-                filename = args.filename or model_info["filename"]
+                filename = args.filename or model_info.get("filename")
+                is_mlx = model_info.get("format") == "mlx"
 
                 print(f"Downloading: {model_info['description']}")
                 print(f"Estimated size: ~{model_info['size_gb']} GB")
@@ -1575,9 +1578,15 @@ def cmd_models(args: argparse.Namespace) -> int:
                 print()
 
             elif args.repo and args.filename:
-                # Custom model with explicit repo and filename
+                # Custom GGUF model with explicit repo and filename
                 repo_id = args.repo
                 filename = args.filename
+
+            elif args.repo and not args.filename:
+                # Custom MLX repo (no filename → download whole repo)
+                repo_id = args.repo
+                filename = None
+                is_mlx = True
 
             else:
                 print(f"error: unknown model '{model_name}'", file=sys.stderr)
@@ -1586,11 +1595,17 @@ def cmd_models(args: argparse.Namespace) -> int:
                 for name in list_available_coding_models().keys():
                     print(f"  - {name}")
                 print()
-                print("Or specify --repo and --filename for custom models")
+                print("Or specify --repo and --filename for custom GGUF, or --repo only for MLX")
                 return 2
 
-            # Download the model
-            model_path = downloader.download_gguf(repo_id, filename, model_name)
+            # Download the model (different code path for MLX vs GGUF)
+            if is_mlx:
+                model_path = downloader.download_mlx(repo_id, model_name)
+            else:
+                if not filename:
+                    print(f"error: filename required for GGUF model download", file=sys.stderr)
+                    return 2
+                model_path = downloader.download_gguf(repo_id, filename, model_name)
 
             print()
             print(f"✓ Model downloaded successfully!")

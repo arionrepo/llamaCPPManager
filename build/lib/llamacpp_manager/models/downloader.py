@@ -160,6 +160,65 @@ class ModelDownloader:
         self.models_dir = Path(models_dir)
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
+    def download_mlx(
+        self,
+        repo_id: str,
+        local_name: str,
+    ) -> Path:
+        """
+        Download an MLX model (entire repo) from Hugging Face.
+
+        MLX models consist of multiple files (config, tokenizer, sharded
+        safetensors). We use snapshot_download to get the whole repo.
+
+        Args:
+            repo_id: Hugging Face repo ID (e.g., "mlx-community/gemma-4-31b-it-4bit")
+            local_name: Local model name for directory
+
+        Returns:
+            Path to the downloaded model directory
+        """
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError:
+            raise ImportError(
+                "huggingface_hub is required for downloading models. "
+                "Install with: pip install huggingface_hub"
+            )
+
+        model_dir = self.models_dir / local_name
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"📦 Downloading MLX repo {repo_id}...")
+        print(f"📁 Saving to: {model_dir}")
+
+        try:
+            local_path = snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(model_dir),
+                # Only download MLX/safetensors-compatible files (skip duplicates like .gguf if present)
+                allow_patterns=["*.safetensors", "*.json", "*.txt", "*.model", "*.jinja", "tokenizer*"],
+            )
+            downloaded_path = Path(local_path)
+            print(f"✓ Downloaded MLX model: {downloaded_path}")
+            return downloaded_path
+
+        except Exception as e:
+            err_type = type(e).__name__
+            err_msg = str(e)
+
+            if "401" in err_msg or "403" in err_msg or "gated" in err_msg.lower():
+                hint = " (auth — set HF_TOKEN env var if gated)"
+            elif "404" in err_msg or "not found" in err_msg.lower() or "RepositoryNotFound" in err_type:
+                hint = f" (not found — verify repo_id='{repo_id}')"
+            elif "disk" in err_msg.lower() or "no space" in err_msg.lower():
+                hint = " (disk error — check space)"
+            elif "timeout" in err_msg.lower() or "connection" in err_msg.lower():
+                hint = " (network error)"
+            else:
+                hint = ""
+            raise RuntimeError(f"Failed to download MLX model ({err_type}): {err_msg}{hint}") from e
+
     def download_gguf(
         self,
         repo_id: str,
@@ -327,8 +386,8 @@ CODING_MODELS = {
         "version": "2.5-q4"
     },
     "deepseek-coder-33b-q8": {
-        "repo_id": "bartowski/DeepSeek-Coder-33B-Instruct-GGUF",
-        "filename": "DeepSeek-Coder-33B-Instruct-Q8_0.gguf",
+        "repo_id": "TheBloke/deepseek-coder-33B-instruct-GGUF",
+        "filename": "deepseek-coder-33b-instruct.Q8_0.gguf",
         "description": "DeepSeek Coder 33B Q8 - Highest quality Chinese coding model",
         "size_gb": 36,
         "ram_gb": 42,
@@ -336,8 +395,8 @@ CODING_MODELS = {
         "version": "1.0-q8"
     },
     "deepseek-coder-33b-q4": {
-        "repo_id": "bartowski/DeepSeek-Coder-33B-Instruct-GGUF",
-        "filename": "DeepSeek-Coder-33B-Instruct-Q4_K_M.gguf",
+        "repo_id": "TheBloke/deepseek-coder-33B-instruct-GGUF",
+        "filename": "deepseek-coder-33b-instruct.Q4_K_M.gguf",
         "description": "DeepSeek Coder 33B Q4 - Fast Chinese coding model",
         "size_gb": 19,
         "ram_gb": 24,
@@ -348,7 +407,7 @@ CODING_MODELS = {
     # === QWEN 3 FAMILY (Latest Generation) ===
     "qwen3-32b-q8": {
         "repo_id": "Qwen/Qwen3-32B-GGUF",
-        "filename": "qwen3-32b-instruct-q8_0.gguf",
+        "filename": "Qwen3-32B-Q8_0.gguf",
         "description": "Qwen 3 32B Q8 - Latest generation, highest quality",
         "size_gb": 35,
         "ram_gb": 40,
@@ -357,7 +416,7 @@ CODING_MODELS = {
     },
     "qwen3-32b-q4": {
         "repo_id": "Qwen/Qwen3-32B-GGUF",
-        "filename": "qwen3-32b-instruct-q4_k_m.gguf",
+        "filename": "Qwen3-32B-Q4_K_M.gguf",
         "description": "Qwen 3 32B Q4 - Balanced quality/size",
         "size_gb": 19,
         "ram_gb": 24,
@@ -366,7 +425,7 @@ CODING_MODELS = {
     },
     "qwen3-14b-q8": {
         "repo_id": "Qwen/Qwen3-14B-GGUF",
-        "filename": "qwen3-14b-instruct-q8_0.gguf",
+        "filename": "Qwen3-14B-Q8_0.gguf",
         "description": "Qwen 3 14B Q8 - Mid-range capability",
         "size_gb": 16,
         "ram_gb": 20,
@@ -375,7 +434,7 @@ CODING_MODELS = {
     },
     "qwen3-14b-q4": {
         "repo_id": "Qwen/Qwen3-14B-GGUF",
-        "filename": "qwen3-14b-instruct-q4_k_m.gguf",
+        "filename": "Qwen3-14B-Q4_K_M.gguf",
         "description": "Qwen 3 14B Q4 - Efficient mid-range",
         "size_gb": 8.5,
         "ram_gb": 12,
@@ -384,7 +443,7 @@ CODING_MODELS = {
     },
     "qwen3-8b-q8": {
         "repo_id": "Qwen/Qwen3-8B-GGUF",
-        "filename": "qwen3-8b-instruct-q8_0.gguf",
+        "filename": "Qwen3-8B-Q8_0.gguf",
         "description": "Qwen 3 8B Q8 - Capable compact model",
         "size_gb": 9.2,
         "ram_gb": 12,
@@ -393,7 +452,7 @@ CODING_MODELS = {
     },
     "qwen3-8b-q4": {
         "repo_id": "Qwen/Qwen3-8B-GGUF",
-        "filename": "qwen3-8b-instruct-q4_k_m.gguf",
+        "filename": "Qwen3-8B-Q4_K_M.gguf",
         "description": "Qwen 3 8B Q4 - Lightweight capable",
         "size_gb": 5.0,
         "ram_gb": 8,
@@ -402,7 +461,7 @@ CODING_MODELS = {
     },
     "qwen3-4b": {
         "repo_id": "Qwen/Qwen3-4B-GGUF",
-        "filename": "qwen3-4b-instruct-q4_k_m.gguf",
+        "filename": "Qwen3-4B-Q4_K_M.gguf",
         "description": "Qwen 3 4B - Ultra-compact",
         "size_gb": 2.5,
         "ram_gb": 4,
@@ -411,7 +470,7 @@ CODING_MODELS = {
     },
     "qwen3-1.7b": {
         "repo_id": "Qwen/Qwen3-1.7B-GGUF",
-        "filename": "qwen3-1.7b-instruct-q8_0.gguf",
+        "filename": "Qwen3-1.7B-Q8_0.gguf",
         "description": "Qwen 3 1.7B - Tiny but capable",
         "size_gb": 1.83,
         "ram_gb": 3,
@@ -420,7 +479,7 @@ CODING_MODELS = {
     },
     "qwen3-0.6b": {
         "repo_id": "Qwen/Qwen3-0.6B-GGUF",
-        "filename": "qwen3-0.6b-instruct-q8_0.gguf",
+        "filename": "Qwen3-0.6B-Q8_0.gguf",
         "description": "Qwen 3 0.6B - Minimal footprint",
         "size_gb": 0.639,
         "ram_gb": 1.5,
@@ -429,7 +488,7 @@ CODING_MODELS = {
     },
     "qwen3.5-27b": {
         "repo_id": "unsloth/Qwen3.5-27B-GGUF",
-        "filename": "Qwen3.5-27B-Instruct-Q8_0.gguf",
+        "filename": "Qwen3.5-27B-Q8_0.gguf",
         "description": "Qwen 3.5 27B - Advanced mid-range model",
         "size_gb": 29,
         "ram_gb": 34,
@@ -438,7 +497,7 @@ CODING_MODELS = {
     },
     "qwen3.6-35b-moe": {
         "repo_id": "unsloth/Qwen3.6-35B-A3B-GGUF",
-        "filename": "Qwen3.6-35B-A3B-Instruct-Q4_K_M.gguf",
+        "filename": "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
         "description": "Qwen 3.6 35B MoE - Latest MoE architecture",
         "size_gb": 21,
         "ram_gb": 28,
@@ -515,7 +574,7 @@ CODING_MODELS = {
     # === VERY LARGE MODELS (70B+) ===
     "llama-3.3-70b-q8": {
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
-        "filename": "Llama-3.3-70B-Instruct-Q8_0.gguf",
+        "filename": "Llama-3.3-70B-Instruct-Q8_0/Llama-3.3-70B-Instruct-Q8_0-00001-of-00002.gguf",
         "description": "Llama 3.3 70B Q8 - Latest 70B, highest quality",
         "size_gb": 75,
         "ram_gb": 82,
@@ -524,7 +583,7 @@ CODING_MODELS = {
     },
     "llama-3.3-70b-q6": {
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
-        "filename": "Llama-3.3-70B-Instruct-Q6_K.gguf",
+        "filename": "Llama-3.3-70B-Instruct-Q6_K/Llama-3.3-70B-Instruct-Q6_K-00001-of-00002.gguf",
         "description": "Llama 3.3 70B Q6 - Good quality, manageable size",
         "size_gb": 58,
         "ram_gb": 64,
@@ -542,7 +601,7 @@ CODING_MODELS = {
     },
     "qwen-2.5-72b-q8": {
         "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
-        "filename": "qwen2.5-72b-instruct-q8_0.gguf",
+        "filename": "qwen2.5-72b-instruct-q8_0-00001-of-00021.gguf",
         "description": "Qwen 2.5 72B Q8 - Highest quality",
         "size_gb": 76,
         "ram_gb": 82,
@@ -551,7 +610,7 @@ CODING_MODELS = {
     },
     "qwen-2.5-72b-q6": {
         "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
-        "filename": "qwen2.5-72b-instruct-q6_k.gguf",
+        "filename": "qwen2.5-72b-instruct-q6_k-00001-of-00016.gguf",
         "description": "Qwen 2.5 72B Q6 - Balanced quality/size",
         "size_gb": 59,
         "ram_gb": 64,
@@ -560,7 +619,7 @@ CODING_MODELS = {
     },
     "qwen-2.5-72b-q4": {
         "repo_id": "Qwen/Qwen2.5-72B-Instruct-GGUF",
-        "filename": "qwen2.5-72b-instruct-q4_k_m.gguf",
+        "filename": "qwen2.5-72b-instruct-q4_k_m-00001-of-00012.gguf",
         "description": "Qwen 2.5 72B Q4 - Most accessible",
         "size_gb": 42,
         "ram_gb": 48,
@@ -665,7 +724,7 @@ CODING_MODELS = {
     },
     "gemma-3-27b-fp16": {
         "repo_id": "bartowski/google_gemma-3-27b-it-GGUF",
-        "filename": "google_gemma-3-27b-it-f16.gguf",
+        "filename": "google_gemma-3-27b-it-bf16/google_gemma-3-27b-it-bf16-00001-of-00002.gguf",
         "description": "Gemma 3 27B FP16 - Unquantized full precision",
         "size_gb": 54,
         "ram_gb": 60,
@@ -683,7 +742,7 @@ CODING_MODELS = {
     },
     "smollm2-1.7b": {
         "repo_id": "HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
-        "filename": "smollm2-1.7b-instruct-q8_0.gguf",
+        "filename": "smollm2-1.7b-instruct-q4_k_m.gguf",
         "description": "SmolLM2 1.7B - Tiny but capable instruction model",
         "size_gb": 1.8,
         "ram_gb": 3,
@@ -691,7 +750,7 @@ CODING_MODELS = {
         "version": "2.0"
     },
     "starcoder2-7b": {
-        "repo_id": "bartowski/starcoder2-7b-GGUF",
+        "repo_id": "second-state/StarCoder2-7B-GGUF",
         "filename": "starcoder2-7b-Q8_0.gguf",
         "description": "StarCoder2 7B - Efficient multi-language coding",
         "size_gb": 8,
@@ -700,7 +759,7 @@ CODING_MODELS = {
         "version": "2.0"
     },
     "starcoder2-3b": {
-        "repo_id": "bartowski/starcoder2-3b-GGUF",
+        "repo_id": "second-state/StarCoder2-3B-GGUF",
         "filename": "starcoder2-3b-Q8_0.gguf",
         "description": "StarCoder2 3B - Tiny but capable",
         "size_gb": 3.5,
@@ -732,7 +791,7 @@ CODING_MODELS = {
     # === GEMMA 4 FAMILY (Latest, requires recent llama.cpp) ===
     "gemma-4-31b": {
         "repo_id": "unsloth/gemma-4-31B-it-GGUF",
-        "filename": "gemma-4-31b-it-Q8_0.gguf",
+        "filename": "gemma-4-31B-it-Q8_0.gguf",
         "description": "Gemma 4 31B Dense - Latest Google model",
         "size_gb": 33,
         "ram_gb": 40,
@@ -742,7 +801,7 @@ CODING_MODELS = {
     },
     "gemma-4-26b-moe": {
         "repo_id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
-        "filename": "gemma-4-26b-a4b-it-Q4_K_M.gguf",
+        "filename": "gemma-4-26B-A4B-it-Q4_K_M.gguf",
         "description": "Gemma 4 26B MoE - Mixture of Experts model",
         "size_gb": 16.8,
         "ram_gb": 22,
@@ -753,7 +812,7 @@ CODING_MODELS = {
     },
     "gemma-4-26b-moe-q8": {
         "repo_id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
-        "filename": "gemma-4-26b-a4b-it-Q8_0.gguf",
+        "filename": "gemma-4-26B-A4B-it-Q8_0.gguf",
         "description": "Gemma 4 26B MoE Q8 - Highest quality MoE",
         "size_gb": 26.9,
         "ram_gb": 32,
@@ -763,7 +822,7 @@ CODING_MODELS = {
     },
     "gemma-4-12b-q8": {
         "repo_id": "ggml-org/gemma-4-12B-it-GGUF",
-        "filename": "gemma-4-12b-it-Q8_0.gguf",
+        "filename": "gemma-4-12B-it-Q8_0.gguf",
         "description": "Gemma 4 12B Q8 - Compact Google model",
         "size_gb": 12.7,
         "ram_gb": 16,
@@ -773,7 +832,7 @@ CODING_MODELS = {
     },
     "gemma-4-12b-q4": {
         "repo_id": "ggml-org/gemma-4-12B-it-GGUF",
-        "filename": "gemma-4-12b-it-Q4_K_M.gguf",
+        "filename": "gemma-4-12B-it-Q4_K_M.gguf",
         "description": "Gemma 4 12B Q4 - Efficient 12B model",
         "size_gb": 7.38,
         "ram_gb": 10,
@@ -783,7 +842,7 @@ CODING_MODELS = {
     },
     "gemma-4-edge-4b": {
         "repo_id": "ggml-org/gemma-4-E4B-it-GGUF",
-        "filename": "gemma-4-e4b-it-Q4_K_M.gguf",
+        "filename": "gemma-4-E4B-it-Q4_K_M.gguf",
         "description": "Gemma 4 Edge 4B - Ultra-compact model",
         "size_gb": 5.34,
         "ram_gb": 7,
@@ -793,45 +852,9 @@ CODING_MODELS = {
     },
 
     # === GOOGLE GEMMA 2 MODELS ===
-    "gemma-2-27b": {
-        "repo_id": "google/gemma-2-27b-it-GGUF",
-        "filename": "gemma-2-27b-it-Q8_0.gguf",
-        "description": "Gemma 2 27B - Google's powerful reasoning model",
-        "size_gb": 29,
-        "ram_gb": 34,
-        "use_case": "Complex reasoning, analysis, research",
-        "version": "2.0"
-    },
-    "gemma-2-27b-qat": {
-        "repo_id": "google/gemma-2-27b-it-GGUF",
-        "filename": "gemma-2-27b-it-qat-Q6_K.gguf",
-        "description": "Gemma 2 27B QAT - Quantization-aware trained for better quality",
-        "size_gb": 22,
-        "ram_gb": 26,
-        "use_case": "High-quality reasoning with efficient memory use",
-        "version": "2.0-qat"
-    },
-    "gemma-2-9b": {
-        "repo_id": "google/gemma-2-9b-it-GGUF",
-        "filename": "gemma-2-9b-it-Q8_0.gguf",
-        "description": "Gemma 2 9B - Google's balanced model",
-        "size_gb": 9.5,
-        "ram_gb": 13,
-        "use_case": "General tasks, coding, reasoning",
-        "version": "2.0"
-    },
-    "gemma-2-9b-qat": {
-        "repo_id": "google/gemma-2-9b-it-GGUF",
-        "filename": "gemma-2-9b-it-qat-Q6_K.gguf",
-        "description": "Gemma 2 9B QAT - Higher quality quantization",
-        "size_gb": 7,
-        "ram_gb": 10,
-        "use_case": "Efficient reasoning with quality preservation",
-        "version": "2.0-qat"
-    },
     "gemma-2-2b": {
         "repo_id": "google/gemma-2-2b-it-GGUF",
-        "filename": "gemma-2-2b-it-Q8_0.gguf",
+        "filename": "2b_it_v2.gguf",
         "description": "Gemma 2 2B - Google's tiny efficient model",
         "size_gb": 2.3,
         "ram_gb": 4,
@@ -919,20 +942,9 @@ CODING_MODELS = {
     },
 
     # === VERY LARGE SPECIALIZED MODELS (requires high-end hardware) ===
-    "kimi-k2.6-moe": {
-        "repo_id": "bartowski/moonshotai_Kimi-K2.6-GGUF",
-        "filename": "moonshotai_Kimi-K2.6-Q4_K_M.gguf",
-        "description": "Kimi K2.6 1T MoE - Ultra-large Mixture of Experts",
-        "size_gb": 585,
-        "ram_gb": 640,
-        "use_case": "Research, extreme scale reasoning (REQUIRES DEDICATED SERVER)",
-        "version": "1.0",
-        "requires": "Dedicated server with 640GB+ RAM, network storage recommended",
-        "note": "1 trillion parameter model - experimental, extreme hardware demands"
-    },
     "minimax-m3-moe": {
         "repo_id": "unsloth/MiniMax-M3-GGUF",
-        "filename": "MiniMax-M3-Q4_K_M.gguf",
+        "filename": "UD-Q4_K_M/MiniMax-M3-UD-Q4_K_M-00001-of-00007.gguf",
         "description": "MiniMax M3 428B MoE - Extremely large model",
         "size_gb": 256,
         "ram_gb": 300,
@@ -956,7 +968,7 @@ CODING_MODELS = {
     # === REASONING & ANALYSIS MODELS ===
     "qwen-2.5-14b": {
         "repo_id": "Qwen/Qwen2.5-14B-Instruct-GGUF",
-        "filename": "qwen2.5-14b-instruct-q8_0.gguf",
+        "filename": "qwen2.5-14b-instruct-q8_0-00001-of-00004.gguf",
         "description": "Qwen 2.5 14B Instruct - Balanced reasoning and speed",
         "size_gb": 16,
         "ram_gb": 20,
@@ -965,7 +977,7 @@ CODING_MODELS = {
     },
     "qwen-2.5-7b": {
         "repo_id": "Qwen/Qwen2.5-7B-Instruct-GGUF",
-        "filename": "qwen2.5-7b-instruct-q8_0.gguf",
+        "filename": "qwen2.5-7b-instruct-q8_0-00001-of-00003.gguf",
         "description": "Qwen 2.5 7B - General purpose reasoning",
         "size_gb": 8,
         "ram_gb": 11,
@@ -983,7 +995,7 @@ CODING_MODELS = {
     },
     "phi-4-14b-q4": {
         "repo_id": "microsoft/phi-4-gguf",
-        "filename": "phi-4-Q4_K_M.gguf",
+        "filename": "phi-4-IQ4_XS.gguf",
         "description": "Phi-4 14B Q4 - Compact Phi-4 for lower resources",
         "size_gb": 9,
         "ram_gb": 12,
@@ -1011,8 +1023,8 @@ CODING_MODELS = {
         "version": "1.5"
     },
     "bge-reranker": {
-        "repo_id": "BAAI/bge-reranker-v2-m3-GGUF",
-        "filename": "bge-reranker-v2-m3.Q8_0.gguf",
+        "repo_id": "gpustack/bge-reranker-v2-m3-GGUF",
+        "filename": "bge-reranker-v2-m3-Q8_0.gguf",
         "description": "BGE Reranker - Document reranking",
         "size_gb": 1.5,
         "ram_gb": 3,
@@ -1025,7 +1037,7 @@ CODING_MODELS = {
 MLX_MODELS = {
     # === QWEN3 MLX MODELS (Latest) ===
     "mlx-qwen3-32b": {
-        "repo_id": "mlx-community/Qwen3-32B-Instruct-4bit",
+        "repo_id": "mlx-community/Qwen3-32B-4bit",
         "filename": None,
         "description": "Qwen 3 32B (MLX 4-bit) - Latest generation for Mac",
         "size_gb": 18,
@@ -1034,28 +1046,6 @@ MLX_MODELS = {
         "version": "3.0",
         "format": "mlx",
         "requires": "Apple Silicon (M1/M2/M3/M4+)"
-    },
-    "mlx-qwen3-8b": {
-        "repo_id": "mlx-community/Qwen3-8B-Instruct-4bit",
-        "filename": None,
-        "description": "Qwen 3 8B (MLX 4-bit) - Capable compact",
-        "size_gb": 4.5,
-        "ram_gb": 6,
-        "use_case": "General coding on Apple Silicon",
-        "version": "3.0",
-        "format": "mlx",
-        "requires": "Apple Silicon"
-    },
-    "mlx-qwen3-4b": {
-        "repo_id": "mlx-community/Qwen3-4B-Instruct-4bit",
-        "filename": None,
-        "description": "Qwen 3 4B (MLX 4-bit) - Ultra-compact",
-        "size_gb": 2.3,
-        "ram_gb": 4,
-        "use_case": "Mobile, edge inference on Mac",
-        "version": "3.0",
-        "format": "mlx",
-        "requires": "Apple Silicon"
     },
     "mlx-qwen3.6-35b-moe": {
         "repo_id": "unsloth/Qwen3.6-35B-A3B-UD-MLX-4bit",
@@ -1345,7 +1335,7 @@ MLX_MODELS = {
         "requires": "Apple Silicon"
     },
     "mlx-smollm2-1.7b": {
-        "repo_id": "mlx-community/SmolLM2-1.7B-Instruct-4bit",
+        "repo_id": "mlx-community/SmolLM2-1.7B-Instruct",
         "filename": None,
         "description": "SmolLM2 1.7B (MLX 4-bit) - Tiny instruction model",
         "size_gb": 1.0,
