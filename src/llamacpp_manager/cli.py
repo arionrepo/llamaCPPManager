@@ -24,6 +24,7 @@ from .config import (
 from .utils import app_support_dir, logs_dir, config_path, ensure_dir, to_json, migrate_directory, write_pid, read_pid, remove_pid, process_alive, port_in_use
 from .process import start_process, stop_process, build_argv
 from .mlx_process import start_mlx_process, build_mlx_argv
+from .mlx_vlm_process import start_mlx_vlm_process, build_mlx_vlm_argv
 from .health import check_endpoint
 from .launchd import render_plist, plist_path, write_plist, launchctl_bootstrap, launchctl_kickstart, launchctl_bootout
 from .discovery import find_llama_processes
@@ -1259,6 +1260,46 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(f"error: refusing to bind non-local host '{spec.host}' without --allow-remote", file=sys.stderr)
             rc = 2
             continue
+
+        # -------------------------------------------------------------------
+        # NEW (Phase 1b): mlx-vlm deployment branch.
+        # Placed ABOVE existing native/mlx branches so they remain byte-identical.
+        # Handles its own dry-run/launchd/port-check/spawn and 'continue's.
+        # Only fires when spec.deployment_type == "mlx-vlm" (opt-in, no existing
+        # model is affected unless its config is explicitly changed).
+        # -------------------------------------------------------------------
+        if spec.deployment_type == "mlx-vlm":
+            mlx_vlm_python = cfg.get("mlx_vlm_python_path", "python3")
+            argv = build_mlx_vlm_argv(mlx_vlm_python, spec)
+
+            if args.dry_run:
+                print("DRY-RUN:", " ".join(shlex.quote(a) for a in argv))
+                continue
+
+            if getattr(args, "launchd", False):
+                print(f"error: launchd not yet supported for mlx-vlm models", file=sys.stderr)
+                rc = 2
+                continue
+
+            if port_in_use(spec.host, spec.port):
+                print(f"error: port {spec.port} on {spec.host} is already in use; cannot start {spec.name}", file=sys.stderr)
+                rc = 2
+                continue
+
+            try:
+                pid = start_mlx_vlm_process(mlx_vlm_python, spec, log_dir, logging_config=logging_config)
+            except RuntimeError as e:
+                # Pre-flight failure (mlx-vlm not installed) or spawn failure - already logged to lifecycle
+                print(f"error: {e}", file=sys.stderr)
+                rc = 2
+                continue
+
+            write_pid(spec.name, pid)
+            print(f"started {spec.name} pid={pid} port={spec.port} (mlx-vlm)")
+            continue
+        # -------------------------------------------------------------------
+        # END NEW BRANCH - all code below is byte-identical to pre-Phase-1b
+        # -------------------------------------------------------------------
 
         # Route to appropriate runtime based on deployment type
         is_mlx = spec.deployment_type == "mlx"
