@@ -9,6 +9,15 @@ let APP_VERSION: String = {
 
 import os.log
 
+// Helper: format ETA seconds as a short human-readable string
+func formatDownloadETA(_ seconds: Int) -> String {
+    if seconds < 60 { return "\(seconds)s" }
+    if seconds < 3600 { return "\(seconds / 60)m \(seconds % 60)s" }
+    let h = seconds / 3600
+    let m = (seconds % 3600) / 60
+    return "\(h)h \(m)m"
+}
+
 // Centralized logging utility
 enum AppLogger {
     private static let logger = Logger(subsystem: "com.llamacpp.manager", category: "GUI")
@@ -474,6 +483,72 @@ struct LlamaCPPManagerApp: App {
                     Divider()
                 }
 
+                // MARK: - Active Downloads
+                if !vm.downloadViewModel.downloads.isEmpty {
+                    Divider()
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("Active Downloads (\(vm.downloadViewModel.downloads.count))")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+
+                    ForEach(Array(vm.downloadViewModel.downloads.keys.sorted()), id: \.self) { name in
+                        if let progress = vm.downloadViewModel.downloads[name] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                        .frame(width: 12, height: 12)
+                                    Text(name)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text("\(Int(progress.percentComplete * 100))%")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                ProgressView(value: progress.percentComplete)
+                                    .progressViewStyle(.linear)
+                                    .frame(height: 4)
+                                HStack {
+                                    Text(progress.status)
+                                        .font(.caption2)
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                    if progress.bytesDownloaded > 0 {
+                                        let dl = ByteCountFormatter.string(fromByteCount: progress.bytesDownloaded, countStyle: .file)
+                                        let total = ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file)
+                                        Text("\(dl) / \(total)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                if progress.speedMBps > 0.1 {
+                                    HStack {
+                                        Text(String(format: "%.1f MB/s", progress.speedMBps))
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        if progress.etaSeconds > 0 {
+                                            Text("ETA: " + formatDownloadETA(progress.etaSeconds))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+
+                Divider()
                 Button("Download Models") { vm.openModelDownloader() }
                 Divider()
                 Button("Refresh") { vm.refresh() }
@@ -617,6 +692,9 @@ final class StatusViewModel: ObservableObject {
     @Published var selectedModes: [String: String] = [:]  // Model name -> mode
     @Published var startupProgress: [String: ModelStartupProgress] = [:]
     private var logMonitorTasks: [String: Task<Void, Never>] = [:]
+
+    // Persistent download view model — survives catalog window closes
+    let downloadViewModel: DownloadViewModel
     private let service = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
@@ -662,6 +740,8 @@ final class StatusViewModel: ObservableObject {
     }
 
     init() {
+        self.downloadViewModel = DownloadViewModel(cliService: service)
+
         // Observe refresh interval changes
         preferences.$refreshInterval
             .sink { [weak self] _ in
@@ -1228,9 +1308,8 @@ final class StatusViewModel: ObservableObject {
             return
         }
 
-        // Create model downloader view
-        let downloaderViewModel = DownloadViewModel(cliService: service)
-        let downloaderView = ModelDownloaderView(viewModel: downloaderViewModel)
+        // Reuse persistent download view model so downloads survive window close
+        let downloaderView = ModelDownloaderView(viewModel: downloadViewModel)
         let hostingController = NSHostingController(rootView: downloaderView)
 
         let window = NSWindow(

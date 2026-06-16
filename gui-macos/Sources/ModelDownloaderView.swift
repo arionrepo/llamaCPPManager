@@ -465,7 +465,7 @@ final class DownloadViewModel: ObservableObject {
 }
 
 struct ModelDownloaderView: View {
-    @StateObject var viewModel: DownloadViewModel
+    @ObservedObject var viewModel: DownloadViewModel
     @Environment(\.dismiss) var dismiss
 
     private func formatRelativeTime(_ isoTimestamp: String) -> String {
