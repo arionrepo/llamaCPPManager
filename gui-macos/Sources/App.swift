@@ -64,6 +64,74 @@ struct LlamaCPPManagerApp: App {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
+
+                // MARK: - Active Downloads (pinned at top so always visible)
+                if !vm.downloadViewModel.downloads.isEmpty {
+                    Divider()
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("Active Downloads (\(vm.downloadViewModel.downloads.count))")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 2)
+
+                    ForEach(Array(vm.downloadViewModel.downloads.keys.sorted()), id: \.self) { name in
+                        if let progress = vm.downloadViewModel.downloads[name] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                        .frame(width: 12, height: 12)
+                                    Text(name)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text("\(Int(progress.percentComplete * 100))%")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                ProgressView(value: progress.percentComplete)
+                                    .progressViewStyle(.linear)
+                                    .frame(height: 4)
+                                HStack {
+                                    Text(progress.status)
+                                        .font(.caption2)
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                    if progress.bytesDownloaded > 0 && progress.totalBytes > 0 {
+                                        let dl = ByteCountFormatter.string(fromByteCount: progress.bytesDownloaded, countStyle: .file)
+                                        let total = ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file)
+                                        Text("\(dl) / \(total)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                if progress.speedMBps > 0.1 {
+                                    HStack {
+                                        Text(String(format: "%.1f MB/s", progress.speedMBps))
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        if progress.etaSeconds > 0 {
+                                            Text("ETA: " + formatDownloadETA(progress.etaSeconds))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+
                 Divider()
 
                 // MARK: - Tabbed Interface
@@ -483,72 +551,6 @@ struct LlamaCPPManagerApp: App {
                     Divider()
                 }
 
-                // MARK: - Active Downloads
-                if !vm.downloadViewModel.downloads.isEmpty {
-                    Divider()
-                    HStack {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("Active Downloads (\(vm.downloadViewModel.downloads.count))")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-
-                    ForEach(Array(vm.downloadViewModel.downloads.keys.sorted()), id: \.self) { name in
-                        if let progress = vm.downloadViewModel.downloads[name] {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    ProgressView()
-                                        .scaleEffect(0.5)
-                                        .frame(width: 12, height: 12)
-                                    Text(name)
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text("\(Int(progress.percentComplete * 100))%")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                ProgressView(value: progress.percentComplete)
-                                    .progressViewStyle(.linear)
-                                    .frame(height: 4)
-                                HStack {
-                                    Text(progress.status)
-                                        .font(.caption2)
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                    if progress.bytesDownloaded > 0 {
-                                        let dl = ByteCountFormatter.string(fromByteCount: progress.bytesDownloaded, countStyle: .file)
-                                        let total = ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file)
-                                        Text("\(dl) / \(total)")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                if progress.speedMBps > 0.1 {
-                                    HStack {
-                                        Text(String(format: "%.1f MB/s", progress.speedMBps))
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                        Spacer()
-                                        if progress.etaSeconds > 0 {
-                                            Text("ETA: " + formatDownloadETA(progress.etaSeconds))
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                        }
-                    }
-                }
-
-                Divider()
                 Button("Download Models") { vm.openModelDownloader() }
                 Divider()
                 Button("Refresh") { vm.refresh() }

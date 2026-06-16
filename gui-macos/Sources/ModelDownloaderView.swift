@@ -104,8 +104,105 @@ final class DownloadViewModel: ObservableObject {
     let sizeFilters = ["All Sizes", "Tiny (<2GB)", "Small (2-10GB)", "Medium (10-25GB)", "Large (25-50GB)", "Very Large (>50GB)"]
     let useCaseFilters = ["All Use Cases", "Agentic AI", "Coding", "Compliance", "General"]
 
+    private var externalScanTask: Task<Void, Never>?
+
     init(cliService: CLIService) {
         self.cliService = cliService
+        startExternalDownloadScanner()
+    }
+
+    /// Detect downloads happening outside the GUI (e.g., from CLI) by checking
+    /// for active `llamacpp-manager models download` processes and tracking
+    /// their destination directories.
+    private func startExternalDownloadScanner() {
+        externalScanTask?.cancel()
+        externalScanTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { return }
+                self.scanForExternalDownloads()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)  // every 2s
+            }
+        }
+    }
+
+    private func scanForExternalDownloads() {
+        // Find names of models currently being downloaded by other processes
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-eo", "command"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return }
+
+        var activeNames = Set<String>()
+        for line in output.split(separator: "\n") {
+            // Looking for lines like: ".../llamacpp-manager models download <name>"
+            guard line.contains("llamacpp-manager") && line.contains("models download") else { continue }
+            let parts = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            if let idx = parts.firstIndex(of: "download"), idx + 1 < parts.count {
+                activeNames.insert(parts[idx + 1])
+            }
+        }
+
+        // Add new external downloads to tracking
+        for name in activeNames where downloads[name] == nil {
+            // Look up expected size from catalog if loaded
+            let expectedGB = availableModels.first(where: { $0.name == name })?.sizeGB ?? 0
+            let expectedBytes = Int64(expectedGB * 1_073_741_824)
+            let modelDir = "\(NSHomeDirectory())/llms/\(name)"
+            let bytes = directorySize(path: modelDir)
+
+            downloads[name] = DownloadProgress(
+                id: name,
+                bytesDownloaded: bytes,
+                totalBytes: expectedBytes,
+                speedMBps: 0.0,
+                etaSeconds: 0,
+                status: "Downloading (external)..."
+            )
+            startExternalProgressPolling(name: name, modelDir: modelDir, expectedBytes: expectedBytes)
+        }
+
+        // Remove entries no longer running externally if we're not the one downloading them
+        // (We only clean up entries that have "external" in status — GUI-initiated ones manage themselves)
+        for (name, prog) in downloads where prog.status.contains("external") && !activeNames.contains(name) {
+            downloads.removeValue(forKey: name)
+        }
+    }
+
+    private func startExternalProgressPolling(name: String, modelDir: String, expectedBytes: Int64) {
+        Task { @MainActor [weak self] in
+            var lastBytes: Int64 = 0
+            var lastTime = Date()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self = self else { return }
+                guard var prog = self.downloads[name], prog.status.contains("external") else { return }
+
+                let bytes = self.directorySize(path: modelDir)
+                let now = Date()
+                let elapsed = now.timeIntervalSince(lastTime)
+                let speedBps = elapsed > 0 ? Double(bytes - lastBytes) / elapsed : 0
+                prog.bytesDownloaded = bytes
+                prog.speedMBps = speedBps / 1_048_576.0
+                if speedBps > 0 && expectedBytes > bytes {
+                    prog.etaSeconds = Int(Double(expectedBytes - bytes) / speedBps)
+                }
+                self.downloads[name] = prog
+                lastBytes = bytes
+                lastTime = now
+            }
+        }
     }
 
     func fetchAvailableModels(refresh: Bool = false) {
