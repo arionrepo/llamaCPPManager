@@ -744,6 +744,14 @@ final class StatusViewModel: ObservableObject {
     init() {
         self.downloadViewModel = DownloadViewModel(cliService: service)
 
+        // Forward DownloadViewModel changes so views observing StatusViewModel re-render
+        // (the Active Downloads section in the menu reads vm.downloadViewModel.downloads)
+        downloadViewModel.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         // Observe refresh interval changes
         preferences.$refreshInterval
             .sink { [weak self] _ in
