@@ -112,95 +112,133 @@ final class DownloadViewModel: ObservableObject {
     }
 
     /// Detect downloads happening outside the GUI (e.g., from CLI) by checking
-    /// for active `llamacpp-manager models download` processes and tracking
-    /// their destination directories.
+    /// for active `llamacpp-manager models download` processes. Runs entirely
+    /// on a background queue; only the @Published `downloads` mutation hops to MainActor.
     private func startExternalDownloadScanner() {
         externalScanTask?.cancel()
-        externalScanTask = Task { @MainActor [weak self] in
+        externalScanTask = Task.detached(priority: .background) { [weak self] in
             while !Task.isCancelled {
                 guard let self = self else { return }
-                self.scanForExternalDownloads()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)  // every 2s
+                let activeNames = await self.scanForExternalDownloadsOffMain()
+                await self.applyExternalScan(activeNames: activeNames)
+                try? await Task.sleep(nanoseconds: 5_000_000_000)  // every 5s
             }
         }
     }
 
-    private func scanForExternalDownloads() {
-        // Find names of models currently being downloaded by other processes
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-eo", "command"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
+    /// Runs the ps subprocess and parses output on a background queue.
+    nonisolated private func scanForExternalDownloadsOffMain() async -> Set<String> {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/bin/ps")
+                process.arguments = ["-eo", "command"]
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = Pipe()
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return
-        }
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                } catch {
+                    continuation.resume(returning: [])
+                    return
+                }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return }
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                guard let output = String(data: data, encoding: .utf8) else {
+                    continuation.resume(returning: [])
+                    return
+                }
 
-        var activeNames = Set<String>()
-        for line in output.split(separator: "\n") {
-            // Looking for lines like: ".../llamacpp-manager models download <name>"
-            guard line.contains("llamacpp-manager") && line.contains("models download") else { continue }
-            let parts = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-            if let idx = parts.firstIndex(of: "download"), idx + 1 < parts.count {
-                activeNames.insert(parts[idx + 1])
+                var activeNames = Set<String>()
+                for line in output.split(separator: "\n") {
+                    guard line.contains("llamacpp-manager") && line.contains("models download") else { continue }
+                    let parts = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+                    if let idx = parts.firstIndex(of: "download"), idx + 1 < parts.count {
+                        activeNames.insert(parts[idx + 1])
+                    }
+                }
+                continuation.resume(returning: activeNames)
             }
         }
+    }
 
-        // Add new external downloads to tracking
+    @MainActor
+    private func applyExternalScan(activeNames: Set<String>) {
+        // Add new external downloads
         for name in activeNames where downloads[name] == nil {
-            // Look up expected size from catalog if loaded
             let expectedGB = availableModels.first(where: { $0.name == name })?.sizeGB ?? 0
             let expectedBytes = Int64(expectedGB * 1_073_741_824)
-            let modelDir = "\(NSHomeDirectory())/llms/\(name)"
-            let bytes = directorySize(path: modelDir)
-
             downloads[name] = DownloadProgress(
-                id: name,
-                bytesDownloaded: bytes,
-                totalBytes: expectedBytes,
-                speedMBps: 0.0,
-                etaSeconds: 0,
+                id: name, bytesDownloaded: 0, totalBytes: expectedBytes,
+                speedMBps: 0.0, etaSeconds: 0,
                 status: "Downloading (external)..."
             )
-            startExternalProgressPolling(name: name, modelDir: modelDir, expectedBytes: expectedBytes)
+            startExternalProgressPolling(name: name, expectedBytes: expectedBytes)
         }
 
-        // Remove entries no longer running externally if we're not the one downloading them
-        // (We only clean up entries that have "external" in status — GUI-initiated ones manage themselves)
+        // Remove ones that are no longer running externally
         for (name, prog) in downloads where prog.status.contains("external") && !activeNames.contains(name) {
             downloads.removeValue(forKey: name)
         }
     }
 
-    private func startExternalProgressPolling(name: String, modelDir: String, expectedBytes: Int64) {
-        Task { @MainActor [weak self] in
+    private func startExternalProgressPolling(name: String, expectedBytes: Int64) {
+        let modelDir = "\(NSHomeDirectory())/llms/\(name)"
+        Task.detached(priority: .background) { [weak self] in
             var lastBytes: Int64 = 0
             var lastTime = Date()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard let self = self else { return }
-                guard var prog = self.downloads[name], prog.status.contains("external") else { return }
-
-                let bytes = self.directorySize(path: modelDir)
+                let bytes = await Self.directorySizeOffMain(path: modelDir)
                 let now = Date()
                 let elapsed = now.timeIntervalSince(lastTime)
                 let speedBps = elapsed > 0 ? Double(bytes - lastBytes) / elapsed : 0
-                prog.bytesDownloaded = bytes
-                prog.speedMBps = speedBps / 1_048_576.0
-                if speedBps > 0 && expectedBytes > bytes {
-                    prog.etaSeconds = Int(Double(expectedBytes - bytes) / speedBps)
-                }
-                self.downloads[name] = prog
+                let eta = (speedBps > 0 && expectedBytes > bytes)
+                    ? Int(Double(expectedBytes - bytes) / speedBps) : 0
+                let stillExternal = await self.updateExternalProgress(
+                    name: name, bytes: bytes,
+                    speedMBps: speedBps / 1_048_576.0, etaSeconds: eta
+                )
+                if !stillExternal { return }
                 lastBytes = bytes
                 lastTime = now
+            }
+        }
+    }
+
+    @MainActor
+    private func updateExternalProgress(name: String, bytes: Int64, speedMBps: Double, etaSeconds: Int) -> Bool {
+        guard var prog = downloads[name], prog.status.contains("external") else { return false }
+        prog.bytesDownloaded = bytes
+        prog.speedMBps = speedMBps
+        prog.etaSeconds = etaSeconds
+        downloads[name] = prog
+        return true
+    }
+
+    nonisolated private static func directorySizeOffMain(path: String) async -> Int64 {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                let url = URL(fileURLWithPath: path)
+                guard let enumerator = FileManager.default.enumerator(
+                    at: url,
+                    includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+                    options: [.skipsHiddenFiles]
+                ) else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+                var total: Int64 = 0
+                for case let fileURL as URL in enumerator {
+                    if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+                       values.isRegularFile == true {
+                        total += Int64(values.fileSize ?? 0)
+                    }
+                }
+                continuation.resume(returning: total)
             }
         }
     }
