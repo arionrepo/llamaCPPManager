@@ -9,6 +9,62 @@ let APP_VERSION: String = {
 
 import os.log
 
+// MARK: - GUI Lifecycle Logger
+// Writes structured JSON events to ~/Library/Logs/llamaCPPManager/lifecycle.jsonl
+// alongside the Python CLI's events so we can correlate GUI actions with backend behavior.
+enum LifecycleLog {
+    private static let logPath: URL = {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home
+            .appendingPathComponent("Library")
+            .appendingPathComponent("Logs")
+            .appendingPathComponent("llamaCPPManager")
+            .appendingPathComponent("lifecycle.jsonl")
+    }()
+
+    private static let queue = DispatchQueue(label: "com.llamacpp.manager.lifecycle", qos: .utility)
+
+    static func log(_ event: String, model: String? = nil, _ fields: [String: Any] = [:],
+                    file: String = #file, function: String = #function) {
+        queue.async {
+            var entry: [String: Any] = [
+                "ts": Self.timestamp(),
+                "pid_self": ProcessInfo.processInfo.processIdentifier,
+                "event": event,
+                "source": "gui",
+                "caller": "gui." + ((file as NSString).lastPathComponent as String).replacingOccurrences(of: ".swift", with: "") + "." + function,
+            ]
+            if let model = model { entry["model"] = model }
+            for (k, v) in fields { entry[k] = v }
+            AppLogger.log("[lifecycle] \(event) model=\(model ?? "-") \(fields)", level: .debug)
+            do {
+                try FileManager.default.createDirectory(at: logPath.deletingLastPathComponent(),
+                                                         withIntermediateDirectories: true)
+                let data = try JSONSerialization.data(withJSONObject: entry, options: [])
+                guard let line = String(data: data, encoding: .utf8) else { return }
+                let payload = (line + "\n").data(using: .utf8)!
+                if FileManager.default.fileExists(atPath: logPath.path) {
+                    if let handle = try? FileHandle(forWritingTo: logPath) {
+                        try? handle.seekToEnd()
+                        try? handle.write(contentsOf: payload)
+                        try? handle.close()
+                    }
+                } else {
+                    try? payload.write(to: logPath)
+                }
+            } catch {
+                AppLogger.log("[lifecycle] write failed: \(error)", level: .error)
+            }
+        }
+    }
+
+    private static func timestamp() -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withColonSeparatorInTime]
+        return f.string(from: Date())
+    }
+}
+
 // Helper: format ETA seconds as a short human-readable string
 func formatDownloadETA(_ seconds: Int) -> String {
     if seconds < 60 { return "\(seconds)s" }
@@ -1057,6 +1113,17 @@ final class StatusViewModel: ObservableObject {
     }
 
     func startWithScript(name: String, mode: String? = nil, isDocker: Bool = false) {
+        // Determine deployment type from the configured row, so we can route MLX vs GGUF correctly
+        let row = rows.first(where: { $0.name == name })
+        let deployment = row?.format?.lowercased() ?? "gguf"  // "mlx", "gguf", or unknown -> assume gguf
+        let isMlx = deployment == "mlx"
+
+        LifecycleLog.log("ui.start.clicked", model: name, [
+            "isDocker": isDocker,
+            "deployment": deployment,
+            "mode": mode ?? selectedModes[name] ?? "default"
+        ])
+
         // Set initial startup progress (visible immediately in UI)
         startupProgress[name] = ModelStartupProgress(
             status: "Starting...",
@@ -1064,36 +1131,41 @@ final class StatusViewModel: ObservableObject {
             detail: nil,
             startedAt: Date()
         )
-
-        // Start monitoring the log file for progress
         startLogMonitor(for: name)
 
         Task { [weak self] in
             guard let self = self else { return }
 
             let result: Int32
+            let command: [String]
             if isDocker {
                 let effectiveMode = mode ?? selectedModes[name] ?? "tools"
-                let command = ["docker", "start", name, "--mode", effectiveMode]
-                result = await service.run(command)
-                if result == 0 {
-                    AppLogger.log("Successfully started Docker container: \(name) in \(effectiveMode) mode", level: .info)
-                }
+                command = ["docker", "start", name, "--mode", effectiveMode]
+            } else if isMlx {
+                // MLX models MUST go through `start` (which routes to start_mlx_process).
+                // `start-script` only supports llama-server / GGUF, so MLX models silently fail there.
+                command = ["start", name]
             } else {
                 let effectiveMode = mode ?? selectedModes[name] ?? "basic"
-                let command = ["start-script", name, "--mode", effectiveMode]
-                result = await service.run(command)
-                if result == 0 {
-                    AppLogger.log("Successfully started \(name) in \(effectiveMode) mode via script", level: .info)
-                }
+                command = ["start-script", name, "--mode", effectiveMode]
             }
 
+            LifecycleLog.log("ui.start.cli_invoke", model: name, [
+                "command": command,
+                "deployment": deployment
+            ])
+            result = await service.run(command)
+            LifecycleLog.log("ui.start.cli_result", model: name, [
+                "exit_code": result,
+                "command": command
+            ])
+
             if result == 0 {
+                AppLogger.log("Successfully started \(name) (deployment=\(deployment))", level: .info)
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 refresh()
             } else {
-                AppLogger.log("Failed to start \(name)", level: .error)
-                // Clear progress on failure
+                AppLogger.log("Failed to start \(name) (exit=\(result))", level: .error)
                 await MainActor.run {
                     self.startupProgress.removeValue(forKey: name)
                     self.stopLogMonitor(for: name)
@@ -1233,10 +1305,15 @@ final class StatusViewModel: ObservableObject {
     }
 
     func stop(name: String, isDocker: Bool = false) {
+        LifecycleLog.log("ui.stop.clicked", model: name, ["isDocker": isDocker])
         Task { [weak self] in
             guard let self = self else { return }
             let command = isDocker ? ["docker", "stop", name] : ["stop", name]
+            LifecycleLog.log("ui.stop.cli_invoke", model: name, ["command": command])
             let result = await service.run(command)
+            LifecycleLog.log("ui.stop.cli_result", model: name, [
+                "exit_code": result, "command": command
+            ])
             if result == 0 {
                 let systemLabel = isDocker ? "Docker container" : "model"
                 AppLogger.log("Successfully stopped \(systemLabel): \(name)", level: .info)
