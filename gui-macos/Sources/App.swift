@@ -65,13 +65,14 @@ struct LlamaCPPManagerApp: App {
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
 
-                // MARK: - Active Downloads (pinned at top so always visible)
-                if !vm.downloadViewModel.downloads.isEmpty {
+                // MARK: - Active Downloads + Loading (pinned at top so always visible)
+                let totalActive = vm.downloadViewModel.downloads.count + vm.startupProgress.count
+                if totalActive > 0 {
                     Divider()
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.down.circle.fill")
                             .foregroundColor(.blue)
-                        Text("Active Downloads (\(vm.downloadViewModel.downloads.count))")
+                        Text("Active Downloads & Loading (\(totalActive))")
                             .font(.caption)
                             .fontWeight(.bold)
                             .foregroundColor(.blue)
@@ -79,6 +80,47 @@ struct LlamaCPPManagerApp: App {
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, 2)
+
+                    // Models being loaded / lazy-downloaded by their server processes
+                    ForEach(Array(vm.startupProgress.keys.sorted()), id: \.self) { name in
+                        if let prog = vm.startupProgress[name] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                        .frame(width: 12, height: 12)
+                                    Text(name)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    if let pct = prog.progress {
+                                        Text("\(Int(pct * 100))%")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                if let pct = prog.progress {
+                                    ProgressView(value: pct)
+                                        .progressViewStyle(.linear)
+                                        .frame(height: 4)
+                                }
+                                HStack {
+                                    Text(prog.status)
+                                        .font(.caption2)
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                    if let detail = prog.detail {
+                                        Text(detail)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                        }
+                    }
 
                     ForEach(Array(vm.downloadViewModel.downloads.keys.sorted()), id: \.self) { name in
                         if let progress = vm.downloadViewModel.downloads[name] {
@@ -745,7 +787,6 @@ final class StatusViewModel: ObservableObject {
         self.downloadViewModel = DownloadViewModel(cliService: service)
 
         // Forward DownloadViewModel changes so views observing StatusViewModel re-render
-        // (the Active Downloads section in the menu reads vm.downloadViewModel.downloads)
         downloadViewModel.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
@@ -758,6 +799,95 @@ final class StatusViewModel: ObservableObject {
                 self?.setupRefreshTimer()
             }
             .store(in: &cancellables)
+
+        // Start scanner for external model server processes (mlx_lm.server, llama-server)
+        // that may be lazy-downloading model files.
+        startExternalServerScanner()
+    }
+
+    // MARK: - External Server Process Scanner
+
+    private var externalServerScanTask: Task<Void, Never>?
+
+    private func startExternalServerScanner() {
+        externalServerScanTask?.cancel()
+        externalServerScanTask = Task.detached(priority: .background) { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { return }
+                let activeNames = await self.scanForActiveServersOffMain()
+                await self.applyExternalServerScan(activeNames: activeNames)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+    }
+
+    /// Run `ps` on a background queue, look for mlx_lm.server / llama-server
+    /// processes, and extract the model name they're running.
+    nonisolated private func scanForActiveServersOffMain() async -> Set<String> {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/bin/ps")
+                process.arguments = ["-eo", "command"]
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                } catch {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                guard let output = String(data: data, encoding: .utf8) else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                var names = Set<String>()
+                for line in output.split(separator: "\n") {
+                    let s = String(line)
+                    // mlx_lm.server pattern: --model <hf_repo_or_path>
+                    if s.contains("mlx_lm.server") || s.contains("mlx_lm/server.py") {
+                        if let modelArg = StatusViewModel.argValue(in: s, flag: "--model") {
+                            names.insert(modelArg)
+                        }
+                    }
+                    // llama-server pattern: -m <path>
+                    if s.contains("llama-server") {
+                        if let pathArg = StatusViewModel.argValue(in: s, flag: "-m") {
+                            names.insert(pathArg)
+                        }
+                    }
+                }
+                continuation.resume(returning: names)
+            }
+        }
+    }
+
+    private static func argValue(in command: String, flag: String) -> String? {
+        let tokens = command.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard let idx = tokens.firstIndex(of: flag), idx + 1 < tokens.count else { return nil }
+        return tokens[idx + 1]
+    }
+
+    @MainActor
+    private func applyExternalServerScan(activeNames: Set<String>) {
+        // For each running server, match to a model in our config and add to startupProgress
+        // if the health check says it isn't ready yet.
+        for row in rows where !row.up {
+            let isMatching = activeNames.contains(row.name) ||
+                activeNames.contains(where: { $0.contains(row.name) })
+            if isMatching && startupProgress[row.name] == nil {
+                startupProgress[row.name] = ModelStartupProgress(
+                    status: "Loading (server starting)...",
+                    progress: nil,
+                    detail: nil,
+                    startedAt: Date()
+                )
+                startLogMonitor(for: row.name)
+            }
+        }
     }
 
     func startPolling(interval: TimeInterval = 2.0) {
