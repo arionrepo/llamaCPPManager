@@ -6,22 +6,28 @@ set -e
 # Configuration
 APP_NAME="llamaCPP Manager"
 BUNDLE_ID="com.llamacpp.manager"
-# Get version from git tag, fallback to default
-VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.1.0")
 
-# Always ensure version starts with 'v'
-if [[ ! "$VERSION" =~ ^v ]]; then
-    VERSION="v$VERSION"
-fi
+# Version source priority:
+#   1. VERSION file at repo root (managed by /version-bump)
+#   2. Latest git tag
+#   3. Today's date as fallback
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "..")
+VERSION_FILE="$REPO_ROOT/VERSION"
 
-# Always use a clean version for display
-# Support both semantic versioning (v1.2.3) and date-based (v2026.03.25.1)
-if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-.*)?$ ]]; then
-    DISPLAY_VERSION="${VERSION#v}"
-else
-    # Force version to current date if format doesn't match
-    DISPLAY_VERSION="$(date +%Y.%m.%d).1"
+if [[ -f "$VERSION_FILE" ]]; then
+    DISPLAY_VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
     VERSION="v$DISPLAY_VERSION"
+else
+    VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.1.0")
+    if [[ ! "$VERSION" =~ ^v ]]; then
+        VERSION="v$VERSION"
+    fi
+    if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-.*)?$ ]]; then
+        DISPLAY_VERSION="${VERSION#v}"
+    else
+        DISPLAY_VERSION="$(date +%Y.%m.%d).1"
+        VERSION="v$DISPLAY_VERSION"
+    fi
 fi
 BUILD_DIR="build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"

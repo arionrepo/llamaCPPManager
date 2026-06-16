@@ -4,7 +4,7 @@ import Combine
 
 // Version constant - Date-based: YYYY.MM.DD.N (N = build number for that day)
 let APP_VERSION: String = {
-    return "2026.03.26"
+    return "2026.06.16.1"
 }()
 
 import os.log
