@@ -1889,6 +1889,69 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         else:
             format_type = "unknown"
 
+        # --- Enrich row with filename, size, quantization, live stats, description ---
+        raw_model_path = str(m.get("model_path", ""))
+        expanded = Path(raw_model_path).expanduser() if raw_model_path else None
+        resolved_file = None
+        file_size_gb = None
+        try:
+            if expanded and expanded.exists():
+                if expanded.is_file():
+                    resolved_file = expanded
+                    file_size_gb = round(expanded.stat().st_size / (1024**3), 2)
+                elif expanded.is_dir():
+                    ggufs = sorted(expanded.glob("*.gguf"), key=lambda p: p.stat().st_size, reverse=True)
+                    if ggufs:
+                        resolved_file = ggufs[0]
+                        file_size_gb = round(resolved_file.stat().st_size / (1024**3), 2)
+                    else:
+                        total = 0
+                        for f in expanded.rglob("*"):
+                            try:
+                                if f.is_file() and (f.suffix in (".safetensors", ".gguf", ".bin")):
+                                    total += f.stat().st_size
+                            except Exception:
+                                pass
+                        if total > 0:
+                            file_size_gb = round(total / (1024**3), 2)
+        except Exception:
+            pass
+
+        filename = resolved_file.name if resolved_file else None
+
+        # Parse quantization from filename
+        quantization = None
+        if filename:
+            up = filename.upper()
+            for q in ("BF16", "FP16", "F16", "Q8_0", "Q6_K", "Q5_K_M", "Q5_K_S",
+                      "Q4_K_M", "Q4_K_S", "Q4_0", "Q3_K_M", "IQ4_XS", "IQ4_NL",
+                      "IQ3_M", "IQ3_S", "IQ2_M", "4BIT", "8BIT", "Q2_K"):
+                if q in up:
+                    quantization = q
+                    break
+
+        # Live process stats via psutil (if process is running)
+        ram_mb = None
+        cpu_percent = None
+        if pid:
+            try:
+                import psutil
+                proc = psutil.Process(pid)
+                ram_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+                cpu_percent = round(proc.cpu_percent(interval=0.0), 1)
+            except Exception:
+                pass
+
+        # Description from catalog if name matches
+        description = None
+        try:
+            from .models.downloader import CODING_MODELS, MLX_MODELS
+            entry_info = CODING_MODELS.get(name) or MLX_MODELS.get(name)
+            if entry_info:
+                description = entry_info.get("description")
+        except Exception:
+            pass
+
         entry = {
             "name": name,
             "pid": pid,
@@ -1898,12 +1961,20 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "latency_ms": health.get("latency_ms"),
             "http_status": health.get("http_status"),
             "version": health.get("version"),
-            "mode": startup_mode,  # Startup mode from config
-            "format": format_type,  # Model format: gguf, mlx, moe
-            "process_source": process_source,  # How process was started
+            "mode": startup_mode,
+            "format": format_type,
+            "process_source": process_source,
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
-            "health_state": health.get("health_state", "down"),  # Enhanced health state
+            "health_state": health.get("health_state", "down"),
             "uptime": uptime,
+            "model_path": raw_model_path,
+            "model_filename": filename,
+            "file_size_gb": file_size_gb,
+            "quantization": quantization,
+            "deployment_type": m.get("deployment_type", "native"),
+            "ram_mb": ram_mb,
+            "cpu_percent": cpu_percent,
+            "description": description,
         }
         models_status.append(entry)
 

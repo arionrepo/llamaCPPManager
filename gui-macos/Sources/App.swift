@@ -321,7 +321,7 @@ struct LlamaCPPManagerApp: App {
                                     .frame(width: 10, height: 10)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 6) {
                                         Text(row.name)
                                             .font(.headline)
                                         if let format = row.format {
@@ -333,10 +333,53 @@ struct LlamaCPPManagerApp: App {
                                                 .foregroundColor(.white)
                                                 .cornerRadius(3)
                                         }
+                                        if let q = row.quantization {
+                                            Text(q)
+                                                .font(.caption2)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 2)
+                                                .background(Color.gray.opacity(0.25))
+                                                .cornerRadius(3)
+                                        }
+                                        if let sz = row.file_size_gb, sz > 0 {
+                                            Text(String(format: "%.1f GB", sz))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
+
+                                    if let fn = row.model_filename, !fn.isEmpty {
+                                        Text(fn)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+
                                     Text(vm.healthStatus(for: row))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
+
+                                    if let desc = row.description, !desc.isEmpty {
+                                        Text(desc)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .italic()
+                                            .lineLimit(2)
+                                    }
+
+                                    if row.up, let ram = row.ram_mb, ram > 0 {
+                                        HStack(spacing: 8) {
+                                            Text(String(format: "RAM: %.1f GB", ram / 1024.0))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                            if let cpu = row.cpu_percent {
+                                                Text(String(format: "CPU: %.1f%%", cpu))
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Spacer()
@@ -479,7 +522,7 @@ struct LlamaCPPManagerApp: App {
                                     .frame(width: 10, height: 10)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: 6) {
                                         Text(row.name)
                                             .font(.headline)
                                         if let format = row.format {
@@ -491,10 +534,53 @@ struct LlamaCPPManagerApp: App {
                                                 .foregroundColor(.white)
                                                 .cornerRadius(3)
                                         }
+                                        if let q = row.quantization {
+                                            Text(q)
+                                                .font(.caption2)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 2)
+                                                .background(Color.gray.opacity(0.25))
+                                                .cornerRadius(3)
+                                        }
+                                        if let sz = row.file_size_gb, sz > 0 {
+                                            Text(String(format: "%.1f GB", sz))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
+
+                                    if let fn = row.model_filename, !fn.isEmpty {
+                                        Text(fn)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+
                                     Text(vm.healthStatus(for: row))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
+
+                                    if let desc = row.description, !desc.isEmpty {
+                                        Text(desc)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .italic()
+                                            .lineLimit(2)
+                                    }
+
+                                    if row.up, let ram = row.ram_mb, ram > 0 {
+                                        HStack(spacing: 8) {
+                                            Text(String(format: "RAM: %.1f GB", ram / 1024.0))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                            if let cpu = row.cpu_percent {
+                                                Text(String(format: "CPU: %.1f%%", cpu))
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Spacer()
@@ -704,9 +790,19 @@ struct StatusRow: Codable {
     let log_path: String?
     let health_state: String?
     let uptime: String?
+    // Enriched fields (optional - missing on older CLI versions)
+    let model_path: String?
+    let model_filename: String?
+    let file_size_gb: Double?
+    let quantization: String?
+    let deployment_type: String?
+    let ram_mb: Double?
+    let cpu_percent: Double?
+    let description: String?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case name, pid, host, port, up, latency_ms, http_status, version, mode, format, log_path, health_state, uptime
+        case model_path, model_filename, file_size_gb, quantization, deployment_type, ram_mb, cpu_percent, description
     }
 }
 

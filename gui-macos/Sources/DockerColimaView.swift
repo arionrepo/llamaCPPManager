@@ -250,7 +250,7 @@ struct DockerColimaView: View {
                                         // Port info: show actual ports, or "no port" in gray if empty
                                         let portText = container.ports.trimmingCharacters(in: .whitespaces)
                                         HStack(spacing: 4) {
-                                            Image(systemName: portText.isEmpty ? "network.slash" : "network")
+                                            Image(systemName: portText.isEmpty ? "minus.circle" : "network")
                                                 .font(.caption2)
                                                 .foregroundColor(portText.isEmpty ? .secondary : .blue)
                                             Text(portText.isEmpty ? "no port" : portText)
