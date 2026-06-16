@@ -77,12 +77,17 @@ def start_process(
     max_bytes = model_log_config.get("max_bytes", log_config.get("max_bytes", 10 * 1024 * 1024))
     backups = model_log_config.get("backups", log_config.get("backups", 5))
 
+    from .lifecycle_log import log_event
+
     env = os.environ.copy()
     if spec.env:
         env.update(spec.env)
     if extra_env:
         env.update(extra_env)
     argv = build_argv(llama_server_path, spec)
+    log_event("process.start.begin", model=spec.name, caller="process.start_process",
+              argv=argv, port=spec.port, deployment="native",
+              logging_enabled=enabled, timestamps=timestamps)
 
     # Configure logging based on settings
     if enabled:
@@ -122,8 +127,12 @@ done >> {shlex.quote(str(log_path))}
             os.chmod(wrapper_path, 0o755)
 
             # Start the wrapper script
-            proc = Popen(['/bin/bash', wrapper_path], env=env)
+            # start_new_session=True detaches the child into its own process group / session
+            # so it survives the parent CLI exiting (was causing models to die ~30s after start)
+            proc = Popen(['/bin/bash', wrapper_path], env=env, start_new_session=True)
             wrapper_pid = proc.pid
+            log_event("process.start.wrapper_spawned", model=spec.name,
+                      pid=wrapper_pid, wrapper_path=wrapper_path)
 
             # Clean up wrapper script after a delay (it will keep running)
             import threading
@@ -158,37 +167,52 @@ done >> {shlex.quote(str(log_path))}
                 except:
                     pass
 
-            # Return actual llama-server PID if found, otherwise fallback to wrapper
-            # (wrapper fallback maintains backwards compatibility if pgrep fails)
+            log_event("process.start.child_resolved", model=spec.name,
+                      wrapper_pid=wrapper_pid, llama_server_pid=llama_server_pid,
+                      returned_pid=llama_server_pid if llama_server_pid else wrapper_pid)
             return llama_server_pid if llama_server_pid else wrapper_pid
         else:
             # No timestamps - direct file logging
             stdout_log = open_log_append(log_path)
             stderr_log = stdout_log  # Share same file
-            proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env)
+            proc = Popen(argv, stdout=stdout_log, stderr=stderr_log, env=env, start_new_session=True)
+            log_event("process.start.direct_spawned", model=spec.name, pid=proc.pid,
+                      mode="direct_no_timestamps")
     else:
         # Logging disabled - discard output
         import subprocess
-        proc = Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+        proc = Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+        log_event("process.start.direct_spawned", model=spec.name, pid=proc.pid,
+                  mode="direct_no_logging")
 
     return proc.pid
 
 
 def stop_process(pid: int, timeout: float = 5.0) -> None:
-    os.kill(pid, signal.SIGTERM)
+    from .lifecycle_log import log_event
+    log_event("process.stop.sigterm", pid=pid, caller="process.stop_process", timeout=timeout)
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError as e:
+        log_event("process.stop.no_such_process", pid=pid, error=str(e))
+        raise
+    except Exception as e:
+        log_event("process.stop.error", pid=pid, error=str(e), error_type=type(e).__name__)
+        raise
+
     # wait up to timeout for process to exit; if still alive, SIGKILL
     deadline = time.time() + max(0.1, float(timeout))
     while time.time() < deadline:
         try:
-            # signal 0 checks existence
             os.kill(pid, 0)
         except ProcessLookupError:
+            log_event("process.stop.exited_after_sigterm", pid=pid)
             return
         except PermissionError:
-            # assume still alive
             pass
         time.sleep(0.1)
     try:
         os.kill(pid, signal.SIGKILL)
+        log_event("process.stop.sigkill", pid=pid, reason="sigterm_timeout")
     except ProcessLookupError:
-        pass
+        log_event("process.stop.exited_before_sigkill", pid=pid)

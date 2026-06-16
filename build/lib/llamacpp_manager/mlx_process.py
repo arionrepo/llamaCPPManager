@@ -128,6 +128,9 @@ def start_mlx_process(
         stderr_file = subprocess.DEVNULL
 
     # Start process with error handling
+    from .lifecycle_log import log_event
+    log_event("process.start.begin", model=spec.name, caller="mlx_process.start_mlx_process",
+              argv=argv, port=spec.port, deployment="mlx")
     try:
         proc = subprocess.Popen(
             argv,
@@ -136,6 +139,8 @@ def start_mlx_process(
             stderr=stderr_file,
             start_new_session=True
         )
+        log_event("process.start.direct_spawned", model=spec.name, pid=proc.pid,
+                  mode="mlx_lm.server")
         return proc.pid
     except FileNotFoundError as e:
         raise RuntimeError(

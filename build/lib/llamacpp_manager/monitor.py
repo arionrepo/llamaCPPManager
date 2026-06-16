@@ -100,12 +100,18 @@ class ModelMonitor:
 
     def check_model_health(self, model_name: str, config: Dict[str, Any]) -> bool:
         """Check if a model needs restart. Returns True if restart was attempted."""
+        from .lifecycle_log import log_event
         if model_name not in self.tracked_models:
             return False
 
         status = self.get_model_status(model_name, config)
         health_state = status["health_state"]
         process_state = status["process_state"]
+
+        log_event("monitor.check_health", model=model_name,
+                  caller="monitor.check_model_health",
+                  health_state=health_state, process_state=process_state,
+                  pid=status.get("pid"))
 
         # Model is healthy - no action needed
         if health_state == "ok":
@@ -126,6 +132,8 @@ class ModelMonitor:
 
     def _restart_model(self, model_name: str, config: Dict[str, Any]) -> bool:
         """Restart a crashed model. Returns True if restart was attempted."""
+        from .lifecycle_log import log_event
+        log_event("monitor.restart.begin", model=model_name, caller="monitor._restart_model")
         try:
             models = config.get("models", [])
             model_config = next((m for m in models if m["name"] == model_name), None)

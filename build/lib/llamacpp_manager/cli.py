@@ -1011,6 +1011,14 @@ Examples:
     sp_ld_uninstall.add_argument("target", help="Model name or 'all'")
     sp_ld_uninstall.set_defaults(func=cmd_launchd)
 
+    # lifecycle (diagnostic command for model lifecycle events)
+    sp_lifecycle = sub.add_parser("lifecycle", help="🔍 Inspect lifecycle events (start, stop, kill, crash)")
+    sp_lifecycle.add_argument("--model", help="Filter by model name")
+    sp_lifecycle.add_argument("--tail", type=int, default=50, help="Number of recent events to show (default: 50)")
+    sp_lifecycle.add_argument("--follow", action="store_true", help="Follow lifecycle log (like tail -f)")
+    sp_lifecycle.add_argument("--path", action="store_true", help="Print the lifecycle log path and exit")
+    sp_lifecycle.set_defaults(func=cmd_lifecycle)
+
     # ensure-running (auto-start missing autostart models)
     sp_ens = sub.add_parser("ensure-running", help="Start models with autostart=true that are not reachable")
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
@@ -1139,7 +1147,81 @@ def _select_models(cfg: Dict[str, Any], target: str) -> List[Dict[str, Any]]:
     return sel
 
 
+def cmd_lifecycle(args: argparse.Namespace) -> int:
+    """Inspect the structured lifecycle event log to troubleshoot model start/stop/kill."""
+    import json
+    from .lifecycle_log import log_path
+    p = log_path()
+
+    if args.path:
+        print(p)
+        return 0
+
+    if not p.exists():
+        print(f"No lifecycle log yet at {p}", file=sys.stderr)
+        print("Events will appear once you start/stop a model.", file=sys.stderr)
+        return 0
+
+    def format_event(line: str) -> Optional[str]:
+        try:
+            d = json.loads(line)
+        except Exception:
+            return None
+        if args.model and d.get("model") != args.model:
+            return None
+        ts = d.get("ts", "")
+        event = d.get("event", "?")
+        model = d.get("model", "-")
+        pid = d.get("pid", d.get("pid_self", "-"))
+        caller = d.get("caller", "")
+        # Build a one-line summary, then extra fields
+        extras = {k: v for k, v in d.items()
+                  if k not in {"ts", "event", "model", "pid", "pid_self", "ppid", "caller"}}
+        extras_str = " ".join(f"{k}={v}" for k, v in extras.items()) if extras else ""
+        return f"{ts}  {event:35s}  model={model:20s} pid={pid:>7} caller={caller}  {extras_str}".rstrip()
+
+    if args.follow:
+        import time
+        # Print last N first
+        with open(p, "r") as f:
+            lines = f.readlines()
+        for line in lines[-args.tail:]:
+            line = line.strip()
+            if not line:
+                continue
+            formatted = format_event(line)
+            if formatted:
+                print(formatted)
+        # Then follow new lines
+        with open(p, "r") as f:
+            f.seek(0, 2)  # end
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.5)
+                    continue
+                formatted = format_event(line.strip())
+                if formatted:
+                    print(formatted)
+                    sys.stdout.flush()
+    else:
+        with open(p, "r") as f:
+            lines = f.readlines()
+        for line in lines[-args.tail:]:
+            line = line.strip()
+            if not line:
+                continue
+            formatted = format_event(line)
+            if formatted:
+                print(formatted)
+    return 0
+
+
 def cmd_start(args: argparse.Namespace) -> int:
+    from .lifecycle_log import log_event
+    log_event("cli.start.begin", caller="cli.cmd_start", target=args.target,
+              launchd=getattr(args, "launchd", False),
+              dry_run=getattr(args, "dry_run", False))
     cfg = load_config()
     llama_path = cfg.get("llama_server_path")
     mlx_python_path = cfg.get("mlx_python_path", "python3")
@@ -1276,6 +1358,9 @@ def cmd_start_script(args: argparse.Namespace) -> int:
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
+    from .lifecycle_log import log_event
+    log_event("cli.stop.begin", caller="cli.cmd_stop", target=args.target,
+              launchd=getattr(args, "launchd", False))
     cfg = load_config()
     selected = _select_models(cfg, args.target)
     rc = 0
