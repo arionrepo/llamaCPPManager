@@ -247,6 +247,18 @@ struct DockerColimaView: View {
                                             .foregroundColor(.secondary)
                                             .lineLimit(1)
 
+                                        // Port info: show actual ports, or "no port" in gray if empty
+                                        let portText = container.ports.trimmingCharacters(in: .whitespaces)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: portText.isEmpty ? "network.slash" : "network")
+                                                .font(.caption2)
+                                                .foregroundColor(portText.isEmpty ? .secondary : .blue)
+                                            Text(portText.isEmpty ? "no port" : portText)
+                                                .font(.caption2)
+                                                .foregroundColor(portText.isEmpty ? .secondary : .secondary)
+                                                .lineLimit(1)
+                                        }
+
                                         if let stats = viewModel.containerStats[container.name] {
                                             Text("CPU: \(stats.cpu, specifier: "%.1f")% | MEM: \(stats.memory)")
                                                 .font(.caption2)

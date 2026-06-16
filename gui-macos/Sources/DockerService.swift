@@ -264,15 +264,16 @@ final class DockerService {
         let lines = output.split(separator: "\n").map(String.init)
 
         return lines.compactMap { line in
-            let parts = line.split(separator: "|").map(String.init)
-            guard parts.count >= 5 else { return nil }
+            // Keep empty trailing fields (Ports may be empty for containers with no exposed ports)
+            let parts = line.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 4 else { return nil }
 
             return DockerContainer(
                 id: parts[0],
                 name: parts[1],
                 status: parts[2],
                 image: parts[3],
-                ports: parts[4],
+                ports: parts.count > 4 ? parts[4] : "",
                 cpuPercent: nil,
                 memoryUsage: nil,
                 colimaProfile: profileName
