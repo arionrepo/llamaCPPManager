@@ -953,16 +953,23 @@ CODING_MODELS = {
         "requires": "Custom llama.cpp build (PR #24523), 300GB+ RAM",
         "note": "Experimental - requires custom llama.cpp fork"
     },
-    "diffusiongemma-26b": {
+    "diffusiongemma-26b-gguf-legacy": {
+        # NOTE: This GGUF variant requires `llama-diffusion-cli` which is CLI-only
+        # (no HTTP server mode in upstream llama.cpp as of June 2026). Kept here
+        # for users who downloaded it earlier; for new installs prefer the
+        # MLX-VLM variants in MLX_MODELS (mlx-diffusiongemma-26b-{4,5,6,8}bit).
         "repo_id": "unsloth/diffusiongemma-26B-A4B-it-GGUF",
         "filename": "diffusiongemma-26B-A4B-it-Q4_K_M.gguf",
-        "description": "DiffusionGemma 26B MoE - Image generation + text",
+        "description": "[DEPRECATED] DiffusionGemma 26B - GGUF (CLI-only, no server)",
         "size_gb": 16,
         "ram_gb": 20,
-        "use_case": "Multimodal generation (text + image synthesis)",
+        "use_case": "Diffusion text generation (CLI only, no server)",
         "version": "1.0",
+        "format": "diffusion",
+        "engine": "llama-diffusion-cli",
         "requires": "llama-diffusion-cli binary (not standard llama-server)",
-        "note": "Specialized binary required - see documentation"
+        "deprecated": True,
+        "note": "Use mlx-diffusiongemma-26b-4bit instead — has server mode via mlx-vlm"
     },
 
     # === REASONING & ANALYSIS MODELS ===
@@ -1035,6 +1042,70 @@ CODING_MODELS = {
 
 # MLX models optimized for Apple Silicon (M1/M2/M3/M4)
 MLX_MODELS = {
+    # === DIFFUSION TEXT MODELS (MLX-VLM backend - experimental) ===
+    # These are served via `python -m mlx_vlm.server` instead of `mlx_lm.server`
+    # because mlx-vlm is currently the only Mac path that supports diffusion
+    # sampling (DiffusionGemma). vLLM has native support but is Linux+CUDA only.
+    # Stock llama-server doesn't support diffusion as of June 2026 (PR #24423 open).
+    "mlx-diffusiongemma-26b-4bit": {
+        "repo_id": "mlx-community/diffusiongemma-26B-A4B-it-4bit",
+        "filename": None,
+        "description": "DiffusionGemma 26B-A4B MoE (MLX 4-bit) — fast block-diffusion text gen",
+        "size_gb": 14,
+        "ram_gb": 18,
+        "use_case": "Fast interactive generation (block diffusion, no KV cache)",
+        "version": "1.0",
+        "format": "diffusion",
+        "engine": "mlx-vlm",
+        "deployment_type": "mlx-vlm",
+        "requires": "Apple Silicon + `llamacpp-manager bootstrap mlx-vlm`",
+        "experimental": True,
+        "note": "Experimental — Google calls DiffusionGemma research-preview; "
+                "scores lower than Gemma 4 on reasoning/math/coding."
+    },
+    "mlx-diffusiongemma-26b-5bit": {
+        "repo_id": "mlx-community/diffusiongemma-26B-A4B-it-5bit",
+        "filename": None,
+        "description": "DiffusionGemma 26B-A4B MoE (MLX 5-bit) — higher quality, more RAM",
+        "size_gb": 17,
+        "ram_gb": 22,
+        "use_case": "Diffusion text gen with better quality than 4-bit",
+        "version": "1.0",
+        "format": "diffusion",
+        "engine": "mlx-vlm",
+        "deployment_type": "mlx-vlm",
+        "requires": "Apple Silicon + `llamacpp-manager bootstrap mlx-vlm`",
+        "experimental": True,
+    },
+    "mlx-diffusiongemma-26b-6bit": {
+        "repo_id": "mlx-community/diffusiongemma-26B-A4B-it-6bit",
+        "filename": None,
+        "description": "DiffusionGemma 26B-A4B MoE (MLX 6-bit) — near-FP16 quality",
+        "size_gb": 20,
+        "ram_gb": 26,
+        "use_case": "Diffusion text gen, high quality on M-series with 32GB+",
+        "version": "1.0",
+        "format": "diffusion",
+        "engine": "mlx-vlm",
+        "deployment_type": "mlx-vlm",
+        "requires": "Apple Silicon + `llamacpp-manager bootstrap mlx-vlm`",
+        "experimental": True,
+    },
+    "mlx-diffusiongemma-26b-8bit": {
+        "repo_id": "mlx-community/diffusiongemma-26B-A4B-it-8bit",
+        "filename": None,
+        "description": "DiffusionGemma 26B-A4B MoE (MLX 8-bit) — highest MLX quality",
+        "size_gb": 26,
+        "ram_gb": 32,
+        "use_case": "Diffusion text gen, max quality (requires ≥64GB RAM)",
+        "version": "1.0",
+        "format": "diffusion",
+        "engine": "mlx-vlm",
+        "deployment_type": "mlx-vlm",
+        "requires": "Apple Silicon + `llamacpp-manager bootstrap mlx-vlm`",
+        "experimental": True,
+    },
+
     # === QWEN3 MLX MODELS (Latest) ===
     "mlx-qwen3-32b": {
         "repo_id": "mlx-community/Qwen3-32B-4bit",

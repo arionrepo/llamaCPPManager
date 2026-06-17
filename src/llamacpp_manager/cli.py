@@ -1668,6 +1668,12 @@ def cmd_models(args: argparse.Namespace) -> int:
                         # Add requires field for MLX models
                         if info.get("requires"):
                             model_dict["requires"] = info["requires"]
+                        # Pass-through additional catalog fields the GUI uses
+                        # for routing/display (purely additive, optional fields).
+                        for opt_key in ("engine", "deployment_type", "experimental",
+                                         "deprecated", "note"):
+                            if info.get(opt_key) is not None:
+                                model_dict[opt_key] = info[opt_key]
                         models_list.append(model_dict)
 
                     # Add metadata to output
