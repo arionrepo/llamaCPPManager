@@ -1020,6 +1020,18 @@ Examples:
     sp_lifecycle.add_argument("--path", action="store_true", help="Print the lifecycle log path and exit")
     sp_lifecycle.set_defaults(func=cmd_lifecycle)
 
+    # bootstrap (set up optional backends like mlx-vlm for diffusion models)
+    sp_bootstrap = sub.add_parser("bootstrap", help="🧰 Set up optional backends (mlx-vlm, ...)")
+    bs_sub = sp_bootstrap.add_subparsers(dest="subcommand", required=True)
+    sp_bs_mlx_vlm = bs_sub.add_parser("mlx-vlm", help="Create venv and install mlx-vlm for diffusion / VLM models")
+    sp_bs_mlx_vlm.add_argument("--venv-path", default=str(Path("~/mlx_vlm_env").expanduser()),
+                                help="Where to create the venv (default: ~/mlx_vlm_env)")
+    sp_bs_mlx_vlm.add_argument("--pip-spec", default="mlx-vlm",
+                                help="pip install spec (default: 'mlx-vlm'; can pin like 'mlx-vlm==0.1.10')")
+    sp_bs_mlx_vlm.add_argument("--no-upgrade", action="store_true",
+                                help="Skip --upgrade flag on pip install")
+    sp_bs_mlx_vlm.set_defaults(func=cmd_bootstrap)
+
     # ensure-running (auto-start missing autostart models)
     sp_ens = sub.add_parser("ensure-running", help="Start models with autostart=true that are not reachable")
     sp_ens.add_argument("--mode", choices=["direct", "launchd"], default="direct", help="How to start missing models")
@@ -1216,6 +1228,46 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
             if formatted:
                 print(formatted)
     return 0
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Set up an optional backend (currently: mlx-vlm)."""
+    if args.subcommand == "mlx-vlm":
+        from .bootstrap import bootstrap_mlx_vlm
+        from .config import load_config, save_config
+
+        print(f"📦 Bootstrapping mlx-vlm in {args.venv_path} ...")
+        ok, msg, details = bootstrap_mlx_vlm(
+            venv_path=Path(args.venv_path).expanduser(),
+            pip_spec=args.pip_spec,
+            upgrade=not args.no_upgrade,
+        )
+        if not ok:
+            print(f"❌ {msg}", file=sys.stderr)
+            return 2
+
+        # Update config with the python path so cmd_start can find it
+        try:
+            cfg = load_config()
+            cfg["mlx_vlm_python_path"] = details["python_path"]
+            save_config(cfg)
+            print(f"✓ Updated config: mlx_vlm_python_path = {details['python_path']}")
+        except Exception as e:
+            print(f"⚠ Could not auto-update config ({e}); add manually:", file=sys.stderr)
+            print(f"   mlx_vlm_python_path: {details['python_path']}", file=sys.stderr)
+
+        print(f"✅ {msg}")
+        print()
+        print("Next steps:")
+        print("  1. Add a diffusion model to config (or use the catalog):")
+        print("     llamacpp-manager config add mlx-diffusiongemma \\")
+        print("       mlx-community/diffusiongemma-26B-A4B-it-4bit \\")
+        print("       --port auto --deployment-type mlx-vlm")
+        print("  2. Start it: llamacpp-manager start mlx-diffusiongemma")
+        return 0
+
+    print(f"error: unknown bootstrap subcommand '{args.subcommand}'", file=sys.stderr)
+    return 2
 
 
 def cmd_start(args: argparse.Namespace) -> int:
