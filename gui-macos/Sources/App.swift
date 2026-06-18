@@ -1209,10 +1209,15 @@ final class StatusViewModel: ObservableObject {
     }
 
     func startWithScript(name: String, mode: String? = nil, isDocker: Bool = false) {
-        // Determine deployment type from the configured row, so we can route MLX vs GGUF correctly
+        // Determine deployment type from the configured row, so we can route MLX / MLX-VLM / GGUF correctly
         let row = rows.first(where: { $0.name == name })
-        let deployment = row?.format?.lowercased() ?? "gguf"  // "mlx", "gguf", or unknown -> assume gguf
+        // Prefer the explicit deployment_type field from the CLI status payload when present,
+        // fall back to the format field, then default to gguf.
+        let deployment = (row?.deployment_type?.lowercased())
+                       ?? (row?.format?.lowercased())
+                       ?? "gguf"
         let isMlx = deployment == "mlx"
+        let isMlxVlm = deployment == "mlx-vlm" || deployment == "diffusion"
 
         LifecycleLog.log("ui.start.clicked", model: name, [
             "isDocker": isDocker,
@@ -1237,6 +1242,10 @@ final class StatusViewModel: ObservableObject {
             if isDocker {
                 let effectiveMode = mode ?? selectedModes[name] ?? "tools"
                 command = ["docker", "start", name, "--mode", effectiveMode]
+            } else if isMlxVlm {
+                // MLX-VLM models (e.g., DiffusionGemma) go through `start` which routes
+                // to start_mlx_vlm_process via the Phase 1b CLI branch.
+                command = ["start", name]
             } else if isMlx {
                 // MLX models MUST go through `start` (which routes to start_mlx_process).
                 // `start-script` only supports llama-server / GGUF, so MLX models silently fail there.
@@ -1689,6 +1698,8 @@ final class StatusViewModel: ObservableObject {
             return .purple
         case "moe":
             return .orange
+        case "diffusion":
+            return .pink
         default:
             return .gray
         }
