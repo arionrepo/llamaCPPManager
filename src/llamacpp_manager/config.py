@@ -188,14 +188,14 @@ def validate_model(cfg: Dict[str, Any], model: ModelSpec, *, updating: bool = Fa
     if not model.model_path:
         errors.append("model_path is required")
     else:
-        # Skip file existence check for MLX models (they use HF repo IDs)
-        if model.deployment_type != "mlx":
+        # Skip file existence check for MLX / MLX-VLM models (they use HF repo IDs)
+        if model.deployment_type not in ("mlx", "mlx-vlm"):
             p = Path(os.path.expanduser(model.model_path))
             if not p.exists():
                 errors.append(f"model_path not found: {p}")
-        # For MLX models, model_path should be a HF repo ID (e.g., mlx-community/model-name)
+        # For MLX / MLX-VLM models, model_path should be a HF repo ID (e.g., mlx-community/model-name)
         elif "/" not in model.model_path:
-            errors.append(f"MLX model_path should be Hugging Face repo ID (e.g., mlx-community/gemma-3-1b-it-4bit)")
+            errors.append(f"{model.deployment_type} model_path should be Hugging Face repo ID (e.g., mlx-community/gemma-3-1b-it-4bit)")
     if not (1 <= int(model.port) <= 65535):
         errors.append("port must be in 1..65535")
     # Unique port check

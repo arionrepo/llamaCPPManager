@@ -828,8 +828,8 @@ Examples:
     sp_cfg_add.add_argument("--port", required=True, help="Port number (e.g., 8081) or 'auto' for automatic allocation")
     sp_cfg_add.add_argument("--mode", choices=["basic", "tools", "performance", "extended"], default="basic",
                             help="Startup mode: basic (minimal), tools (--jinja), performance (optimized), extended (flash-attn)")
-    sp_cfg_add.add_argument("--deployment-type", choices=["native", "container", "mlx"], default="native",
-                            help="Deployment type: native (llama.cpp), container (Docker), mlx (Apple Silicon)")
+    sp_cfg_add.add_argument("--deployment-type", choices=["native", "container", "mlx", "mlx-vlm"], default="native",
+                            help="Deployment type: native (llama.cpp), container (Docker), mlx (mlx_lm.server), mlx-vlm (mlx_vlm.server, for diffusion/VLM)")
     sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
     sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
     sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
