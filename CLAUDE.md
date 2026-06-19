@@ -26,7 +26,7 @@ After ANY change to anything under `gui-macos/Sources/`:
 llamacpp-manager install-gui
 ```
 
-Or in a Claude Code chat: `/install-gui`
+Or in a Claude Code chat: `/llamacpp-install-gui`
 
 That single command handles the full deterministic sequence:
 build → kill running → replace `/Applications/llamaCPP Manager.app` → MD5 verify → launch → confirm process running.
@@ -37,7 +37,7 @@ Flags:
 - `--no-launch` — install without opening the app
 - `--quiet` — minimal output
 
-The script is at `gui-macos/install_gui.sh`. The CLI wrapper is `cmd_install_gui` in `cli.py`. Slash command spec is at `.claude/commands/install-gui.md`.
+The script is at `gui-macos/install_gui.sh`. The CLI wrapper is `cmd_install_gui` in `cli.py`. Slash command spec is at `.claude/commands/llamacpp-install-gui.md` (the `llamacpp-` prefix avoids collisions with similar commands in other repos).
 
 ### Legacy manual workflow (only if `install-gui` is broken)
 

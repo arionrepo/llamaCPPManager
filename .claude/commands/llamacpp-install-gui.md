@@ -1,13 +1,28 @@
 ---
-description: Rebuild the llamaCPPManager macOS GUI app and install it to /Applications (deterministic)
+description: llamaCPPManager — rebuild the macOS menu-bar GUI and install it to /Applications (deterministic)
 ---
 
-# Install GUI
+# /llamacpp-install-gui
 
-**File:** /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/.claude/commands/install-gui.md
-**Description:** Repo-local slash command — rebuild the macOS GUI app and install it deterministically to /Applications
+**File:** /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/.claude/commands/llamacpp-install-gui.md
+**Description:** Repo-specific slash command for **llamaCPPManager** — rebuild the macOS menu-bar GUI and install it deterministically to /Applications. NOT generic — only applies to this repo.
 **Author:** Libor Ballaty <libor@arionetworks.com>
 **Created:** 2026-06-19
+
+---
+
+## Scope
+
+This command is **specific to the llamaCPPManager repo**:
+`/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager`
+
+It only makes sense when the current working repo is llamaCPPManager. Do not invoke from other repos. The command shells out to:
+
+```
+~/.local/bin/llamacpp-manager install-gui [flags]
+```
+
+which expects to find the llamaCPPManager Swift sources at the path baked into the CLI.
 
 ---
 
@@ -48,7 +63,7 @@ The shell pipeline `killall ... && rm -rf ... && cp -R ... && open ...` is britt
 
 ### From Claude Code (this slash command)
 
-Just say `/install-gui` in the chat. I will run:
+Just say `/llamacpp-install-gui` in the chat. I will run:
 
 ```
 ~/.local/bin/llamacpp-manager install-gui
