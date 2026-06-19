@@ -217,26 +217,56 @@ final class DockerService {
 
     // MARK: - Helper Methods
 
+    // Run a subprocess fully off the main thread.
+    // The previous version used Process.waitUntilExit() inline; since DockerColimaViewModel
+    // is @MainActor, that blocked the UI for the duration of the subprocess. Long-running
+    // commands (e.g. `colima delete -f` which takes many seconds) would freeze the menu
+    // bar and the confirmation dialog. Using withCheckedThrowingContinuation +
+    // terminationHandler keeps the @MainActor caller free while we wait.
     private func runCommand(_ command: String, args: [String]) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [command] + args
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = [command] + args
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = pipe
 
-        try process.run()
-        process.waitUntilExit()
+                // Track resume state to avoid double-resume on edge cases.
+                var didResume = false
+                let resumeOnce: (Result<String, Error>) -> Void = { result in
+                    guard !didResume else { return }
+                    didResume = true
+                    switch result {
+                    case .success(let s): continuation.resume(returning: s)
+                    case .failure(let e): continuation.resume(throwing: e)
+                    }
+                }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
+                process.terminationHandler = { proc in
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    let output = String(data: data, encoding: .utf8) ?? ""
+                    if proc.terminationStatus == 0 {
+                        resumeOnce(.success(output))
+                    } else {
+                        let err = NSError(
+                            domain: "DockerService",
+                            code: Int(proc.terminationStatus),
+                            userInfo: [NSLocalizedDescriptionKey: output]
+                        )
+                        resumeOnce(.failure(err))
+                    }
+                }
 
-        guard process.terminationStatus == 0 else {
-            throw NSError(domain: "DockerService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: output])
+                do {
+                    try process.run()
+                } catch {
+                    resumeOnce(.failure(error))
+                }
+            }
         }
-
-        return output
     }
 
     private func parseColimaList(_ output: String) -> [ColimaProfile] {
