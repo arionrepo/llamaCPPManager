@@ -1,3 +1,7 @@
+---
+description: Rebuild the llamaCPPManager macOS GUI app and install it to /Applications (deterministic)
+---
+
 # Install GUI
 
 **File:** /Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llamaCPPManager/.claude/commands/install-gui.md
