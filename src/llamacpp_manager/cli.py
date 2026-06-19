@@ -1020,6 +1020,19 @@ Examples:
     sp_lifecycle.add_argument("--path", action="store_true", help="Print the lifecycle log path and exit")
     sp_lifecycle.set_defaults(func=cmd_lifecycle)
 
+    # install-gui (deterministic build + install + launch of the macOS app)
+    sp_install_gui = sub.add_parser("install-gui",
+        help="🖥️  Rebuild GUI app and install it to /Applications (deterministic)")
+    sp_install_gui.add_argument("--no-rebuild", action="store_true",
+                                 help="Skip rebuild even if sources are newer")
+    sp_install_gui.add_argument("--no-launch", action="store_true",
+                                 help="Install but don't open the app")
+    sp_install_gui.add_argument("--force", action="store_true",
+                                 help="Force rebuild + reinstall even if MD5s match")
+    sp_install_gui.add_argument("--quiet", action="store_true",
+                                 help="Less verbose output (status lines only)")
+    sp_install_gui.set_defaults(func=cmd_install_gui)
+
     # bootstrap (set up optional backends like mlx-vlm for diffusion models)
     sp_bootstrap = sub.add_parser("bootstrap", help="🧰 Set up optional backends (mlx-vlm, ...)")
     bs_sub = sp_bootstrap.add_subparsers(dest="subcommand", required=True)
@@ -1228,6 +1241,53 @@ def cmd_lifecycle(args: argparse.Namespace) -> int:
             if formatted:
                 print(formatted)
     return 0
+
+
+def cmd_install_gui(args: argparse.Namespace) -> int:
+    """
+    Deterministically rebuild the macOS GUI app and install it to /Applications.
+
+    This is a thin wrapper around gui-macos/install_gui.sh — the shell script
+    is the single source of truth; this command makes it scriptable and
+    discoverable via the normal CLI surface.
+    """
+    import subprocess
+    from .lifecycle_log import log_event
+
+    # Locate the script relative to the repo root (which holds this module's parent's parent's parent).
+    here = Path(__file__).resolve()
+    # __file__ = .../src/llamacpp_manager/cli.py -> repo_root is parents[2]
+    candidates = [
+        here.parents[2] / "gui-macos" / "install_gui.sh",
+        Path.home() / "LocalProjects" / "GitHubProjectsDocuments" / "llamaCPPManager" / "gui-macos" / "install_gui.sh",
+    ]
+    script = next((p for p in candidates if p.exists()), None)
+    if not script:
+        print("error: install_gui.sh not found. Expected at one of:", file=sys.stderr)
+        for c in candidates:
+            print(f"  {c}", file=sys.stderr)
+        return 2
+
+    cmd = [str(script)]
+    if args.no_rebuild: cmd.append("--no-rebuild")
+    if args.no_launch:  cmd.append("--no-launch")
+    if args.force:      cmd.append("--force")
+    if args.quiet:      cmd.append("--quiet")
+
+    log_event("cli.install_gui.begin", caller="cli.cmd_install_gui",
+              flags={"no_rebuild": args.no_rebuild, "no_launch": args.no_launch,
+                     "force": args.force, "quiet": args.quiet},
+              script=str(script))
+    try:
+        # Stream script output live so the user sees progress
+        result = subprocess.run(cmd)
+    except KeyboardInterrupt:
+        print("\nInterrupted.", file=sys.stderr)
+        log_event("cli.install_gui.interrupted")
+        return 130
+
+    log_event("cli.install_gui.result", exit_code=result.returncode)
+    return result.returncode
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
