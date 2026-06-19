@@ -86,6 +86,7 @@ struct CatalogResponse: Codable {
     }
 }
 
+@MainActor
 final class DownloadViewModel: ObservableObject {
     @Published var availableModels: [ModelInfo] = []
     @Published var downloads: [String: DownloadProgress] = [:]

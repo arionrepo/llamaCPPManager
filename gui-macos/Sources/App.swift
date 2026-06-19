@@ -883,6 +883,7 @@ struct ModelStartupProgress: Equatable {
     var startedAt: Date
 }
 
+@MainActor
 final class StatusViewModel: ObservableObject {
     @Published var rows: [StatusRow] = []
     @Published var dockerRows: [StatusRow] = []
@@ -1020,7 +1021,7 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
-    private static func argValue(in command: String, flag: String) -> String? {
+    nonisolated private static func argValue(in command: String, flag: String) -> String? {
         let tokens = command.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard let idx = tokens.firstIndex(of: flag), idx + 1 < tokens.count else { return nil }
         return tokens[idx + 1]
@@ -1097,7 +1098,9 @@ final class StatusViewModel: ObservableObject {
             withTimeInterval: TimeInterval(preferences.refreshInterval),
             repeats: true
         ) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
     }
 
@@ -2500,6 +2503,7 @@ struct ChatMessage: Identifiable, Equatable {
     let timestamp: Date = Date()
 }
 
+@MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var currentInput: String = ""
