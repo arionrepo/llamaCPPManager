@@ -6,30 +6,66 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
-### Known Issues (logged 2026-06-19, post-v2026.06.19.5)
-
-- **Create Profile still doesn't actually create the profile.**
-  Symptom: form opens in NSWindow (no longer frozen — Tab works,
-  fields accept input, Create button is clickable). User clicks
-  Create with name filled and other fields empty. Window closes,
-  no error shown, but `colima list` shows no new profile.
-  Suspected cause: `DockerService.createColimaProfile` calls
-  `colima create <name>` but `colima` may not have a `create`
-  subcommand — Colima typically uses `colima start <name>` for
-  both first-time creation and start. The Bool return value of
-  `createColimaProfile` is discarded by the caller (`_ = await ...`),
-  so any non-zero exit code is silently swallowed.
-  Fix path for next session:
-  1. Verify the correct Colima command (likely `colima start <name>
-     --cpu N --memory M --disk D`, not `colima create`).
-  2. Surface the failure from `createProfile` to the form via a new
-     `errorMessage` @State on `CreateProfileForm`.
-  3. Don't auto-close the window on failure.
+### Known Issues (carried forward)
 
 - **`docs/SWIFT-AGENT-STANDARD.md` is referenced from `CLAUDE.md`
   but was authored mid-session and not yet applied to the work in
   this session.** Future Swift work in `gui-macos/` must read that
   doc before editing per the new mandatory rule in CLAUDE.md.
+  The v.6 and v.7 Swift edits below were not retroactively audited
+  against the standard but were inspected for no force-unwraps, no
+  secrets, no `@unchecked Sendable` introductions.
+
+## [2026.06.19.7] - 2026-06-19
+
+### Added
+- **"Copy spec from" dropdown in Create Profile form** — pick an
+  existing Colima profile and its `cpus/memory/disk/runtime/arch`
+  pre-fill the form for the new VM. Source-VM data is untouched;
+  the new VM is independent with identical resource flags. Closes
+  the gap between Colima's mental model (each profile is its own
+  VM) and the user's "create another one like that" need.
+- **Runtime + Architecture pickers** in the Create Profile form
+  (`docker`/`containerd`, `aarch64`/`x86_64`). Default to
+  `docker` and `aarch64` for M-series Macs.
+- **Live streaming progress output** during VM creation — the
+  form now shows a `ProgressView` plus a 100-pt scrollable mono
+  log that streams colima's stdout/stderr in real time. New
+  `runCommandStreaming` helper in `DockerService` uses
+  `FileHandle.readabilityHandler` to deliver per-line callbacks
+  to the main queue. VM provisioning takes 30-60s so feedback
+  matters.
+- **SSH button per running Colima profile** — opens Terminal.app
+  via `osascript` and runs `colima ssh -p <profile>` so the user
+  can drop into the VM without leaving the menu bar app. Profile
+  names are escaped for AppleScript safety.
+
+### Changed
+- Create Profile form window expanded to 460x560 to accommodate
+  the new fields and live log.
+- Memory/disk field labels now explicitly say "GiB" (was
+  ambiguous "Memory (optional)").
+
+## [2026.06.19.6] - 2026-06-19
+
+### Fixed
+- **Create Profile silently failed (root-cause fix).** The form
+  opened, accepted input, the Create button was clickable — but
+  no profile was created and no error appeared. Root cause:
+  `DockerService.createColimaProfile` invoked `colima create
+  <name>`, which is not a real Colima subcommand. Colima creates
+  a VM on first `colima start <profile>` (the `start` command
+  both creates and starts). The `Bool` return was also discarded
+  by the caller so any non-zero exit was swallowed silently.
+  Fix:
+  1. Use `colima start <name>` (with `--cpus` instead of `--cpu`).
+  2. Change `createColimaProfile` signature to return `String?`
+     (nil on success, error message on failure).
+  3. `CreateProfileForm` now holds an `errorMessage` `@State`,
+     displays it in red, and only auto-closes on success.
+  4. Form is lenient about unit suffixes — strips trailing
+     `G`/`GB`/`GiB` from memory/disk so old habits still work
+     (Colima itself expects bare GiB integers).
 
 ## [2026.06.19.5] - 2026-06-19
 

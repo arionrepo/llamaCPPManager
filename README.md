@@ -149,6 +149,18 @@ The native macOS menu bar application provides:
 - **Settings** - Configure models, ports, and preferences
 - **MyRAGDB Integration** - Monitor and control MyRAGDB search service
 - **"Stop All Models" Button** - Emergency stop for all running models
+- **Infrastructure Tab (Docker + Colima)** - Manage Colima profiles and
+  Docker containers from the menu bar:
+  - Create a new Colima profile/VM with a "Copy spec from" dropdown
+    that pre-fills CPU / memory / disk / runtime / architecture from
+    an existing profile, plus runtime (`docker`/`containerd`) and
+    architecture (`aarch64`/`x86_64`) pickers.
+  - Live streaming colima output during VM creation (creation takes
+    30-60s so progress visibility matters).
+  - **SSH button** on each running profile — opens Terminal.app and
+    drops you into the VM via `colima ssh -p <profile>`.
+  - Start / Stop / Delete profiles and containers; per-container CPU
+    and memory stats.
 
 **Accessing the GUI:**
 1. Launch from Applications folder

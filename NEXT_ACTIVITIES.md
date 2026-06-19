@@ -240,22 +240,30 @@
 ### **Low Priority Issues to Address:**
 
 #### **Open bugs (logged 2026-06-19, must-fix next session):**
-- [ ] **Create Profile silently fails** — the NSWindow form (added in
-      v2026.06.19.5) is interactive, but clicking Create dismisses the
-      window without creating a Colima profile and without showing an
-      error. Likely cause: `DockerService.createColimaProfile` runs
-      `colima create <name>` but Colima may not have that subcommand
-      (it uses `colima start <name>` for both create + start). Plus
-      `_ = await createColimaProfile()` discards the Bool return so any
-      failure is swallowed.
-      Acceptance:
-      - Verify correct Colima command via `colima start --help` / `colima --help`.
-      - Update `createColimaProfile` to use the correct command.
-      - Propagate failure back to `CreateProfileForm` via an
-        `errorMessage` @State; don't auto-close on error.
+- [x] **Create Profile silently fails** — RESOLVED 2026-06-19 in
+      v2026.06.19.6. Root cause confirmed: `colima create <name>` is
+      not a real subcommand; Colima uses `colima start <name>` for
+      both create and start. Fix:
+      - `DockerService.createColimaProfile` now invokes `colima start`
+        with `--cpus` (canonical flag).
+      - Signature changed from `Bool` to `String?` (nil = success,
+        error string = failure).
+      - `CreateProfileForm` shows the colima error in red and does not
+        auto-close on failure.
+      - Form is lenient about unit suffixes (strips `G`/`GB`/`GiB`).
+      Verified: user successfully created a profile after the fix.
+- [x] **Create Profile UX follow-up** — RESOLVED 2026-06-19 in
+      v2026.06.19.7. Added "Copy spec from" dropdown (pre-fills
+      cpus/memory/disk/runtime/arch from an existing profile),
+      Runtime + Architecture pickers, live streaming progress log,
+      and SSH button per profile row (opens Terminal via osascript
+      and runs `colima ssh -p <name>`).
 - [ ] **Read `docs/SWIFT-AGENT-STANDARD.md` before any next-session Swift
       work** — added by user mid-session 2026-06-19, referenced from
-      `CLAUDE.md` as MANDATORY. Not yet applied to this session's work.
+      `CLAUDE.md` as MANDATORY. The v.6 + v.7 Swift edits this session
+      were inspected for force-unwraps / secrets / `@unchecked Sendable`
+      (none introduced) but were NOT retroactively audited section-by-section
+      against the standard. Carry forward.
 
 #### **Code Quality:**
 - [ ] Add type hints to older modules
