@@ -23,6 +23,33 @@ llamaCPPManager is a comprehensive toolkit for managing multiple local `llama-se
 - 🔌 **MyRAGDB Integration** - Monitor and manage MyRAGDB search service
 - 🎯 **Port Management** - Automatic port allocation and conflict detection
 
+### Supported Backends
+
+llamaCPPManager dispatches each model to the right runtime based on the
+`deployment_type` field in its config entry:
+
+| `deployment_type` | Runtime | Use case |
+|---|---|---|
+| `native` (default) | `llama-server` from llama.cpp | Standard GGUF models (most common) |
+| `container` | Docker container with llama-server inside | Sandboxed / multi-arch deployments |
+| `mlx` | `python -m mlx_lm.server` | Apple Silicon autoregressive MLX models (e.g. Qwen3 4-bit) |
+| `mlx-vlm` | `python -m mlx_vlm.server` | Apple Silicon **diffusion / vision-language** models (e.g. DiffusionGemma). Run `llamacpp-manager bootstrap mlx-vlm` to set up the venv before first use. |
+
+All backends expose the same OpenAI-compatible `/v1/chat/completions` API,
+so the CLI's `query chat` and the GUI's Chat button work uniformly across
+runtimes.
+
+### Lifecycle Diagnostics
+
+Every start, stop, kill, crash, and bootstrap event is appended to
+`~/Library/Logs/llamaCPPManager/lifecycle.jsonl`. Inspect with:
+
+```bash
+llamacpp-manager lifecycle --tail 50
+llamacpp-manager lifecycle --model phi3 --tail 20
+llamacpp-manager lifecycle --follow      # tail -f mode
+```
+
 ---
 
 ## Quick Start
