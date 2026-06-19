@@ -82,6 +82,16 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] Hung process detection and cleanup
 
 ## Stretch / Backlog
+- [ ] **MCP server visibility & GUI lifecycle management** (added 2026-06-19, see discussion in conformance-pass session)
+  - Status today: `src/llamacpp_manager/mcp_server.py` exists (464 lines, 8 tools, registered as `llamacpp-mcp-server` console script via `pyproject.toml`). Documented in `docs/mcp-server-api.md`. **But it is invisible in the GUI and the README — agentic users don't know it exists.**
+  - Proposed scope (revisit *after* Swift conformance pass completes, since adding an infra row to the current 2,732-line `App.swift` would make that file worse):
+    1. Add MCP server as a first-class infrastructure component in the GUI (same row pattern as cloudflared / llm_controller): status indicator, start/stop toggle, last-restart timestamp.
+    2. Add a "Copy agent config" button that writes the right `claude_desktop_config.json` / Codex / Gemini snippet to clipboard, pointing at the user's installed `llamacpp-mcp-server` path.
+    3. Add a one-liner to `README.md` and `CLAUDE.md` advertising that the repo ships an MCP server (current docs only mention CLI + GUI).
+    4. Verify the pipx-install gotcha (CLAUDE.md "Python CLI Development" section) doesn't silently break the MCP console-script entry point after `pipx reinstall`.
+    5. Product question to answer before building: are the existing 8 tools sufficient, or are `compare_models` / `chat_history` / `query_multi` agent tools also needed?
+  - Explicitly out of scope: reimplementing the MCP server in Swift inside the macOS app. That was evaluated and rejected as overkill.
+  - Dependency: do *not* start before `docs/SWIFT-CONFORMANCE-PLAN.md` phases 0–4 are complete.
 - [ ] Prometheus endpoint/sidecar for metrics
 - [ ] Workspace profiles (multiple configs)
 - [ ] Raycast commands / VS Code tasks
