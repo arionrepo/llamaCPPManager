@@ -13,6 +13,20 @@ llamaCPPManager is a macOS tool for managing multiple llama.cpp server instances
 - SQLite chat history database
 - Multi-model comparison features
 
+## Swift Development Standard (MANDATORY)
+
+All Swift / SwiftUI work under `gui-macos/` (and any future Apple-platform code in this repo) must follow:
+
+**[docs/SWIFT-AGENT-STANDARD.md](docs/SWIFT-AGENT-STANDARD.md)** — execution standard for AI coding agents and human reviewers (inspection, technology selection, concurrency, accessibility, security, testing, validation, reporting).
+
+Key non-negotiables agents must respect before editing `gui-macos/`:
+- Inspect first; record pre-existing build/test failures.
+- No force unwraps, no secrets in source/`UserDefaults`/logs, no `@unchecked Sendable` without justification.
+- No networking / persistence / business logic in SwiftUI view bodies.
+- Don't change bundle ID, signing, entitlements, or deployment targets casually.
+- Icon-only buttons must have `.accessibilityLabel(...)`.
+- Don't claim completion without attempting build + test validation (or documenting why it wasn't possible) — use the reporting format in §24.
+
 ## Swift GUI Application Workflow (MANDATORY)
 
 ### Problem
