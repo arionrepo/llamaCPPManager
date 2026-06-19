@@ -85,14 +85,15 @@ class DockerColimaViewModel: ObservableObject {
 
 struct DockerColimaView: View {
     @StateObject private var viewModel = DockerColimaViewModel()
-    @State private var showCreateSheet = false
-    // showDeleteConfirm / profileToDelete removed - delete now uses NSAlert
-    // directly via confirmAndDeleteProfile() because SwiftUI .confirmationDialog
-    // freezes inside a MenuBarExtra menu.
-    @State private var newProfileName = ""
-    @State private var newProfileCpus = ""
-    @State private var newProfileMemory = ""
-    @State private var newProfileDisk = ""
+    // NOTE: SwiftUI modal presentations (.sheet / .confirmationDialog / .alert)
+    // inside MenuBarExtra silently freeze the menu because the modal can't
+    // cleanly steal focus from the menu's transient host window. Both the
+    // create-profile flow and delete-profile flow are presented via native
+    // AppKit primitives instead:
+    //   - Create:  NSWindow + NSHostingController (see CreateProfileWindowController)
+    //   - Delete:  NSAlert.runModal() (see confirmAndDeleteProfile)
+    // Previously this struct held @State for showCreateSheet, showDeleteConfirm,
+    // profileToDelete, newProfileName/Cpus/Memory/Disk — all removed.
 
     private var groupedContainers: [String: [DockerContainer]] {
         Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
@@ -192,7 +193,11 @@ struct DockerColimaView: View {
                     .font(.caption)
 
                     Button("New Profile") {
-                        showCreateSheet = true
+                        // SwiftUI .sheet inside MenuBarExtra steals focus only
+                        // partially, leaving the form's text fields inert.
+                        // Present in a real NSWindow instead (same pattern as
+                        // the Model Downloader window).
+                        showCreateProfileWindow()
                     }
                     .buttonStyle(.bordered)
                     .font(.caption)
@@ -343,73 +348,129 @@ struct DockerColimaView: View {
         .onDisappear {
             viewModel.stopPolling()
         }
-        .sheet(isPresented: $showCreateSheet) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Create Colima Profile")
-                    .font(.headline)
-                    .padding(.bottom, 8)
+        // No SwiftUI .sheet — the create form is presented in a real NSWindow
+        // (see showCreateProfileWindow / CreateProfileForm below).
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Profile Name")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                    TextField("e.g., default", text: $newProfileName)
-                        .textFieldStyle(.roundedBorder)
+    // MARK: - Create Profile Window (NSWindow-hosted to avoid MenuBarExtra .sheet freeze)
 
-                    Text("CPUs (optional)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                    TextField("Uses default if empty", text: $newProfileCpus)
-                        .textFieldStyle(.roundedBorder)
+    private func showCreateProfileWindow() {
+        // Reuse window if it's already open
+        if let win = CreateProfileWindowController.shared.window {
+            win.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        CreateProfileWindowController.shared.show(viewModel: viewModel)
+    }
+}
 
-                    Text("Memory (optional)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                    TextField("e.g., 4G", text: $newProfileMemory)
-                        .textFieldStyle(.roundedBorder)
+// MARK: - CreateProfileForm + window controller
 
-                    Text("Disk (optional)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                    TextField("e.g., 60G", text: $newProfileDisk)
-                        .textFieldStyle(.roundedBorder)
+private struct CreateProfileForm: View {
+    @ObservedObject var viewModel: DockerColimaViewModel
+    var onClose: () -> Void
+
+    @State private var profileName = ""
+    @State private var cpus = ""
+    @State private var memory = ""
+    @State private var disk = ""
+    @State private var isSubmitting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Create Colima Profile")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Profile Name").font(.caption).fontWeight(.semibold)
+                TextField("e.g., my-profile", text: $profileName)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isSubmitting)
+
+                Text("CPUs (optional)").font(.caption).fontWeight(.semibold)
+                TextField("Uses default if empty", text: $cpus)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isSubmitting)
+
+                Text("Memory (optional)").font(.caption).fontWeight(.semibold)
+                TextField("e.g., 4G", text: $memory)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isSubmitting)
+
+                Text("Disk (optional)").font(.caption).fontWeight(.semibold)
+                TextField("e.g., 60G", text: $disk)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isSubmitting)
+            }
+
+            HStack(spacing: 12) {
+                Button("Cancel") {
+                    onClose()
                 }
-                .padding(.vertical, 8)
+                .buttonStyle(.bordered)
+                .disabled(isSubmitting)
 
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        showCreateSheet = false
-                        newProfileName = ""
-                        newProfileCpus = ""
-                        newProfileMemory = ""
-                        newProfileDisk = ""
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Create") {
-                        let cpus = Int(newProfileCpus)
-                        Task {
-                            await viewModel.createProfile(
-                                name: newProfileName,
-                                cpus: cpus,
-                                memory: newProfileMemory.isEmpty ? nil : newProfileMemory,
-                                disk: newProfileDisk.isEmpty ? nil : newProfileDisk
-                            )
-                            showCreateSheet = false
-                            newProfileName = ""
-                            newProfileCpus = ""
-                            newProfileMemory = ""
-                            newProfileDisk = ""
+                Button(isSubmitting ? "Creating..." : "Create") {
+                    let cpusInt = Int(cpus)
+                    isSubmitting = true
+                    Task {
+                        await viewModel.createProfile(
+                            name: profileName.trimmingCharacters(in: .whitespaces),
+                            cpus: cpusInt,
+                            memory: memory.isEmpty ? nil : memory,
+                            disk: disk.isEmpty ? nil : disk
+                        )
+                        await MainActor.run {
+                            isSubmitting = false
+                            onClose()
                         }
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .padding(.top, 12)
-
-                Spacer()
+                .buttonStyle(.borderedProminent)
+                .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
+                .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(.top, 8)
+
+            Spacer()
         }
+        .padding(16)
+        .frame(width: 400, height: 320)
+    }
+}
+
+private final class CreateProfileWindowController: NSObject, NSWindowDelegate {
+    static let shared = CreateProfileWindowController()
+    var window: NSWindow?
+
+    func show(viewModel: DockerColimaViewModel) {
+        let form = CreateProfileForm(viewModel: viewModel) { [weak self] in
+            self?.close()
+        }
+        let hostingController = NSHostingController(rootView: form)
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        win.title = "New Colima Profile"
+        win.contentViewController = hostingController
+        win.center()
+        win.delegate = self
+        win.isReleasedWhenClosed = false
+        win.level = .floating
+        win.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.window = win
+    }
+
+    func close() {
+        window?.close()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        self.window = nil
     }
 }
