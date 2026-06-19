@@ -6,6 +6,62 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.19.5] - 2026-06-19
+
+### Fixed
+- **Create Profile form was frozen** in the Infrastructure tab — could
+  type the name field only; other fields and the Create button were
+  unresponsive. Replaced SwiftUI `.sheet` (which fails inside
+  MenuBarExtra because the modal can't steal focus from the menu's
+  transient host window) with a real `NSWindow + NSHostingController`
+  via new `CreateProfileForm` view and `CreateProfileWindowController`.
+  Tab key now moves between fields; Return triggers Create.
+- Removed unused `@State` vars (showCreateSheet,
+  newProfileName/Cpus/Memory/Disk) — moved into the new form view.
+
+## [2026.06.19.4] - 2026-06-19
+
+### Fixed
+- **Delete Profile dialog froze the entire menu** in the Infrastructure
+  tab — clicking Delete on a stopped Colima profile presented a
+  confirmation dialog that the user could not interact with at all
+  (couldn't click Delete or Cancel). Same MenuBarExtra modal-focus
+  issue as the Create Profile sheet. Replaced
+  `.confirmationDialog` with `NSAlert.runModal()` + `NSApp.activate(ignoringOtherApps:)`.
+
+## [2026.06.19.3] - 2026-06-19
+
+### Fixed
+- **CLIService.run / runAndCapture blocked the main thread** — every
+  model start/stop/chat/status fetch and every model-download CLI call
+  went through these two methods (~18 call sites). Both used synchronous
+  `Process.waitUntilExit()` on the caller's thread, freezing the UI
+  during any long-running CLI invocation. Refactored to use
+  `withCheckedThrowingContinuation` + `DispatchQueue.global(qos: .userInitiated)`
+  + `Process.terminationHandler`. Signatures unchanged.
+- `parseStartupLog()` now reads only the last 64KB of a log via
+  `FileHandle` seek instead of loading the whole file. Prevents log-polling
+  task stalls on huge model log files.
+
+## [2026.06.19.2] - 2026-06-19
+
+### Fixed
+- **`colima delete` froze the GUI** for the entire 5-30 second duration
+  of the VM teardown. Root cause: `DockerService.runCommand` used
+  synchronous `Process.waitUntilExit()` while
+  `DockerColimaViewModel` is `@MainActor`. Refactored to background
+  queue + `terminationHandler` so the UI stays responsive while colima
+  works. Fix applies to all 11 docker/colima operations
+  (getColimaProfiles, start/stop/restart/createColimaProfile,
+  deleteColimaProfile, getDockerContainers, start/stop/restartDockerContainer,
+  getContainerStats).
+
+### Added
+- **`/llamacpp-install-gui` slash command** (repo-local in
+  `.claude/commands/`) — invokes `llamacpp-manager install-gui`. Renamed
+  from generic `/install-gui` for repo-namespace clarity. Includes YAML
+  frontmatter so Claude Code registers it.
+
 ## [2026.06.19.1] - 2026-06-19
 
 ### Added
