@@ -16,6 +16,43 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.19.8] - 2026-06-19
+
+### Added (Accessibility — Conformance Phase 1)
+- VoiceOver labels on 4 icon-only buttons: menu bar brain icon
+  ("llamaCPPManager menu"), refresh button in Model Downloader
+  ("Refresh catalog"), clear-search button ("Clear search"),
+  copy-error button ("Copy error message").
+- `.accessibilityHidden(true)` on 9 decorative icons paired with
+  adjacent Text(...) — prevents VoiceOver from reading the same
+  content twice. Sites in App.swift (active-downloads header,
+  error banner), ModelDownloaderView.swift (search field icon,
+  error icon, empty-tray icon, model-row brain, downloaded
+  checkmark, hardware-requires CPU icon), DockerColimaView.swift
+  (port-status icon).
+
+### Changed (Concurrency — Conformance Phase 2)
+- `StatusViewModel`, `ChatViewModel`, and `DownloadViewModel`
+  now declared `@MainActor`. Formalizes the existing intent
+  (the code already uses `MainActor.run { }` and `@MainActor in`
+  closures throughout). Compiler now catches future off-main UI
+  writes.
+- `StatusViewModel.argValue(in:flag:)` marked `nonisolated` —
+  pure string-parsing helper called from the background
+  `Task.detached` that scans `ps` output. No state access.
+- `setupRefreshTimer` Timer callback now hops to the main actor
+  explicitly: `Task { @MainActor in self?.refresh() }`. No
+  behavior change (Timer already fires on the main RunLoop);
+  this only makes the isolation contract explicit so Swift 6
+  strict-concurrency mode won't warn.
+
+### Process
+- Conformance pass began against `docs/SWIFT-AGENT-STANDARD.md`
+  following the phased plan in `docs/SWIFT-CONFORMANCE-PLAN.md`.
+  Phases 1+2 complete; Phase 0 baseline established that
+  `Package.swift` has no test target wired up (5 orphaned test
+  files in `gui-macos/Tests/`) — Phase 7 will address.
+
 ## [2026.06.19.7] - 2026-06-19
 
 ### Added
