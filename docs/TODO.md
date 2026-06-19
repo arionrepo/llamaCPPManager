@@ -82,6 +82,16 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] Hung process detection and cleanup
 
 ## Stretch / Backlog
+- [ ] **Fix `version-bump.py` to also sync embedded version literals (GLOBAL — affects all repos)** (added 2026-06-19)
+  - Tool: `~/.ai-dev-dotfiles/tools/version-bump.py`. Currently it updates only the `VERSION` file. It does NOT patch:
+    - `gui-macos/Sources/App.swift` APP_VERSION literal (only `gui-macos/build_app.sh` does, via a perl regex, when install-gui runs)
+    - `gui-macos/build/.../Info.plist` (build artifact updated by `build_app.sh`)
+  - Result: after `version-bump.py` runs, `VERSION` says vN+1 but `App.swift` still says vN. The two files literally disagree until the next `install-gui` run.
+  - The pre-commit hook at `.git/hooks/pre-commit` enforces tag == App.swift == Info.plist, so any commit between bump-time and install-gui-time fails. Chicken-and-egg with the documented release process in `.claude/CLAUDE.md`.
+  - Proposed fix: make `version-bump.py` repo-aware. Discover patchable files via a config (e.g. `.versionbump.yaml` at repo root) or by scanning known patterns (`APP_VERSION = "x.y.z"`, `version: x.y.z` in Info.plist, `version = "x.y.z"` in pyproject.toml, etc.). Solution must work for ALL of the user's repos — not a llamaCPPManager-local hack.
+  - Also: redesign the pre-commit hook to check `VERSION` file (not latest git tag) so tagging is truly optional as `.claude/CLAUDE.md` claims.
+  - Workaround until fixed: after running `version-bump.py`, manually patch the App.swift literal (or run `install-gui --no-launch`), then commit. For commit, may need `--no-verify` if hook's git-tag check fails — or tag retroactively before commit.
+  - Found during: Swift conformance pass Phase 3 (2026-06-19). Phase 3 was forced to ship as a no-bump structural commit to avoid the trap.
 - [ ] **MCP server visibility & GUI lifecycle management** (added 2026-06-19, see discussion in conformance-pass session)
   - Status today: `src/llamacpp_manager/mcp_server.py` exists (464 lines, 8 tools, registered as `llamacpp-mcp-server` console script via `pyproject.toml`). Documented in `docs/mcp-server-api.md`. **But it is invisible in the GUI and the README — agentic users don't know it exists.**
   - Proposed scope (revisit *after* Swift conformance pass completes, since adding an infra row to the current 2,732-line `App.swift` would make that file worse):
