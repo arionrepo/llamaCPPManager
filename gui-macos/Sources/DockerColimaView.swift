@@ -86,8 +86,9 @@ class DockerColimaViewModel: ObservableObject {
 struct DockerColimaView: View {
     @StateObject private var viewModel = DockerColimaViewModel()
     @State private var showCreateSheet = false
-    @State private var showDeleteConfirm = false
-    @State private var profileToDelete: String?
+    // showDeleteConfirm / profileToDelete removed - delete now uses NSAlert
+    // directly via confirmAndDeleteProfile() because SwiftUI .confirmationDialog
+    // freezes inside a MenuBarExtra menu.
     @State private var newProfileName = ""
     @State private var newProfileCpus = ""
     @State private var newProfileMemory = ""
@@ -95,6 +96,24 @@ struct DockerColimaView: View {
 
     private var groupedContainers: [String: [DockerContainer]] {
         Dictionary(grouping: viewModel.dockerContainers) { $0.colimaProfile }
+    }
+
+    // Use NSAlert (the codebase's established imperative-dialog pattern) instead of
+    // SwiftUI .confirmationDialog. .confirmationDialog inside a MenuBarExtra menu
+    // was freezing the entire menu when the modal tried to present, because the
+    // modal can't steal focus cleanly from the menu's transient host window.
+    private func confirmAndDeleteProfile(name: String) {
+        let alert = NSAlert()
+        alert.messageText = "Delete Colima profile '\(name)'?"
+        alert.informativeText = "This will destroy the VM and all containers inside it. This cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        // Activate the app so the alert window appears in front of everything.
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        Task { await viewModel.deleteProfile(name: name) }
     }
 
     var body: some View {
@@ -151,8 +170,9 @@ struct DockerColimaView: View {
                                 }
 
                                 Button("Delete") {
-                                    profileToDelete = profile.name
-                                    showDeleteConfirm = true
+                                    // Use NSAlert directly — SwiftUI .confirmationDialog
+                                    // in a MenuBarExtra was freezing the menu's interaction.
+                                    confirmAndDeleteProfile(name: profile.name)
                                 }
                                 .buttonStyle(.borderless)
                                 .font(.caption)
@@ -322,16 +342,6 @@ struct DockerColimaView: View {
         }
         .onDisappear {
             viewModel.stopPolling()
-        }
-        .confirmationDialog("Delete Profile", isPresented: $showDeleteConfirm) {
-            Button("Delete", role: .destructive) {
-                if let profile = profileToDelete {
-                    Task { await viewModel.deleteProfile(name: profile) }
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Are you sure you want to delete '\(profileToDelete ?? "")'? This cannot be undone.")
         }
         .sheet(isPresented: $showCreateSheet) {
             VStack(alignment: .leading, spacing: 12) {
