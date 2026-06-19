@@ -128,6 +128,7 @@ struct LlamaCPPManagerApp: App {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.down.circle.fill")
                             .foregroundColor(.blue)
+                            .accessibilityHidden(true)
                         Text("Active Downloads & Loading (\(totalActive))")
                             .font(.caption)
                             .fontWeight(.bold)
@@ -754,6 +755,8 @@ struct LlamaCPPManagerApp: App {
         } label: {
             HStack(spacing: 3) {
                 Image(systemName: "brain.head.profile")
+                    .accessibilityLabel("llamaCPPManager menu")
+                    .accessibilityHint("Opens the model management menu")
                 Circle()
                     .fill(vm.overallStatusColor)
                     .frame(width: 8, height: 8)
@@ -2609,6 +2612,7 @@ struct ChatView: View {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.orange)
+                        .accessibilityHidden(true)
                     Text(error)
                         .foregroundColor(.orange)
                         .font(.caption)

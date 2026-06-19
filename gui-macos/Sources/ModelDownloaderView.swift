@@ -644,6 +644,7 @@ struct ModelDownloaderView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Refresh catalog")
                 .help("Refresh catalog from HuggingFace")
                 .disabled(viewModel.isLoading)
                 Button("Close") {
@@ -658,6 +659,7 @@ struct ModelDownloaderView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search by name, description, or repo...", text: $viewModel.searchText)
                     .textFieldStyle(.roundedBorder)
                 if !viewModel.searchText.isEmpty {
@@ -666,6 +668,7 @@ struct ModelDownloaderView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal)
@@ -727,6 +730,7 @@ struct ModelDownloaderView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(.orange)
+                        .accessibilityHidden(true)
                     Text(error)
                         .foregroundColor(.orange)
                         .font(.caption)
@@ -741,6 +745,7 @@ struct ModelDownloaderView: View {
                             .font(.caption)
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Copy error message")
                     .help("Copy error message")
                     Button("Dismiss") {
                         viewModel.errorMessage = nil
@@ -769,6 +774,7 @@ struct ModelDownloaderView: View {
                     Image(systemName: "tray")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
+                        .accessibilityHidden(true)
                     Text("No models found")
                         .foregroundColor(.secondary)
                         .padding(.top)
@@ -812,6 +818,7 @@ struct ModelCard: View {
                 Image(systemName: "brain.head.profile")
                     .font(.title2)
                     .foregroundColor(.blue)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.name)
@@ -829,6 +836,7 @@ struct ModelCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
+                            .accessibilityHidden(true)
                         Text("Downloaded")
                             .font(.caption)
                             .foregroundColor(.green)
@@ -880,6 +888,7 @@ struct ModelCard: View {
             if let requires = model.requires {
                 HStack(spacing: 4) {
                     Image(systemName: "cpu")
+                        .accessibilityHidden(true)
                     Text(requires)
                 }
                 .font(.caption2)

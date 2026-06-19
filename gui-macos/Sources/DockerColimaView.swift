@@ -304,6 +304,7 @@ struct DockerColimaView: View {
                                             Image(systemName: portText.isEmpty ? "minus.circle" : "network")
                                                 .font(.caption2)
                                                 .foregroundColor(portText.isEmpty ? .secondary : .blue)
+                                                .accessibilityHidden(true)
                                             Text(portText.isEmpty ? "no port" : portText)
                                                 .font(.caption2)
                                                 .foregroundColor(portText.isEmpty ? .secondary : .secondary)
