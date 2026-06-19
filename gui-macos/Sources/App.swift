@@ -4,7 +4,7 @@ import Combine
 
 // Version constant - Date-based: YYYY.MM.DD.N (N = build number for that day)
 let APP_VERSION: String = {
-    return "2026.06.16.2"
+    return "2026.06.19.2"
 }()
 
 import os.log
@@ -1358,8 +1358,17 @@ final class StatusViewModel: ObservableObject {
     }
 
     private func parseStartupLog(path: String, modelName: String) -> ModelStartupProgress? {
-        guard let data = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        let lines = data.split(separator: "\n").suffix(50).map(String.init)
+        // Read up to last ~64KB of the log; for big log files we'd otherwise pull
+        // megabytes into memory and parse them on the caller's thread.
+        let maxBytes = 64 * 1024
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        let offset = size > UInt64(maxBytes) ? size - UInt64(maxBytes) : 0
+        try? handle.seek(toOffset: offset)
+        let data = handle.readDataToEndOfFile()
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        let lines = text.split(separator: "\n").suffix(50).map(String.init)
 
         var latest = ModelStartupProgress(
             status: "Starting...",
@@ -2330,87 +2339,115 @@ final class CLIService {
         return try await runAndCapture(["infra", "logs", name])
     }
 
+    // Non-blocking CLI runner.
+    // Previously used Process.waitUntilExit() on the caller's thread, which froze the
+    // UI when called from MainActor Tasks (every model start/stop/chat goes through
+    // here). Now runs the subprocess on a global background queue and resumes via
+    // terminationHandler so the calling Task is never blocked.
     func run(_ args: [String]) async -> Int32 {
-        // Log the command being executed
         AppLogger.log("Executing CLI command: \(args.joined(separator: " "))", level: .debug)
-
+        let url: URL
         do {
-            let url = try requireExec()
-            let process = Process()
-            process.executableURL = url
-            process.arguments = args
-
-            // Capture output and error
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
-
-            // Start the process
-            try process.run()
-            process.waitUntilExit()
-
-            // Read output and error data
-            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-
-            // Log output if any
-            if let outputString = String(data: outputData, encoding: .utf8), !outputString.isEmpty {
-                AppLogger.log("CLI Command Output: \(outputString)", level: .debug)
-            }
-
-            // Log and handle errors
-            if let errorString = String(data: errorData, encoding: .utf8), !errorString.isEmpty {
-                AppLogger.log("CLI Command Error: \(args.joined(separator: " ")) - \(errorString)", level: .warning)
-            }
-
-            // Log termination status
-            let status = process.terminationStatus
-            if status != 0 {
-                AppLogger.log("CLI Command Failed: \(args.joined(separator: " ")) - Exit Status: \(status)", level: .error)
-            }
-
-            return status
+            url = try requireExec()
         } catch {
-            // Log any execution errors
             AppLogger.log("CLI Execution Error: \(args.joined(separator: " ")) - \(error.localizedDescription)", level: .error)
             return -1
         }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Int32, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = url
+                process.arguments = args
+                let outputPipe = Pipe()
+                let errorPipe = Pipe()
+                process.standardOutput = outputPipe
+                process.standardError = errorPipe
+
+                var didResume = false
+                let resumeOnce: (Int32) -> Void = { status in
+                    guard !didResume else { return }
+                    didResume = true
+                    continuation.resume(returning: status)
+                }
+
+                process.terminationHandler = { proc in
+                    let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                    let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                    if let outputString = String(data: outputData, encoding: .utf8), !outputString.isEmpty {
+                        AppLogger.log("CLI Command Output: \(outputString)", level: .debug)
+                    }
+                    if let errorString = String(data: errorData, encoding: .utf8), !errorString.isEmpty {
+                        AppLogger.log("CLI Command Error: \(args.joined(separator: " ")) - \(errorString)", level: .warning)
+                    }
+                    let status = proc.terminationStatus
+                    if status != 0 {
+                        AppLogger.log("CLI Command Failed: \(args.joined(separator: " ")) - Exit Status: \(status)", level: .error)
+                    }
+                    resumeOnce(status)
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    AppLogger.log("CLI Execution Error: \(args.joined(separator: " ")) - \(error.localizedDescription)", level: .error)
+                    resumeOnce(-1)
+                }
+            }
+        }
     }
 
+    // Non-blocking variant of runAndCapture (formerly used synchronous
+    // waitUntilExit on the caller's thread). Output buffering / error semantics
+    // are preserved.
     func runAndCapture(_ args: [String]) async throws -> String {
         let cmd = args.joined(separator: " ")
         AppLogger.log("runAndCapture: \(cmd)", level: .debug)
-
         let url = try requireExec()
-        let process = Process()
-        process.executableURL = url
-        process.arguments = args
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = url
+                process.arguments = args
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError  = stderrPipe
+                var didResume = false
+                let resumeOnce: (Result<String, Error>) -> Void = { result in
+                    guard !didResume else { return }
+                    didResume = true
+                    switch result {
+                    case .success(let s): continuation.resume(returning: s)
+                    case .failure(let e): continuation.resume(throwing: e)
+                    }
+                }
 
-        try process.run()
-        process.waitUntilExit()
+                process.terminationHandler = { proc in
+                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+                    let exitCode = proc.terminationStatus
+                    if !stderr.isEmpty {
+                        AppLogger.log("runAndCapture stderr [\(cmd)]: \(stderr)", level: .warning)
+                    }
+                    if exitCode != 0 {
+                        AppLogger.log("runAndCapture failed [\(cmd)] exit=\(exitCode): \(stderr)", level: .error)
+                        resumeOnce(.failure(CLIError.commandFailed(cmd: cmd, exitCode: exitCode, stderr: stderr)))
+                    } else {
+                        AppLogger.log("runAndCapture success [\(cmd)]", level: .debug)
+                        resumeOnce(.success(stdout))
+                    }
+                }
 
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-        let exitCode = process.terminationStatus
-
-        if !stderr.isEmpty {
-            AppLogger.log("runAndCapture stderr [\(cmd)]: \(stderr)", level: .warning)
+                do {
+                    try process.run()
+                } catch {
+                    resumeOnce(.failure(error))
+                }
+            }
         }
-        if exitCode != 0 {
-            AppLogger.log("runAndCapture failed [\(cmd)] exit=\(exitCode): \(stderr)", level: .error)
-            throw CLIError.commandFailed(cmd: cmd, exitCode: exitCode, stderr: stderr)
-        }
-
-        AppLogger.log("runAndCapture success [\(cmd)]", level: .debug)
-        return stdout
     }
 
     private func requireExec() throws -> URL {
