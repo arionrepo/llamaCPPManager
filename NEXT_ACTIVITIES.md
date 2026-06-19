@@ -239,6 +239,24 @@
 
 ### **Low Priority Issues to Address:**
 
+#### **Open bugs (logged 2026-06-19, must-fix next session):**
+- [ ] **Create Profile silently fails** — the NSWindow form (added in
+      v2026.06.19.5) is interactive, but clicking Create dismisses the
+      window without creating a Colima profile and without showing an
+      error. Likely cause: `DockerService.createColimaProfile` runs
+      `colima create <name>` but Colima may not have that subcommand
+      (it uses `colima start <name>` for both create + start). Plus
+      `_ = await createColimaProfile()` discards the Bool return so any
+      failure is swallowed.
+      Acceptance:
+      - Verify correct Colima command via `colima start --help` / `colima --help`.
+      - Update `createColimaProfile` to use the correct command.
+      - Propagate failure back to `CreateProfileForm` via an
+        `errorMessage` @State; don't auto-close on error.
+- [ ] **Read `docs/SWIFT-AGENT-STANDARD.md` before any next-session Swift
+      work** — added by user mid-session 2026-06-19, referenced from
+      `CLAUDE.md` as MANDATORY. Not yet applied to this session's work.
+
 #### **Code Quality:**
 - [ ] Add type hints to older modules
 - [ ] Increase test coverage (currently basic)

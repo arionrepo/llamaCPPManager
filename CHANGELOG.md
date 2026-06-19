@@ -6,6 +6,31 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+### Known Issues (logged 2026-06-19, post-v2026.06.19.5)
+
+- **Create Profile still doesn't actually create the profile.**
+  Symptom: form opens in NSWindow (no longer frozen — Tab works,
+  fields accept input, Create button is clickable). User clicks
+  Create with name filled and other fields empty. Window closes,
+  no error shown, but `colima list` shows no new profile.
+  Suspected cause: `DockerService.createColimaProfile` calls
+  `colima create <name>` but `colima` may not have a `create`
+  subcommand — Colima typically uses `colima start <name>` for
+  both first-time creation and start. The Bool return value of
+  `createColimaProfile` is discarded by the caller (`_ = await ...`),
+  so any non-zero exit code is silently swallowed.
+  Fix path for next session:
+  1. Verify the correct Colima command (likely `colima start <name>
+     --cpu N --memory M --disk D`, not `colima create`).
+  2. Surface the failure from `createProfile` to the form via a new
+     `errorMessage` @State on `CreateProfileForm`.
+  3. Don't auto-close the window on failure.
+
+- **`docs/SWIFT-AGENT-STANDARD.md` is referenced from `CLAUDE.md`
+  but was authored mid-session and not yet applied to the work in
+  this session.** Future Swift work in `gui-macos/` must read that
+  doc before editing per the new mandatory rule in CLAUDE.md.
+
 ## [2026.06.19.5] - 2026-06-19
 
 ### Fixed
