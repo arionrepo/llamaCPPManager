@@ -18,9 +18,31 @@ llamaCPPManager is a macOS tool for managing multiple llama.cpp server instances
 ### Problem
 GUI changes don't appear because multiple instances and stale compiled binaries persist.
 
-### Solution: Follow This Workflow EVERY TIME
+### Solution: One command (preferred)
 
-**After making ANY changes to `gui-macos/Sources/App.swift`:**
+After ANY change to anything under `gui-macos/Sources/`:
+
+```bash
+llamacpp-manager install-gui
+```
+
+Or in a Claude Code chat: `/install-gui`
+
+That single command handles the full deterministic sequence:
+build → kill running → replace `/Applications/llamaCPP Manager.app` → MD5 verify → launch → confirm process running.
+
+Flags:
+- `--force` — always rebuild + reinstall (even if MD5s match)
+- `--no-rebuild` — install the existing build/ contents only
+- `--no-launch` — install without opening the app
+- `--quiet` — minimal output
+
+The script is at `gui-macos/install_gui.sh`. The CLI wrapper is `cmd_install_gui` in `cli.py`. Slash command spec is at `.claude/commands/install-gui.md`.
+
+### Legacy manual workflow (only if `install-gui` is broken)
+
+<details>
+<summary>Click to expand the old 5-step manual sequence</summary>
 
 1. **Commit changes first:**
 ```bash
@@ -49,6 +71,8 @@ open ./.build/x86_64-apple-macosx/debug/llamacpp-gui
 
 5. **Verify with user:**
 Ask the user to confirm they see the changes before proceeding.
+
+</details>
 
 ### Common Issues
 
