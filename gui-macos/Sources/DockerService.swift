@@ -82,31 +82,53 @@ final class DockerService {
         }
     }
 
-    func createColimaProfile(name: String, cpus: Int? = nil, memory: String? = nil, disk: String? = nil) async -> Bool {
+    // Returns nil on success, or a human-readable error message on failure.
+    // Colima has no `create` subcommand; `colima start <profile>` both creates
+    // (if missing) and starts the VM. Memory/disk are GiB integers; the form
+    // strips any trailing unit suffix before calling. `onLine` is called on
+    // the main queue for each line of colima's stdout/stderr so the UI can
+    // show live progress (VM creation takes 30-60s).
+    func createColimaProfile(
+        name: String,
+        cpus: Int? = nil,
+        memory: String? = nil,
+        disk: String? = nil,
+        runtime: String? = nil,
+        arch: String? = nil,
+        onLine: ((String) -> Void)? = nil
+    ) async -> String? {
+        var args = ["start", name]
+
+        if let cpus = cpus {
+            args.append("--cpus")
+            args.append(String(cpus))
+        }
+        if let memory = memory, !memory.isEmpty {
+            args.append("--memory")
+            args.append(memory)
+        }
+        if let disk = disk, !disk.isEmpty {
+            args.append("--disk")
+            args.append(disk)
+        }
+        if let runtime = runtime, !runtime.isEmpty {
+            args.append("--runtime")
+            args.append(runtime)
+        }
+        if let arch = arch, !arch.isEmpty {
+            args.append("--arch")
+            args.append(arch)
+        }
+
         do {
-            var args = ["create", name]
-
-            if let cpus = cpus {
-                args.append("--cpu")
-                args.append(String(cpus))
-            }
-
-            if let memory = memory {
-                args.append("--memory")
-                args.append(memory)
-            }
-
-            if let disk = disk {
-                args.append("--disk")
-                args.append(disk)
-            }
-
-            _ = try await runCommand("colima", args: args)
+            _ = try await runCommandStreaming("colima", args: args, onLine: onLine)
             AppLogger.log("Created Colima profile: \(name)", level: .info)
-            return true
+            return nil
         } catch {
-            AppLogger.log("Failed to create Colima profile \(name): \(error)", level: .error)
-            return false
+            let msg = (error as NSError).localizedDescription
+            AppLogger.log("Failed to create Colima profile \(name): \(msg)", level: .error)
+            let trimmed = msg.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "colima start \(name) failed (exit code \((error as NSError).code))" : trimmed
         }
     }
 
@@ -255,6 +277,89 @@ final class DockerService {
                             domain: "DockerService",
                             code: Int(proc.terminationStatus),
                             userInfo: [NSLocalizedDescriptionKey: output]
+                        )
+                        resumeOnce(.failure(err))
+                    }
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    resumeOnce(.failure(error))
+                }
+            }
+        }
+    }
+
+    // Streaming variant: invokes `onLine` (on the main queue) for each
+    // newline-terminated chunk of stdout/stderr. Used by long-running commands
+    // (e.g. `colima start <new-profile>`) so the UI can show live progress.
+    private func runCommandStreaming(
+        _ command: String,
+        args: [String],
+        onLine: ((String) -> Void)?
+    ) async throws -> String {
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = [command] + args
+
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = pipe
+
+                let bufferLock = NSLock()
+                var lineBuffer = ""
+                var collected = ""
+
+                pipe.fileHandleForReading.readabilityHandler = { handle in
+                    let data = handle.availableData
+                    guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+                    bufferLock.lock()
+                    lineBuffer += chunk
+                    collected += chunk
+                    var lines: [String] = []
+                    while let nl = lineBuffer.firstIndex(of: "\n") {
+                        lines.append(String(lineBuffer[..<nl]))
+                        lineBuffer = String(lineBuffer[lineBuffer.index(after: nl)...])
+                    }
+                    bufferLock.unlock()
+                    if let onLine = onLine {
+                        for line in lines {
+                            let l = line
+                            DispatchQueue.main.async { onLine(l) }
+                        }
+                    }
+                }
+
+                var didResume = false
+                let resumeOnce: (Result<String, Error>) -> Void = { result in
+                    guard !didResume else { return }
+                    didResume = true
+                    pipe.fileHandleForReading.readabilityHandler = nil
+                    switch result {
+                    case .success(let s): continuation.resume(returning: s)
+                    case .failure(let e): continuation.resume(throwing: e)
+                    }
+                }
+
+                process.terminationHandler = { proc in
+                    bufferLock.lock()
+                    let tail = lineBuffer
+                    lineBuffer = ""
+                    let allOutput = collected
+                    bufferLock.unlock()
+                    if !tail.isEmpty, let onLine = onLine {
+                        DispatchQueue.main.async { onLine(tail) }
+                    }
+                    if proc.terminationStatus == 0 {
+                        resumeOnce(.success(allOutput))
+                    } else {
+                        let err = NSError(
+                            domain: "DockerService",
+                            code: Int(proc.terminationStatus),
+                            userInfo: [NSLocalizedDescriptionKey: allOutput]
                         )
                         resumeOnce(.failure(err))
                     }

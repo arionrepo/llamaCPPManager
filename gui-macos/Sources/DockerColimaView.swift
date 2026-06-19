@@ -72,9 +72,29 @@ class DockerColimaViewModel: ObservableObject {
         await refresh()
     }
 
-    func createProfile(name: String, cpus: Int? = nil, memory: String? = nil, disk: String? = nil) async {
-        _ = await dockerService.createColimaProfile(name: name, cpus: cpus, memory: memory, disk: disk)
+    // Returns nil on success, or a human-readable error message on failure.
+    // `onLine` is forwarded to the underlying streaming subprocess so the
+    // form can show live progress while the new VM boots (30-60s).
+    func createProfile(
+        name: String,
+        cpus: Int? = nil,
+        memory: String? = nil,
+        disk: String? = nil,
+        runtime: String? = nil,
+        arch: String? = nil,
+        onLine: ((String) -> Void)? = nil
+    ) async -> String? {
+        let err = await dockerService.createColimaProfile(
+            name: name,
+            cpus: cpus,
+            memory: memory,
+            disk: disk,
+            runtime: runtime,
+            arch: arch,
+            onLine: onLine
+        )
         await refresh()
+        return err
     }
 
     func deleteProfile(name: String) async {
@@ -157,6 +177,12 @@ struct DockerColimaView: View {
 
                             HStack(spacing: 4) {
                                 if profile.isRunning {
+                                    Button("SSH") {
+                                        openSSHInTerminal(profile: profile.name)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .font(.caption)
+
                                     Button("Stop") {
                                         Task { await viewModel.stopColima(profile: profile.name) }
                                     }
@@ -354,6 +380,28 @@ struct DockerColimaView: View {
 
     // MARK: - Create Profile Window (NSWindow-hosted to avoid MenuBarExtra .sheet freeze)
 
+    // Open Terminal.app in a new window and run `colima ssh -p <profile>`.
+    // Profile names are validated by Colima itself, but we additionally escape
+    // any double quotes to keep the AppleScript string well-formed.
+    private func openSSHInTerminal(profile: String) {
+        let safe = profile.replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "colima ssh -p \(safe)"
+        end tell
+        """
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script]
+        do {
+            try task.run()
+            AppLogger.log("Opened Terminal for SSH to colima profile: \(profile)", level: .info)
+        } catch {
+            AppLogger.log("Failed to open Terminal for SSH: \(error)", level: .error)
+        }
+    }
+
     private func showCreateProfileWindow() {
         // Reuse window if it's already open
         if let win = CreateProfileWindowController.shared.window {
@@ -371,11 +419,47 @@ private struct CreateProfileForm: View {
     @ObservedObject var viewModel: DockerColimaViewModel
     var onClose: () -> Void
 
+    private static let sourceDefault = "— Colima defaults —"
+    private static let runtimeOptions = ["docker", "containerd"]
+    private static let archOptions = ["aarch64", "x86_64"]
+
     @State private var profileName = ""
+    @State private var sourceProfile: String = sourceDefault
     @State private var cpus = ""
     @State private var memory = ""
     @State private var disk = ""
+    @State private var runtime = "docker"
+    @State private var arch = "aarch64"
     @State private var isSubmitting = false
+    @State private var errorMessage: String?
+    @State private var progressLines: [String] = []
+
+    // Colima accepts memory as float GiB and disk as int GiB. Accept lenient
+    // user input like "4G" / "4GiB" / "4 GB" and normalize to the bare number
+    // that the colima CLI expects.
+    private static func normalizeGiB(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        let stripped = trimmed
+            .replacingOccurrences(of: "GiB", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "GB", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "G", with: "", options: .caseInsensitive)
+        return stripped.trimmingCharacters(in: .whitespaces)
+    }
+
+    // Apply the picked source profile's spec to the form fields. The new VM
+    // gets independent data; only resource flags are copied.
+    private func applySourceProfile(_ name: String) {
+        guard name != Self.sourceDefault,
+              let p = viewModel.colimaProfiles.first(where: { $0.name == name }) else {
+            return
+        }
+        cpus = p.cpus > 0 ? String(p.cpus) : ""
+        memory = Self.normalizeGiB(p.memory)
+        disk = Self.normalizeGiB(p.disk)
+        if Self.runtimeOptions.contains(p.runtime) { runtime = p.runtime }
+        if Self.archOptions.contains(p.arch) { arch = p.arch }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -388,20 +472,100 @@ private struct CreateProfileForm: View {
                     .textFieldStyle(.roundedBorder)
                     .disabled(isSubmitting)
 
-                Text("CPUs (optional)").font(.caption).fontWeight(.semibold)
-                TextField("Uses default if empty", text: $cpus)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(isSubmitting)
+                Text("Copy spec from (optional)").font(.caption).fontWeight(.semibold)
+                Picker("", selection: $sourceProfile) {
+                    Text(Self.sourceDefault).tag(Self.sourceDefault)
+                    ForEach(viewModel.colimaProfiles.map { $0.name }, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .labelsHidden()
+                .disabled(isSubmitting)
+                .onChange(of: sourceProfile) { newValue in
+                    applySourceProfile(newValue)
+                }
 
-                Text("Memory (optional)").font(.caption).fontWeight(.semibold)
-                TextField("e.g., 4G", text: $memory)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(isSubmitting)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("CPUs").font(.caption).fontWeight(.semibold)
+                        TextField("2", text: $cpus)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isSubmitting)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Memory (GiB)").font(.caption).fontWeight(.semibold)
+                        TextField("2", text: $memory)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isSubmitting)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Disk (GiB)").font(.caption).fontWeight(.semibold)
+                        TextField("100", text: $disk)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(isSubmitting)
+                    }
+                }
 
-                Text("Disk (optional)").font(.caption).fontWeight(.semibold)
-                TextField("e.g., 60G", text: $disk)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(isSubmitting)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Runtime").font(.caption).fontWeight(.semibold)
+                        Picker("", selection: $runtime) {
+                            ForEach(Self.runtimeOptions, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .disabled(isSubmitting)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Architecture").font(.caption).fontWeight(.semibold)
+                        Picker("", selection: $arch) {
+                            ForEach(Self.archOptions, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .disabled(isSubmitting)
+                    }
+                }
+            }
+
+            if isSubmitting || !progressLines.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        if isSubmitting {
+                            ProgressView().scaleEffect(0.6)
+                        }
+                        Text(isSubmitting ? "Creating VM (can take 30–60s)…" : "Output")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 1) {
+                                ForEach(Array(progressLines.enumerated()), id: \.offset) { idx, line in
+                                    Text(line)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .id(idx)
+                                }
+                            }
+                            .padding(6)
+                        }
+                        .frame(height: 100)
+                        .background(Color(NSColor.textBackgroundColor).opacity(0.5))
+                        .cornerRadius(4)
+                        .onChange(of: progressLines.count) { newCount in
+                            if newCount > 0 {
+                                proxy.scrollTo(newCount - 1, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(spacing: 12) {
@@ -411,19 +575,32 @@ private struct CreateProfileForm: View {
                 .buttonStyle(.bordered)
                 .disabled(isSubmitting)
 
-                Button(isSubmitting ? "Creating..." : "Create") {
-                    let cpusInt = Int(cpus)
+                Button(isSubmitting ? "Creating…" : "Create") {
+                    let cpusInt = Int(cpus.trimmingCharacters(in: .whitespaces))
+                    let memoryArg = Self.normalizeGiB(memory)
+                    let diskArg = Self.normalizeGiB(disk)
                     isSubmitting = true
+                    errorMessage = nil
+                    progressLines = []
                     Task {
-                        await viewModel.createProfile(
+                        let err = await viewModel.createProfile(
                             name: profileName.trimmingCharacters(in: .whitespaces),
                             cpus: cpusInt,
-                            memory: memory.isEmpty ? nil : memory,
-                            disk: disk.isEmpty ? nil : disk
+                            memory: memoryArg.isEmpty ? nil : memoryArg,
+                            disk: diskArg.isEmpty ? nil : diskArg,
+                            runtime: runtime,
+                            arch: arch,
+                            onLine: { line in
+                                progressLines.append(line)
+                            }
                         )
                         await MainActor.run {
                             isSubmitting = false
-                            onClose()
+                            if let err = err {
+                                errorMessage = err
+                            } else {
+                                onClose()
+                            }
                         }
                     }
                 }
@@ -436,7 +613,7 @@ private struct CreateProfileForm: View {
             Spacer()
         }
         .padding(16)
-        .frame(width: 400, height: 320)
+        .frame(width: 460, height: 560)
     }
 }
 
@@ -450,7 +627,7 @@ private final class CreateProfileWindowController: NSObject, NSWindowDelegate {
         }
         let hostingController = NSHostingController(rootView: form)
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 560),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
