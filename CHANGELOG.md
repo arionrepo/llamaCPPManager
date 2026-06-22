@@ -16,6 +16,35 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.22.4] - 2026-06-22
+
+### Added — zombie-process cleanup
+- New module `src/llamacpp_manager/cleanup.py` plus CLI command
+  `llamacpp-manager cleanup [--model NAME] [--max-age-hours N] [--dry-run] [--json]`.
+- **Default mode** (`cleanup` with no args): scans for
+  `llamacpp-manager models download <X>` processes older than 1 hour
+  (configurable) and kills them. Does NOT touch running model servers.
+  Three zombies were found and killed on first run after this landed
+  (two stuck copies of `qwen3-1.7b` downloads from 6+ days ago, plus
+  one `qwen-coder-32b-q8`).
+- **Targeted mode** (`cleanup --model NAME`): kills BOTH stale
+  downloads for NAME AND any model-server processes (`mlx_lm.server`,
+  `mlx_vlm.server`, `llama-server`) matching the configured
+  `model_path`. Handles multiples — every match is killed, not just
+  the first.
+- Process discovery uses `/bin/ps -eo pid,etime,command` (no psutil
+  hard-dep). SIGTERM, 2-second grace, then SIGKILL escalation.
+
+### Added — GUI integration of cleanup
+- `StatusViewModel.init` now fires `llamacpp-manager cleanup` once at
+  app launch (fire-and-forget, non-blocking).
+- `StatusViewModel.startWithScript` now calls
+  `llamacpp-manager cleanup --model <name>` BEFORE the actual start,
+  so any prior-instance server processes (or stale downloads for the
+  same model) are reaped before a fresh start. Prevents the
+  port-already-bound / "stuck" symptom we saw with multiple stale
+  downloads of the same model name.
+
 ## [2026.06.22.3] - 2026-06-22
 
 ### Fixed

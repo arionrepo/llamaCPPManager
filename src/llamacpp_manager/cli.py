@@ -1146,6 +1146,29 @@ Examples:
     sp_logs.add_argument("--follow", "-f", action="store_true", help="Follow log output (like tail -f)")
     sp_logs.set_defaults(func=cmd_logs)
 
+    sp_cleanup = sub.add_parser(
+        "cleanup",
+        help="🧹 Identify and kill zombie processes (stale downloads, orphaned model servers)",
+    )
+    sp_cleanup.add_argument(
+        "--model", metavar="NAME",
+        help="Restrict cleanup to a specific model (kills stale downloads + ANY running server for it). "
+             "Without --model, only stale downloads are killed; servers are untouched.",
+    )
+    sp_cleanup.add_argument(
+        "--max-age-hours", type=float, default=1.0,
+        help="For non-targeted (no --model) cleanup, kill download processes older than this. Default: 1 hour.",
+    )
+    sp_cleanup.add_argument(
+        "--dry-run", action="store_true",
+        help="Report what would be killed without actually killing anything.",
+    )
+    sp_cleanup.add_argument(
+        "--json", dest="emit_json", action="store_true",
+        help="Emit a JSON report (for GUI / scripting use).",
+    )
+    sp_cleanup.set_defaults(func=cmd_cleanup)
+
     return p
 
 
@@ -2841,6 +2864,58 @@ def cmd_logging(args: argparse.Namespace) -> int:
 
     print("unknown logging subcommand", file=sys.stderr)
     return 2
+
+
+def cmd_cleanup(args: argparse.Namespace) -> int:
+    """
+    Zombie process cleanup. Two modes:
+      1. No --model: scan for stale `llamacpp-manager models download <X>`
+         processes older than --max-age-hours and kill them. Does NOT touch
+         running model servers because the user may have legitimate live
+         servers running.
+      2. --model NAME: kill BOTH stale downloads for NAME AND any model-server
+         processes (mlx_lm.server / mlx_vlm.server / llama-server) that match
+         NAME's `model_path` from config. Used as a pre-start hook by the GUI
+         so a stale instance never blocks a fresh start.
+
+    Handles multiples — if there are several zombie copies of the same model,
+    all are killed (not just the first).
+    """
+    from . import cleanup as cleanup_mod
+
+    if args.model:
+        cfg = load_config()
+        model_path: Optional[str] = None
+        for m in cfg.get("models", []):
+            if m.get("name") == args.model:
+                model_path = m.get("model_path")
+                break
+        report = cleanup_mod.cleanup_for_model(
+            model_name=args.model,
+            model_path=model_path,
+            dry_run=args.dry_run,
+        )
+    else:
+        max_age = int(args.max_age_hours * 3600)
+        report = cleanup_mod.cleanup_stale_downloads(
+            max_age_seconds=max_age,
+            dry_run=args.dry_run,
+        )
+
+    if args.emit_json:
+        print(json.dumps(report, indent=2))
+    else:
+        matches = report.get("matches", [])
+        if not matches:
+            scope = f"model={args.model!r}" if args.model else f"downloads older than {args.max_age_hours}h"
+            print(f"No zombie processes found ({scope}).")
+        else:
+            print(f"Found {len(matches)} zombie process(es)" + (" (DRY RUN — not killed)" if args.dry_run else ""))
+            for m in matches:
+                killed_marker = "✓ killed" if m["pid"] in report.get("killed_pids", []) and not args.dry_run else ("would kill" if args.dry_run else "skipped")
+                print(f"  [{killed_marker}] pid={m['pid']} age={m['age_seconds']}s — {m['reason']}")
+                print(f"             cmd: {m['cmdline'][:140]}")
+    return 0
 
 
 def cmd_logs(args: argparse.Namespace) -> int:

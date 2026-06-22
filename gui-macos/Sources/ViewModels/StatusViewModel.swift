@@ -101,6 +101,14 @@ final class StatusViewModel: ObservableObject {
         // Start scanner for external model server processes (mlx_lm.server, llama-server)
         // that may be lazy-downloading model files.
         startExternalServerScanner()
+
+        // Zombie-process cleanup at GUI launch. Targets `llamacpp-manager models download`
+        // processes older than 1 hour (default) — we have repeatedly observed downloads
+        // from prior sessions stuck for days. Fire-and-forget; does not block UI.
+        Task { [weak self] in
+            guard let self = self else { return }
+            _ = await self.service.run(["cleanup"])
+        }
     }
 
     // MARK: - External Server Process Scanner
@@ -384,6 +392,12 @@ final class StatusViewModel: ObservableObject {
 
         Task { [weak self] in
             guard let self = self else { return }
+
+            // Pre-start zombie cleanup for THIS model: kill any leftover server
+            // processes for the same model_path and any stale downloads for the
+            // same name. Handles multiples (kills all matches, not just one).
+            // Fast — completes in well under a second.
+            _ = await self.service.run(["cleanup", "--model", name])
 
             let result: Int32
             let command: [String]
