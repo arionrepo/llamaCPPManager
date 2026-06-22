@@ -16,6 +16,44 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.22.6] - 2026-06-22
+
+### Fixed — external-download visibility in the GUI
+
+Two surgical changes to the existing external-download scanner in
+`DownloadViewModel` (Sources/Views/ModelDownloaderView.swift). The
+scanner architecture was already in place (Task.detached every 5 s,
+ps-based discovery, per-name dir-size polling, render hook into
+`Active Downloads & Loading`) but had two limitations that hid every
+real-world external download:
+
+- **Pattern matcher only recognized `llamacpp-manager models download <name>`.**
+  My `hf download unsloth/diffusiongemma-26B-A4B-it-GGUF --local-dir ~/llms/diffusiongemma-26b/`
+  wrote 7 GB of `.incomplete` files but was completely invisible in
+  the GUI because neither `"llamacpp-manager"` nor `"models download"`
+  appears in that command line. The matcher now ALSO recognizes:
+  - `hf download <repo> [file] [--local-dir <path>]`
+  - `huggingface-cli download <repo> [file] [--local-dir <path>]`
+  For the HF-tool variants we register the download only when
+  `--local-dir` is set and we use the last path segment as the model
+  name (matches the `~/llms/<X>/` convention).
+
+- **`directorySizeOffMain` used `.skipsHiddenFiles`.** `hf download`
+  writes partial files into `<model_dir>/.cache/huggingface/download/*.incomplete`
+  — that path starts with `.` so even when a download WAS detected,
+  the size watcher reported 0 bytes forever. Now walks including
+  hidden files.
+
+### Known gaps (intentionally out of scope for this fix)
+- Downloads without `--local-dir` (writing to `~/.cache/huggingface/hub/`
+  default) still won't show progress — the watcher only looks at
+  `~/llms/<name>/`.
+- Direct python downloads (where huggingface_hub is imported into a
+  long-lived Python process) won't show as separate ps entries.
+- Repo-name → configured-model-name mapping is approximate (last path
+  segment of `--local-dir`); if those don't match, the download will
+  appear under the dir-basename rather than the configured row name.
+
 ## [2026.06.22.5] - 2026-06-22
 
 ### Added — MLX-specific modes (basic / think)

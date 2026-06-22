@@ -154,10 +154,38 @@ final class DownloadViewModel: ObservableObject {
 
                 var activeNames = Set<String>()
                 for line in output.split(separator: "\n") {
-                    guard line.contains("llamacpp-manager") && line.contains("models download") else { continue }
-                    let parts = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-                    if let idx = parts.firstIndex(of: "download"), idx + 1 < parts.count {
-                        activeNames.insert(parts[idx + 1])
+                    let lineStr = String(line)
+                    let parts = lineStr.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+
+                    // Variant 1: `llamacpp-manager ... models download <name>` — the
+                    // argument right after `download` is the configured model name.
+                    if lineStr.contains("llamacpp-manager") && lineStr.contains("models download") {
+                        if let idx = parts.firstIndex(of: "download"), idx + 1 < parts.count {
+                            activeNames.insert(parts[idx + 1])
+                        }
+                        continue
+                    }
+
+                    // Variant 2: `hf download <repo> [file] [--local-dir <path>]` OR
+                    // `huggingface-cli download <repo> [file] [--local-dir <path>]`.
+                    // We only register these when --local-dir points at ~/llms/<X>/
+                    // because that's where the size watcher looks. Without a known
+                    // dir we can't measure progress, so silently skip.
+                    let isHf = (parts.contains("hf") || parts.contains(where: { $0.hasSuffix("/hf") }))
+                                && parts.contains("download")
+                    let isHfCli = (parts.contains("huggingface-cli") || parts.contains(where: { $0.hasSuffix("/huggingface-cli") }))
+                                && parts.contains("download")
+                    if isHf || isHfCli {
+                        if let dirIdx = parts.firstIndex(of: "--local-dir"), dirIdx + 1 < parts.count {
+                            let dir = parts[dirIdx + 1]
+                            // Take the last non-empty path segment as the model name —
+                            // matches the `~/llms/<X>/` directory convention.
+                            let trimmed = dir.hasSuffix("/") ? String(dir.dropLast()) : dir
+                            if let lastSeg = trimmed.split(separator: "/").last {
+                                activeNames.insert(String(lastSeg))
+                            }
+                        }
+                        continue
                     }
                 }
                 continuation.resume(returning: activeNames)
@@ -224,10 +252,14 @@ final class DownloadViewModel: ObservableObject {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .background).async {
                 let url = URL(fileURLWithPath: path)
+                // Walk INCLUDING hidden files. `hf download` and `huggingface-cli`
+                // write partial files into <model_dir>/.cache/huggingface/download/*.incomplete
+                // — that path starts with `.` so .skipsHiddenFiles would make the
+                // walker miss every byte of an in-progress hf download.
                 guard let enumerator = FileManager.default.enumerator(
                     at: url,
                     includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
-                    options: [.skipsHiddenFiles]
+                    options: []
                 ) else {
                     continuation.resume(returning: 0)
                     return
