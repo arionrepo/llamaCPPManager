@@ -84,7 +84,18 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 ## Bugs (Inherited / Pre-existing, found 2026-06-22)
 
 ### Open items from 2026-06-22 session
-- [ ] **Verify llama.cpp build supports DiffusionGemma block-diffusion sampler before using the GGUF path.** The GGUF download for `diffusiongemma-26b` from `unsloth/diffusiongemma-26B-A4B-it-GGUF` (Q4_K_M, ~15 GB) is in progress to `~/llms/diffusiongemma-26b/`. Even with a valid GGUF, vanilla llama-server may not run it — DiffusionGemma uses a `DiffusionGemmaForBlockDiffusion` architecture that needs explicit support in the loader/sampler. Check llama.cpp release notes from June 2026 forward for diffusion-gemma support before relying on this path. The `mlx-diffusiongemma` config (MLX-VLM) is the proven-working alternative.
+
+- [ ] **Per-model `llama_server_path` config field (generalizable infra improvement)** — Today every native/GGUF model goes through the same `restart-llm-interactive.sh` which picks llama-server via PATH fallback. Adding an optional per-model `llama_server_path` field would allow: (a) pinning a known-good llama.cpp build per model, (b) running an experimental fork for one model without breaking others, (c) eventually pointing diffusion-class models at a diffusion-capable server when that exists. ~30 min to wire: extend config schema → extend `start-script` arg passing → update `restart-llm-interactive.sh` to honor an env var or extra arg. Low risk, high optionality.
+
+- [ ] **DiffusionGemma via llama.cpp — DO NOT pursue until upstream catches up** *(research notes 2026-06-22)*
+  - Mainline `llama.cpp` does **not** support DiffusionGemma as of 2026-06-22.
+  - PR [`ggml-org/llama.cpp#24427`](https://github.com/ggml-org/llama.cpp/pull/24427) is open, draft, 35+ commits, 0 reviews, with merge conflicts. Adds `DIFFUSION_GEMMA4` arch + conversion path.
+  - Sibling PR `#24423` ships a separate `llama-diffusion-cli` binary with a custom entropy-bounded sampler (`--diffusion-eb`, `--diffusion-eb-max-steps`, `--diffusion-eb-t-max/min`, `--diffusion-eb-entropy-bound`).
+  - **Critical gap for our use case**: the PR is **CLI-only — no `llama-server`**. Our entire GUI assumes a server with /health and /v1/chat/completions. A CLI-only binary can't plug in.
+  - Sampler / arch summary: 256-token canvas, parallel denoising, block-autoregressive chaining, ~15-20 tokens per forward pass, optional KV cache over committed prompt prefix.
+  - Recommendation: ignore the GGUF route until both (a) PR merges and (b) server mode lands. Use `mlx-diffusiongemma` (MLX-VLM) which already works.
+  - The in-progress download was cancelled 2026-06-22 with ~7 GB partial in `~/llms/diffusiongemma-26b/.cache/` (operator to `rm -rf` the cache dir to reclaim).
+  - Sources: [PR #24427](https://github.com/ggml-org/llama.cpp/pull/24427), [unsloth/diffusiongemma-26B-A4B-it-GGUF](https://huggingface.co/unsloth/diffusiongemma-26B-A4B-it-GGUF), [diffusiongemma.dev/llama-cpp](https://diffusiongemma.dev/llama-cpp/), [ollama issue #16664](https://github.com/ollama/ollama/issues/16664).
 
 ### Audit findings from "check all modes for GGUF and MLX" sweep (2026-06-22)
 
