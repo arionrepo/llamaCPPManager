@@ -16,6 +16,20 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.22.1] - 2026-06-22
+
+### Fixed
+- **`performance` startup mode crashed llama-server** with `error:
+  invalid argument: --n-parallel`. The CLI was passing the obsolete
+  `--n-parallel` flag in 4 places in `cli.py` (the canonical fix had
+  been applied to `process.py` long ago — see comment at
+  `process.py:36` — but `cli.py` was missed). Current llama-server
+  builds accept only `--parallel N` / `-np N`. Affected models that
+  started in `performance` mode (e.g. `mistral-small-24b`). Models
+  in `basic` / `tools` / `extended` modes were unaffected.
+- Same fix applied to the help-text strings in `models options` so the
+  documented advice now matches reality.
+
 ## [2026.06.19.8] - 2026-06-19
 
 ### Added (Accessibility — Conformance Phase 1)

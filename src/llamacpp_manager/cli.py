@@ -242,7 +242,7 @@ def cmd_config(args: argparse.Namespace) -> int:
                 "mode_flags": {
                     "basic": "none",
                     "tools": "--jinja",
-                    "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                    "performance": "--jinja --parallel 4 --batch-size 512 --ubatch-size 512",
                     "extended": "--jinja --flash-attn"
                 }.get(spec.mode, "none")
             }
@@ -258,7 +258,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             mode_flags = {
                 "basic": "(no mode flags)",
                 "tools": "--jinja",
-                "performance": "--jinja --n-parallel 4 --batch-size 512 --ubatch-size 512",
+                "performance": "--jinja --parallel 4 --batch-size 512 --ubatch-size 512",
                 "extended": "--jinja --flash-attn"
             }
             print(f"\nMode adds: {mode_flags.get(spec.mode, 'none')}")
@@ -283,7 +283,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         print("  basic       - Minimal mode, no special features")
         print("  tools       - Enables function calling with --jinja")
         print("  performance - Optimized for speed:")
-        print("                --jinja --n-parallel 4 --batch-size 512 --ubatch-size 512")
+        print("                --jinja --parallel 4 --batch-size 512 --ubatch-size 512")
         print("  extended    - Advanced features with Flash Attention:")
         print("                --jinja --flash-attn")
 
@@ -304,7 +304,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         print("Performance:")
         print("  --batch-size N       - Batch size for prompt eval (default: 512)")
         print("  --ubatch-size N      - Micro-batch size (default: batch-size)")
-        print("  --n-parallel N       - Number of parallel sequences (default: 1)")
+        print("  --parallel N         - Number of parallel sequences (default: 1)")
         print("  --cont-batching      - Enable continuous batching")
         print("  --flash-attn         - Enable Flash Attention (if supported)")
         print()
