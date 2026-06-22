@@ -16,6 +16,23 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.22.3] - 2026-06-22
+
+### Fixed
+- **`mlx_vlm.server` models reported as `down` even when serving.**
+  `health.check_endpoint()` in `src/llamacpp_manager/health.py` was
+  only treating `"status":"ok"` (the llama.cpp / mlx_lm.server
+  convention) as a success signal. `mlx_vlm.server` returns
+  `{"status":"healthy","loaded_model":"…",...}` so the check fell
+  through to `health_state="down"`, which propagated `up=False` to
+  status callers. Symptom: GUI showed `mlx-diffusiongemma` as stuck
+  with the spinner / "issue detected" even though `mlx_vlm.server`
+  was running healthily on port 8200.
+- Now accepts `"status":"healthy"` or a `loaded_model` field as
+  additional success signals. No false positives expected — those
+  strings don't appear in genuine error responses from llama.cpp /
+  mlx_lm.server / mlx_vlm.server.
+
 ## [2026.06.22.2] - 2026-06-22
 
 ### Fixed (5 inherited bugs)

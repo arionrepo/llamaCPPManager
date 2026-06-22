@@ -86,7 +86,16 @@ def check_endpoint(host: str, port: int, timeout_ms: int = 2000) -> Dict[str, An
                 # (MLX server returns {"status": "ok"}, llama.cpp returns {"status":"ok"})
                 normalized = body.replace(" ", "").replace("\n", "").replace("\t", "")
                 if http_status == 200:
-                    if '"status":"ok"' in normalized or "models" in body:
+                    # Success signals across the server families we manage:
+                    #   - llama.cpp / mlx_lm.server return {"status":"ok"}
+                    #   - mlx_vlm.server returns {"status":"healthy"} with a "loaded_model" field
+                    #   - OpenAI-compatible /v1/models returns a "data":[...] payload mentioning "models"
+                    if (
+                        '"status":"ok"' in normalized
+                        or '"status":"healthy"' in normalized
+                        or "loaded_model" in body
+                        or "models" in body
+                    ):
                         health_state = "ok"
                     elif "loading" in body or "initializing" in body:
                         health_state = "starting"
