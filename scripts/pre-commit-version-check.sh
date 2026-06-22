@@ -22,12 +22,13 @@ if git diff --cached --name-only | grep -q "gui-macos/"; then
     # Check Info.plist version
     PLIST_VERSION=$(grep -A1 CFBundleShortVersionString gui-macos/build/llamaCPP\ Manager.app/Contents/Info.plist | tail -n1 | sed -E 's/.*<string>(.*)<\/string>.*/\1/')
 
-    # Check App.swift version
-    APP_SWIFT_VERSION=$(grep 'return "' gui-macos/Sources/App.swift | head -1 | sed -E 's/.*return "(.*)".*/\1/')
+    # Check APP_VERSION literal (lives in AppConstants.swift as of Conformance Phase 4)
+    APP_SWIFT_VERSION=$(grep 'return "' gui-macos/Sources/AppConstants.swift 2>/dev/null | head -1 | sed -E 's/.*return "(.*)".*/\1/')
 
-    # Check that AboutView uses APP_VERSION interpolation
-    if ! grep -q 'llamaCPP Manager v\\(APP_VERSION)' gui-macos/Sources/App.swift; then
-        echo "Warning: AboutView does not use APP_VERSION interpolation"
+    # Check that the About dialog uses APP_VERSION interpolation
+    # (openAbout() moved to ViewModels/StatusViewModel.swift in Conformance Phase 4)
+    if ! grep -q 'llamaCPP Manager v\\(APP_VERSION)' gui-macos/Sources/ViewModels/StatusViewModel.swift 2>/dev/null; then
+        echo "Warning: About dialog does not use APP_VERSION interpolation"
     fi
 
     # Validate versions match

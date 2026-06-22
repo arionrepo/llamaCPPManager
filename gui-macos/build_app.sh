@@ -42,9 +42,10 @@ log() { echo -e "${GREEN}[BUILD]${NC} $1"; }
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Update APP_VERSION in App.swift BEFORE building
+# Update APP_VERSION in AppConstants.swift BEFORE building
+# (moved out of App.swift in Conformance Phase 4 — 2026-06-22)
 log "Updating APP_VERSION to $DISPLAY_VERSION..."
-ABOUT_FILE="Sources/App.swift"
+ABOUT_FILE="Sources/AppConstants.swift"
 
 # Use perl for more reliable multi-line replacement
 perl -i -pe "BEGIN{undef $/;} s/let APP_VERSION: String = \{\s*return \"[^\"]*\"\s*\}\(\)/let APP_VERSION: String = {\n    return \"$DISPLAY_VERSION\"\n}()/smg" "$ABOUT_FILE"
