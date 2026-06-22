@@ -81,6 +81,25 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] GUI integration for infrastructure status
 - [x] Hung process detection and cleanup
 
+## Bugs (Inherited / Pre-existing, found 2026-06-22)
+- [ ] **HIGH — Closing chat window quits the entire app** (found during Phase 3 smoke test)
+  - Repro: start any LLM → click Chat → close the chat window (red dot or Cmd-W) → menu bar icon disappears, app process exits.
+  - Root cause (confirmed via code read): `App.swift:1608-1631` creates the chat NSWindow with default `isReleasedWhenClosed = true`, calls `NSApp.activate(ignoringOtherApps: true)` (which promotes the menubar app to a regular foreground app), and there is NO `NSApplicationDelegate` overriding `applicationShouldTerminateAfterLastWindowClosed`. When the last window closes, Cocoa's default behavior terminates the foreground app. The chat window's `ChatWindowDelegate.windowWillClose` only cleans up internal references — it does not block termination.
+  - Same code pattern in `openModelDownloader` (App.swift:1639+) and `openPreferences` — they likely have the same latent bug, masked when another window is still open.
+  - Fix options: (a) `window.isReleasedWhenClosed = false` on all three windows, or (b) add an `NSApplicationDelegate` that returns `false` for `applicationShouldTerminateAfterLastWindowClosed`. Option (b) is the macOS-idiomatic fix for a MenuBarExtra app.
+  - Effort: ~15 min. **Do not fix during conformance pass** — would mix feature change with structural refactor. Tackle after Phase 4 lands.
+- [ ] **MEDIUM-HIGH — Some larger models fail to start with no UI feedback** (found 2026-06-22)
+  - Symptom: click Start on a (typically larger) model → spinner appears briefly → spinner disappears → model stays stopped → no error message, no toast, no modal. No way for the user to know why.
+  - Root cause (confirmed via code read): `App.swift:1278-1284` in `StatusViewModel.startWithScript` — when `service.run(...)` returns non-zero exit code, the code logs "Failed to start" to `AppLogger` (a file/os.log destination, not the UI) and removes the entry from `startupProgress` (which is why the spinner disappears). It does NOT set any UI-visible error. `StatusViewModel` doesn't even have an `errorMessage` property.
+  - Additional limitation: `CLIService.run(_:)` returns only `Int32` exit code, discarding stderr text. Even if we surface the failure, we have no message to display unless we also capture stderr. CLIService does have `runAndCapture` for other call sites — should use it here.
+  - Two possible underlying causes for the user-visible "can't start large models" bug, which the missing error surface is hiding:
+    1. Models incompletely downloaded (e.g. partial GGUF shards) — CLI start fails with file-not-found-ish error.
+    2. Insufficient RAM / VRAM at start time — llama-server / mlx_lm.server exits immediately.
+  - Fix scope:
+    - **Minimum:** add `errorMessage: String?` `@Published` on `StatusViewModel`, switch `service.run(...)` to `service.runAndCapture(...)` in `startWithScript`, set `errorMessage` on non-zero exit with the captured stderr, render an error banner in the menu bar dropdown (similar to how `ChatView` already does it).
+    - **Better:** also surface the download-integrity check (verify file count / total size matches expected for completed downloads) before allowing Start. Catch problem #1 above before the start attempt.
+  - Effort: 20-30 min for minimum scope; 1-2 h for "better" scope. **Do not fix during conformance pass** — feature change.
+
 ## Stretch / Backlog
 - [ ] **Fix `version-bump.py` to also sync embedded version literals (GLOBAL — affects all repos)** (added 2026-06-19)
   - Tool: `~/.ai-dev-dotfiles/tools/version-bump.py`. Currently it updates only the `VERSION` file. It does NOT patch:
