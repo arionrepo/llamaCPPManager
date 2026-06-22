@@ -16,19 +16,59 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
-## [2026.06.22.1] - 2026-06-22
+## [2026.06.22.1] - 2026-06-22 (revised 2026-06-22 after full audit)
 
-### Fixed
-- **`performance` startup mode crashed llama-server** with `error:
-  invalid argument: --n-parallel`. The CLI was passing the obsolete
-  `--n-parallel` flag in 4 places in `cli.py` (the canonical fix had
-  been applied to `process.py` long ago — see comment at
-  `process.py:36` — but `cli.py` was missed). Current llama-server
-  builds accept only `--parallel N` / `-np N`. Affected models that
-  started in `performance` mode (e.g. `mistral-small-24b`). Models
-  in `basic` / `tools` / `extended` modes were unaffected.
-- Same fix applied to the help-text strings in `models options` so the
-  documented advice now matches reality.
+### Fixed (cli.py — display strings only, see note below)
+- Replaced `--n-parallel` with `--parallel` in 4 places in `cli.py`
+  (lines 245, 261, 286, 307). These strings appear in:
+  - `models config-show --json` output (`mode_flags.performance`)
+  - `models config-show` human-readable output
+  - `models options` help-text describing what each mode adds
+  - `models options` help-text listing common llama-server parameters
+- The same correction had been applied to `process.py:37` long ago
+  (see explanatory comment at `process.py:36`); `cli.py` was missed.
+
+### Important accuracy note (corrects the original entry)
+- The original entry for this commit overstated the impact. The
+  `cli.py` strings are **display only** — they appear in CLI help and
+  `config-show` output but do NOT participate in the actual model
+  start. The real start path for GGUF / `deployment_type: native`
+  models goes through:
+    GUI -> `llamacpp-manager start-script <name> --mode <mode>`
+        -> `cli.cmd_start_script` (cli.py:1467)
+        -> `subprocess.run([restart_script_path, name, mode])`
+        -> `/Users/liborballaty/llms/restart-llm-interactive.sh`
+  That external bash script (outside this repo) is the actual source
+  of the `--n-parallel` flag the user hit. The bash-script fix was
+  applied locally during this session but is not part of this commit
+  because the file lives outside the repository.
+- `process.py` has its own `start_process` flag builder for the
+  non-script start path, and it was already correct.
+
+### Audit of all start modes (static analysis vs current llama-server `--help`)
+| Code path | Flag | Status |
+|---|---|---|
+| restart-llm-interactive.sh:146 `performance` | `--n-parallel 4` -> `--parallel 4` | FIXED locally |
+| restart-llm-interactive.sh:151 `extended` | bare `--flash-attn` | BROKEN on current llama-server (now tristate `[on\|off\|auto]`); fixed locally to `--flash-attn on` |
+| restart-llm-interactive.sh:108 PATH | `which llama-server \|\| /opt/homebrew/bin/llama-server` | FRAGILE — brew fallback path doesn't exist on this system |
+| cli.py:245,261,286,307 (display) | `--n-parallel` | FIXED in this commit |
+| process.py:34,37,39 | `--jinja`, `--parallel 4`, `--flash-attn on` | already correct |
+| mlx_process.build_mlx_argv | `--model`, `--host`, `--port`, +spec.args | valid, but `spec.mode` is silently ignored for MLX |
+
+### Impact by model
+- GGUF / native models (qwen-coder-7b, qwen2.5-32b, deepseek-r1-qwen-32b,
+  llama-3.1-8b, llama-4-scout-17b, hermes-3-llama-8b, mistral-7b,
+  mistral-small-24b, phi3, smollm3, gemma-3-270m, gemma-3-27b,
+  qwen3-0.6b): `basic` and `tools` worked all along; `performance` was
+  broken until the bash-script fix; `extended` was broken until the
+  bash-script `--flash-attn on` fix.
+- MLX models (mlx-gemma-3-1b, mlx-gemma4-31b, gemma-270m-compliance-mlx,
+  gemma-3-27b-mlx, mistral-05b-compliance-mlx, mlx-diffusiongemma):
+  mode is ignored. Selecting `performance` or `extended` for an MLX
+  model has no effect — only `spec.args` is appended to the
+  `mlx_lm.server` command line.
+
+## [2026.06.19.8] - 2026-06-19
 
 ## [2026.06.19.8] - 2026-06-19
 

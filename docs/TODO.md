@@ -82,6 +82,22 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] Hung process detection and cleanup
 
 ## Bugs (Inherited / Pre-existing, found 2026-06-22)
+
+### Audit findings from "check all modes for GGUF and MLX" sweep (2026-06-22)
+
+- [ ] **MEDIUM — `restart-llm-interactive.sh` PATH lookup is fragile** (the user's personal script at `/Users/liborballaty/llms/restart-llm-interactive.sh:108`)
+  - `LLAMA_SERVER=$(which llama-server 2>/dev/null || echo "/opt/homebrew/bin/llama-server")` falls back to a path that doesn't exist on this system. If `llama-server` isn't on the GUI subprocess's PATH (the LocalProjects build dir typically isn't), the script gets a "No such file or directory" before reaching mode-arg parsing. The GUI then sees the eventual exit code only.
+  - Fix: replace the fallback with the actual local-build path (`/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llama.cpp/build/bin/llama-server`) OR have the GUI's `start-script` invocation export a PATH that includes the local build dir, OR pin the script to a config-read value.
+
+- [ ] **MEDIUM — MLX models silently ignore the `mode` field**
+  - `src/llamacpp_manager/mlx_process.py:build_mlx_argv` does not branch on `spec.mode`. So picking `performance`, `tools`, or `extended` for any MLX model has zero effect — only `--model`, `--host`, `--port`, and `spec.args` are appended.
+  - User impact: confusing UX (mode picker appears active but does nothing for MLX). For MLX-relevant tuning (e.g. KV cache type, draft model, max_kv_size) `mlx_lm.server` has its own flag set; the GUI/CLI should either route an MLX-specific mode table OR hide the mode picker on MLX rows.
+  - Affected: mlx-gemma-3-1b, mlx-gemma4-31b, gemma-270m-compliance-mlx, gemma-3-27b-mlx, mistral-05b-compliance-mlx, mlx-diffusiongemma.
+
+- [ ] **LOW — `parseStartupLog` reads stale log lines and produces false "Issue detected" alerts**
+  - `Sources/ViewModels/StatusViewModel.swift` `parseStartupLog()` scans the last 50 lines of `<model>.log` for the substring `error`. The log file is append-only across runs, so historical tracebacks from prior failed attempts (e.g. the gemma4 `ValueError: Model type gemma4 not supported` lines that lingered after the mlx-lm upgrade) keep triggering the false alert during legitimate new starts.
+  - Three possible fixes (cheapest first): (1) anchor parsing to lines after the most recent "Starting httpd" / startup banner, (2) parse in reverse and let the most recent success/fail signal win, (3) truncate `<model>.log` on each fresh start (destructive — loses history).
+
 - [ ] **HIGH — Closing chat window quits the entire app** (found during Phase 3 smoke test)
   - Repro: start any LLM → click Chat → close the chat window (red dot or Cmd-W) → menu bar icon disappears, app process exits.
   - Root cause (confirmed via code read): `App.swift:1608-1631` creates the chat NSWindow with default `isReleasedWhenClosed = true`, calls `NSApp.activate(ignoringOtherApps: true)` (which promotes the menubar app to a regular foreground app), and there is NO `NSApplicationDelegate` overriding `applicationShouldTerminateAfterLastWindowClosed`. When the last window closes, Cocoa's default behavior terminates the foreground app. The chat window's `ChatWindowDelegate.windowWillClose` only cleans up internal references — it does not block termination.
