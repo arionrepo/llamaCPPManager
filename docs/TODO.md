@@ -85,6 +85,28 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 
 ### Open items from 2026-06-22 session
 
+- [ ] **MEDIUM — Download progress not visible in the Native Models tab**
+  - User report (2026-06-22): when an LLM is downloading, the progress doesn't appear in the Native Models tab as expected.
+  - Code state: the pinned "Active Downloads & Loading" section in `App.swift` (top of MenuBarExtra body) DOES render `vm.downloadViewModel.downloads` AND `vm.startupProgress`. So the rendering exists.
+  - Likely causes (need repro to confirm):
+    1. **External-tool downloads aren't tracked** — `hf download` / `huggingface-cli` started from a shell or by a non-GUI code path don't go through `downloadViewModel` and so don't appear. The GUI only sees what it initiated.
+    2. **`parseStartupLog` patterns may not match the current mlx-lm / mlx-vlm log lines.** When a server is started and lazy-downloads weights from HF on first load, parseStartupLog should pick up "Fetching N files" lines. But mlx-lm 0.31.3 may have changed log formatting; verify the regex still matches.
+    3. **Race on `startupProgress` lifecycle** — if startupProgress is cleared before the parser sees a fetch line, no progress shows.
+  - Repro recipe: clear `~/.cache/huggingface/hub/models--mlx-community--gemma-3-1b-it-4bit` so weights are fresh; start `mlx-gemma-3-1b` from the GUI; watch both the menu and `~/Library/Logs/llamaCPPManager/mlx-gemma-3-1b.log`. Compare what the log shows to what the GUI shows.
+  - Fix path (once repro is in hand): either widen parseStartupLog's "Fetching" regex, or add a background HF-cache watcher that reports incomplete-file sizes / total expected.
+
+- [ ] **MEDIUM — Model Downloader UI doesn't allow downloading all listed models** (especially diffusion models)
+  - User report (2026-06-22): the in-app Model Downloader window lists models but doesn't let the user download some of them, particularly diffusion-class models.
+  - Probable causes:
+    1. **Curated catalog filter** — the downloader UI may filter to a known-good subset (GGUF-only? text-only?). Diffusion / multimodal entries may be displayed but Download button is disabled/missing.
+    2. **Download command incompatibility** — the CLI's `models download <name>` may only support a specific path (e.g., HF-Hub via huggingface_hub library); diffusion models may need different download tooling.
+    3. **Static catalog list** — entries hardcoded in the GUI / CLI that haven't been updated for newer model classes (DiffusionGemma was released 2026-06-10).
+  - Investigation needed:
+    - Read `ModelDownloaderView.swift` to see filter / disable conditions.
+    - Read `src/llamacpp_manager/models/downloader.py` to see what `llamacpp-manager models download <name>` supports.
+    - Compare against the displayed catalog to see which entries can't be acted on.
+  - Acceptance criteria for fix: every model row in the downloader UI has a working Download button OR a clearly displayed reason why it's unavailable (e.g., "requires GUI version >= X" / "diffusion class — use direct hf download to ~/llms/X").
+
 - [ ] **Per-model `llama_server_path` config field (generalizable infra improvement)** — Today every native/GGUF model goes through the same `restart-llm-interactive.sh` which picks llama-server via PATH fallback. Adding an optional per-model `llama_server_path` field would allow: (a) pinning a known-good llama.cpp build per model, (b) running an experimental fork for one model without breaking others, (c) eventually pointing diffusion-class models at a diffusion-capable server when that exists. ~30 min to wire: extend config schema → extend `start-script` arg passing → update `restart-llm-interactive.sh` to honor an env var or extra arg. Low risk, high optionality.
 
 - [ ] **DiffusionGemma via llama.cpp — DO NOT pursue until upstream catches up** *(research notes 2026-06-22)*
