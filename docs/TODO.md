@@ -85,15 +85,16 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 
 ### Open items from 2026-06-22 session
 
-- [ ] **MEDIUM — Download progress not visible in the Native Models tab**
-  - User report (2026-06-22): when an LLM is downloading, the progress doesn't appear in the Native Models tab as expected.
-  - Code state: the pinned "Active Downloads & Loading" section in `App.swift` (top of MenuBarExtra body) DOES render `vm.downloadViewModel.downloads` AND `vm.startupProgress`. So the rendering exists.
-  - Likely causes (need repro to confirm):
-    1. **External-tool downloads aren't tracked** — `hf download` / `huggingface-cli` started from a shell or by a non-GUI code path don't go through `downloadViewModel` and so don't appear. The GUI only sees what it initiated.
-    2. **`parseStartupLog` patterns may not match the current mlx-lm / mlx-vlm log lines.** When a server is started and lazy-downloads weights from HF on first load, parseStartupLog should pick up "Fetching N files" lines. But mlx-lm 0.31.3 may have changed log formatting; verify the regex still matches.
-    3. **Race on `startupProgress` lifecycle** — if startupProgress is cleared before the parser sees a fetch line, no progress shows.
-  - Repro recipe: clear `~/.cache/huggingface/hub/models--mlx-community--gemma-3-1b-it-4bit` so weights are fresh; start `mlx-gemma-3-1b` from the GUI; watch both the menu and `~/Library/Logs/llamaCPPManager/mlx-gemma-3-1b.log`. Compare what the log shows to what the GUI shows.
-  - Fix path (once repro is in hand): either widen parseStartupLog's "Fetching" regex, or add a background HF-cache watcher that reports incomplete-file sizes / total expected.
+- [ ] **MEDIUM — Download progress not visible in the Native Models tab (confirmed 2026-06-22)**
+  - User repro confirmed: the `hf download unsloth/diffusiongemma-26B-A4B-it-GGUF` that wrote ~7 GB to `~/llms/diffusiongemma-26b/.cache/huggingface/download/*.incomplete` was completely invisible in the GUI's "Active Downloads & Loading" section throughout its lifetime.
+  - **Root cause (confirmed via code read):** `vm.downloadViewModel.downloads` is populated ONLY by downloads initiated through the GUI's own Model Downloader window. External invocations — `hf download` from a shell, `huggingface-cli`, or `llamacpp-manager models download` from any non-GUI source — never enter that dict. Same architectural gap as the original "external mlx_lm.server processes" problem which was already solved by the external-server scanner.
+  - **Proposed fix (mirrors the existing external-server scanner pattern in `StatusViewModel`):**
+    1. Add a background `Task.detached` scanner that periodically walks each configured model's `model_path` directory looking for `.cache/huggingface/download/*.incomplete` files, OR scans for active `hf download` / `models download` subprocesses (the cleanup module already has `find_stale_downloads` which can be extended).
+    2. For each detected active download, post a synthetic entry into a new `@Published var externalDownloads: [String: ExternalDownloadProgress]` field on `StatusViewModel`.
+    3. Render those alongside the existing GUI-initiated downloads in the "Active Downloads & Loading" section.
+  - Effort: ~1-2 hours. Touches `cleanup.py` (extend with `find_active_downloads`), `StatusViewModel.swift` (new scanner + field), `App.swift` (render external downloads).
+  - Secondary issue (still hypothetical, not confirmed):
+    - `parseStartupLog` regex may not match the current mlx-lm 0.31.3 log format. The "Fetching N files" pattern was added when MLX models lazy-download weights on first start. Worth a re-check, but only AFTER a controlled repro: clear `~/.cache/huggingface/hub/models--mlx-community--gemma-3-1b-it-4bit`, click Start, compare log output to parseStartupLog patterns.
 
 - [ ] **MEDIUM — Model Downloader UI doesn't allow downloading all listed models** (especially diffusion models)
   - User report (2026-06-22): the in-app Model Downloader window lists models but doesn't let the user download some of them, particularly diffusion-class models.
