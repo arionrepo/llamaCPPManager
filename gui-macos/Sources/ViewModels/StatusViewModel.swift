@@ -20,6 +20,7 @@ final class StatusViewModel: ObservableObject {
     @Published var loggingConfig: LoggingConfig?
     @Published var selectedModes: [String: String] = [:]  // Model name -> mode
     @Published var startupProgress: [String: ModelStartupProgress] = [:]
+    @Published var errorMessage: String?  // Surfaces start failures in the menu UI
     private var logMonitorTasks: [String: Task<Void, Never>] = [:]
 
     // Persistent download view model — survives catalog window closes
@@ -56,6 +57,18 @@ final class StatusViewModel: ObservableObject {
         let infraErrors = infrastructureRows.contains { !$0.healthy }
 
         return nativeErrors || dockerErrors || infraErrors
+    }
+
+    /// True when the row's deployment type silently ignores `spec.mode` at start time.
+    /// MLX, MLX-VLM, and Diffusion deployments go through `build_mlx_argv` which does not
+    /// branch on mode — only `--model`, `--host`, `--port`, and `spec.args` are sent to
+    /// `mlx_lm.server`. The GUI hides the mode picker for these rows to avoid pretending
+    /// the picker affects anything.
+    func deploymentIgnoresMode(_ row: StatusRow) -> Bool {
+        let deployment = (row.deployment_type?.lowercased())
+                       ?? (row.format?.lowercased())
+                       ?? "gguf"
+        return deployment == "mlx" || deployment == "mlx-vlm" || deployment == "diffusion"
     }
 
     var overallStatusColor: Color {
@@ -394,7 +407,22 @@ final class StatusViewModel: ObservableObject {
                 "command": command,
                 "deployment": deployment
             ])
-            result = await service.run(command)
+
+            // Capture stderr so we can surface the actual failure reason. Falls back to
+            // `service.run` semantics on success: stdout is discarded as before.
+            var capturedStderr: String?
+            var exitCode: Int32 = 0
+            do {
+                _ = try await service.runAndCapture(command)
+            } catch let CLIError.commandFailed(_, code, stderr) {
+                exitCode = code
+                capturedStderr = stderr
+            } catch {
+                exitCode = -1
+                capturedStderr = error.localizedDescription
+            }
+            result = exitCode
+
             LifecycleLog.log("ui.start.cli_result", model: name, [
                 "exit_code": result,
                 "command": command
@@ -405,13 +433,78 @@ final class StatusViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 refresh()
             } else {
-                AppLogger.log("Failed to start \(name) (exit=\(result))", level: .error)
+                AppLogger.log("Failed to start \(name) (exit=\(result)): \(capturedStderr ?? "no stderr")", level: .error)
                 await MainActor.run {
                     self.startupProgress.removeValue(forKey: name)
                     self.stopLogMonitor(for: name)
+                    self.surfaceStartFailure(modelName: name, reason: capturedStderr ?? "Exit \(result) with no stderr output")
                 }
             }
         }
+    }
+
+    /// Sets `errorMessage` for the menu's red banner AND opens the model's log file in
+    /// the system default app (Console.app) so the user immediately sees the real failure.
+    /// Called from the CLI-start failure path and from the log monitor when it detects a
+    /// fatal-keyword crash post-spawn.
+    private func surfaceStartFailure(modelName: String, reason: String) {
+        let truncated = reason.count > 240 ? String(reason.prefix(240)) + "…" : reason
+        errorMessage = "Failed to start \(modelName): \(truncated)"
+        let logPath = "\(NSHomeDirectory())/Library/Logs/llamaCPPManager/\(modelName).log"
+        if FileManager.default.fileExists(atPath: logPath) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: logPath))
+        }
+        LifecycleLog.log("ui.start.failure_surfaced", model: modelName, ["reason": truncated])
+    }
+
+    /// Scans the log tail (post-startup-banner, same window parseStartupLog uses) for
+    /// definitive failure keywords. Returns the matching line so the caller can surface it.
+    /// nil = no fatal signal detected.
+    private func detectStartupFailure(path: String) -> String? {
+        let maxBytes = 64 * 1024
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        let offset = size > UInt64(maxBytes) ? size - UInt64(maxBytes) : 0
+        try? handle.seek(toOffset: offset)
+        let data = handle.readDataToEndOfFile()
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+
+        // Same anchoring strategy as parseStartupLog — only consider lines AFTER the most
+        // recent startup banner so historical failures don't mis-fire here either.
+        let allRecentLines = text.split(separator: "\n").suffix(200).map(String.init)
+        let startupBannerMarkers = [
+            "Starting httpd", "main: server is listening", "system_info:", "build info:"
+        ]
+        var anchorIdx = 0
+        for (i, line) in allRecentLines.enumerated().reversed() {
+            if startupBannerMarkers.contains(where: { line.contains($0) }) {
+                anchorIdx = i
+                break
+            }
+        }
+        let lines = Array(allRecentLines.suffix(from: anchorIdx))
+
+        // Patterns that mean "the spawned process gave up" — distinct from transient
+        // warnings or single-token "error" mentions that the loose parser would catch.
+        let fatalPatterns = [
+            "error: invalid argument",
+            "ValueError:",
+            "FATAL",
+            "Traceback (most recent call last):",
+            "bash: ", // covers "bash: /opt/homebrew/bin/llama-server: No such file or directory"
+            "Aborted",
+            "Segmentation fault",
+            "ModuleNotFoundError",
+        ]
+        for line in lines.reversed() {
+            for pat in fatalPatterns {
+                if line.contains(pat) {
+                    return line.trimmingCharacters(in: .whitespaces)
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Startup Log Monitoring
@@ -452,6 +545,18 @@ final class StatusViewModel: ObservableObject {
                     await MainActor.run {
                         self.startupProgress.removeValue(forKey: name)
                         self.stopLogMonitor(for: name)
+                    }
+                    return
+                }
+
+                // Post-spawn crash detection: look for fatal keywords in the post-banner
+                // tail. If found, surface it and stop monitoring — don't wait for the
+                // 10-minute timeout while the spinner pretends progress is happening.
+                if let fatalLine = self.detectStartupFailure(path: logPath) {
+                    await MainActor.run {
+                        self.startupProgress.removeValue(forKey: name)
+                        self.stopLogMonitor(for: name)
+                        self.surfaceStartFailure(modelName: name, reason: fatalLine)
                     }
                     return
                 }
@@ -503,7 +608,27 @@ final class StatusViewModel: ObservableObject {
         try? handle.seek(toOffset: offset)
         let data = handle.readDataToEndOfFile()
         guard let text = String(data: data, encoding: .utf8) else { return nil }
-        let lines = text.split(separator: "\n").suffix(50).map(String.init)
+        let allRecentLines = text.split(separator: "\n").suffix(200).map(String.init)
+
+        // Anchor to the most recent startup so historical tracebacks from prior
+        // failed runs (the log file is append-only across attempts) don't trigger
+        // false "Issue detected" alerts on a legitimately-loading new run. Markers
+        // are the first lines that any fresh llama-server / mlx_lm.server / mlx-vlm
+        // run prints — pick whichever appears latest in the tail window.
+        let startupBannerMarkers = [
+            "Starting httpd",          // mlx_lm.server
+            "main: server is listening", // llama-server (llama.cpp)
+            "system_info:",             // llama-server early banner
+            "build info:",              // llama-server very-early banner
+        ]
+        var anchorIdx = 0
+        for (i, line) in allRecentLines.enumerated().reversed() {
+            if startupBannerMarkers.contains(where: { line.contains($0) }) {
+                anchorIdx = i
+                break
+            }
+        }
+        let lines = Array(allRecentLines.suffix(from: anchorIdx).suffix(50))
 
         var latest = ModelStartupProgress(
             status: "Starting...",

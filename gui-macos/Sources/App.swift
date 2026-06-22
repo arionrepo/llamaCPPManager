@@ -4,6 +4,7 @@ import Combine
 
 @main
 struct LlamaCPPManagerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var vm = StatusViewModel()
 
     var body: some Scene {
@@ -15,6 +16,30 @@ struct LlamaCPPManagerApp: App {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
+
+                // MARK: - Error banner (start failures, etc.)
+                if let error = vm.errorMessage {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                            .accessibilityHidden(true)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .textSelection(.enabled)
+                            .lineLimit(4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button(action: { vm.errorMessage = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Dismiss error")
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.red.opacity(0.08))
+                }
 
                 // MARK: - Active Downloads + Loading (pinned at top so always visible)
                 let totalActive = vm.downloadViewModel.downloads.count + vm.startupProgress.count
@@ -324,8 +349,10 @@ struct LlamaCPPManagerApp: App {
                                 .padding(.vertical, 4)
                             }
 
-                            // Mode picker (show when stopped and not starting)
-                            if !row.up && vm.startupProgress[row.name] == nil {
+                            // Mode picker (show when stopped, not starting, and the deployment honors modes).
+                            // MLX / MLX-VLM / Diffusion deployments silently ignore mode in build_mlx_argv,
+                            // so we hide the picker for them rather than pretend it works.
+                            if !row.up && vm.startupProgress[row.name] == nil && !vm.deploymentIgnoresMode(row) {
                                 HStack(spacing: 4) {
                                     Text("Mode:")
                                         .font(.caption)
