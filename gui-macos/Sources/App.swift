@@ -349,10 +349,11 @@ struct LlamaCPPManagerApp: App {
                                 .padding(.vertical, 4)
                             }
 
-                            // Mode picker (show when stopped, not starting, and the deployment honors modes).
-                            // MLX / MLX-VLM / Diffusion deployments silently ignore mode in build_mlx_argv,
-                            // so we hide the picker for them rather than pretend it works.
-                            if !row.up && vm.startupProgress[row.name] == nil && !vm.deploymentIgnoresMode(row) {
+                            // Mode picker (show when stopped and not starting). Mode set is
+                            // deployment-specific — llama.cpp gets basic/tools/performance/extended,
+                            // MLX gets basic/think. See StatusViewModel.availableModes(for:).
+                            if !row.up && vm.startupProgress[row.name] == nil {
+                                let modes = vm.availableModes(for: row)
                                 HStack(spacing: 4) {
                                     Text("Mode:")
                                         .font(.caption)
@@ -365,10 +366,9 @@ struct LlamaCPPManagerApp: App {
                                             vm.saveMode(for: row.name, mode: newMode)
                                         }
                                     )) {
-                                        Text("Basic").tag("basic")
-                                        Text("Tools").tag("tools")
-                                        Text("Performance").tag("performance")
-                                        Text("Extended").tag("extended")
+                                        ForEach(modes, id: \.tag) { mode in
+                                            Text(mode.label).tag(mode.tag)
+                                        }
                                     }
                                     .pickerStyle(.segmented)
                                     .labelsHidden()
@@ -552,8 +552,10 @@ struct LlamaCPPManagerApp: App {
                                 .padding(.vertical, 4)
                             }
 
-                            // Mode selector (only shown when stopped and not starting)
+                            // Mode selector (only shown when stopped and not starting).
+                            // Uses availableModes(for:) so MLX rows get MLX-specific modes.
                             if !row.up && vm.startupProgress[row.name] == nil {
+                                let modes = vm.availableModes(for: row)
                                 HStack(spacing: 4) {
                                     Text("Mode:")
                                         .font(.caption)
@@ -566,10 +568,9 @@ struct LlamaCPPManagerApp: App {
                                             vm.saveMode(for: row.name, mode: newMode)
                                         }
                                     )) {
-                                        Text("Basic").tag("basic")
-                                        Text("Tools").tag("tools")
-                                        Text("Performance").tag("performance")
-                                        Text("Extended").tag("extended")
+                                        ForEach(modes, id: \.tag) { mode in
+                                            Text(mode.label).tag(mode.tag)
+                                        }
                                     }
                                     .pickerStyle(.segmented)
                                     .labelsHidden()

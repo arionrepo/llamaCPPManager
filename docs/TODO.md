@@ -83,6 +83,9 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 
 ## Bugs (Inherited / Pre-existing, found 2026-06-22)
 
+### Open items from 2026-06-22 session
+- [ ] **Verify llama.cpp build supports DiffusionGemma block-diffusion sampler before using the GGUF path.** The GGUF download for `diffusiongemma-26b` from `unsloth/diffusiongemma-26B-A4B-it-GGUF` (Q4_K_M, ~15 GB) is in progress to `~/llms/diffusiongemma-26b/`. Even with a valid GGUF, vanilla llama-server may not run it — DiffusionGemma uses a `DiffusionGemmaForBlockDiffusion` architecture that needs explicit support in the loader/sampler. Check llama.cpp release notes from June 2026 forward for diffusion-gemma support before relying on this path. The `mlx-diffusiongemma` config (MLX-VLM) is the proven-working alternative.
+
 ### Audit findings from "check all modes for GGUF and MLX" sweep (2026-06-22)
 
 - [ ] **MEDIUM — `restart-llm-interactive.sh` PATH lookup is fragile** (the user's personal script at `/Users/liborballaty/llms/restart-llm-interactive.sh:108`)

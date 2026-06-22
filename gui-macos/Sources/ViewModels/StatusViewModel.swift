@@ -59,16 +59,28 @@ final class StatusViewModel: ObservableObject {
         return nativeErrors || dockerErrors || infraErrors
     }
 
-    /// True when the row's deployment type silently ignores `spec.mode` at start time.
-    /// MLX, MLX-VLM, and Diffusion deployments go through `build_mlx_argv` which does not
-    /// branch on mode — only `--model`, `--host`, `--port`, and `spec.args` are sent to
-    /// `mlx_lm.server`. The GUI hides the mode picker for these rows to avoid pretending
-    /// the picker affects anything.
-    func deploymentIgnoresMode(_ row: StatusRow) -> Bool {
+    /// Available start-time modes for the given row. Modes are deployment-specific:
+    ///   - llama.cpp / GGUF (native, non-mlx): basic / tools / performance / extended
+    ///   - MLX (mlx_lm.server / mlx_vlm.server / diffusion): basic / think
+    /// The mlx_lm.server flag set is completely different from llama.cpp's, so the
+    /// llama-mode labels (tools/performance/extended) would be misleading for MLX.
+    func availableModes(for row: StatusRow) -> [(tag: String, label: String)] {
         let deployment = (row.deployment_type?.lowercased())
                        ?? (row.format?.lowercased())
                        ?? "gguf"
-        return deployment == "mlx" || deployment == "mlx-vlm" || deployment == "diffusion"
+        let isMlxFlavored = (deployment == "mlx" || deployment == "mlx-vlm" || deployment == "diffusion")
+        if isMlxFlavored {
+            return [
+                ("basic", "Basic"),
+                ("think", "Think"),
+            ]
+        }
+        return [
+            ("basic", "Basic"),
+            ("tools", "Tools"),
+            ("performance", "Performance"),
+            ("extended", "Extended"),
+        ]
     }
 
     var overallStatusColor: Color {

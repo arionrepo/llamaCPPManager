@@ -16,6 +16,39 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.22.5] - 2026-06-22
+
+### Added — MLX-specific modes (basic / think)
+- Previous v.22.2 hid the mode picker for MLX/MLX-VLM/Diffusion rows
+  (Bug 5) because `build_mlx_argv` ignored the mode field. This release
+  replaces that hide-it-entirely approach with truthful, MLX-aware
+  modes that actually do something:
+  - `basic` — default: just `--model` / `--host` / `--port`
+  - `think` — adds `--enable-thinking --thinking-budget 4096`,
+    enabling Qwen3 / DeepSeek-R1 / DiffusionGemma-style step-by-step
+    reasoning on models that support it (mlx_lm.server is permissive
+    about ignored flags on models that don't).
+- `StatusViewModel.availableModes(for:)` returns the right mode set per
+  row: GGUF gets `basic/tools/performance/extended`; MLX gets
+  `basic/think`. UI Picker (App.swift, both native and Docker sections)
+  iterates this list rather than hard-coding the 4 llama.cpp tags.
+- `deploymentIgnoresMode(_:)` removed — MLX rows now honor mode.
+
+### Fixed — incorrect "stale config entry" advice from v.22.4
+- The v.22.4 CHANGELOG note advised removing the `diffusiongemma-26b`
+  config entry as stale. **That advice was wrong.** DiffusionGemma 26B
+  is Google DeepMind's diffusion language model, released 2026-06-10
+  (12 days ago) — a genuinely new architecture, not a typo. A GGUF
+  build is published at `unsloth/diffusiongemma-26B-A4B-it-GGUF`. The
+  user's local `~/llms/diffusiongemma-26b/` is empty only because the
+  download never completed.
+- Caveat: whether `llama-server` can actually run the GGUF depends on
+  llama.cpp having block-diffusion sampler support for the
+  `DiffusionGemmaForBlockDiffusion` architecture. Verify against
+  current llama.cpp release notes before relying on the GGUF path.
+- The working `mlx-diffusiongemma` config (MLX-VLM path) remains the
+  proven-running alternative.
+
 ## [2026.06.22.4] - 2026-06-22
 
 ### Added — zombie-process cleanup

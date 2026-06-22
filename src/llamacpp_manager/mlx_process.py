@@ -44,7 +44,23 @@ def build_mlx_argv(python_path: str, spec: ModelSpec) -> list:
         "--port", str(spec.port)
     ]
 
-    # Add any extra args from config
+    # MLX-specific modes. Modes here are distinct from the llama.cpp modes
+    # (basic/tools/performance/extended) used by start-script / process.py
+    # because mlx_lm.server / mlx_vlm.server have a completely different
+    # flag set. Recognized values:
+    #   - basic    : just --model/--host/--port (default — no extras)
+    #   - think    : --enable-thinking with a default budget of 4096 tokens
+    #                (Qwen3-style reasoning mode; the model must support it
+    #                for the flag to have any effect — mlx_lm.server is
+    #                permissive about ignored flags)
+    # Any other value (including the llama.cpp tags) is silently treated as
+    # `basic` so legacy configs don't break.
+    mode = (getattr(spec, "mode", None) or "basic").lower()
+    if mode == "think":
+        argv.extend(["--enable-thinking", "--thinking-budget", "4096"])
+
+    # Add any extra args from config (after mode flags, so user args can
+    # override mode defaults if needed)
     if spec.args:
         argv.extend(spec.args)
 
