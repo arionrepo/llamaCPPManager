@@ -132,8 +132,10 @@ def test_status_json_vs_table_consistency(tmp_path, monkeypatch, capsys):
     assert main(["status"]) == 0
     table_out = capsys.readouterr().out
 
-    # Verify JSON data appears in table
-    model_data = json_data[0]
+    # Verify JSON data appears in table. The JSON shape is now an object
+    # with `models` and `infrastructure` keys (was previously a flat list).
+    assert isinstance(json_data, dict) and "models" in json_data
+    model_data = json_data["models"][0]
     assert model_data["name"] == "consistency-test"
     assert str(model_data["pid"]) in table_out
     assert str(model_data["port"]) in table_out
