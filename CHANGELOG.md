@@ -6,6 +6,16 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.23.8] - 2026-06-23
+
+### Fixed
+
+- **Chat window opened behind MenuBarExtra's transient host window and never
+  became key**, so Cmd-W was silently ignored until the user clicked into the
+  window. Fix: call `window.makeKey()` after `makeKeyAndOrderFront(nil)` in
+  `StatusViewModel.openChat(name:)`, applied to both the existing-window
+  reactivate path and the new-window creation path.
+
 ## [2026.06.23.7] - 2026-06-23
 
 ### Fixed

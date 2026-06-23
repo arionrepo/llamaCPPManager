@@ -12,5 +12,5 @@ import Foundation
 
 // Version constant - Date-based: YYYY.MM.DD.N (N = build number for that day)
 let APP_VERSION: String = {
-    return "2026.06.23.7"
+    return "2026.06.23.8"
 }()

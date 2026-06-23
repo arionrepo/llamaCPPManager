@@ -881,6 +881,7 @@ final class StatusViewModel: ObservableObject {
         if let existingWindow = chatWindows[name] {
             existingWindow.level = .floating
             existingWindow.makeKeyAndOrderFront(nil)
+            existingWindow.makeKey()
             let policyBefore = NSApp.activationPolicy().rawValue
             NSApp.activate(ignoringOtherApps: true)
             LifecycleLog.log("ui.chat.window_reactivated", model: name,
@@ -907,6 +908,7 @@ final class StatusViewModel: ObservableObject {
         window.level = .floating
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
+        window.makeKey()
 
         let policyBefore = NSApp.activationPolicy().rawValue
         NSApp.activate(ignoringOtherApps: true)
