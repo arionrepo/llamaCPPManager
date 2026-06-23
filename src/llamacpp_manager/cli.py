@@ -2315,6 +2315,7 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
     llama_path = cfg.get("llama_server_path")
     log_dir = Path(cfg.get("log_dir")).expanduser()
     timeout_ms = int(cfg.get("timeout_ms", 2000))
+    logging_config = cfg.get("logging", {})
     started = 0
     for m in cfg.get("models", []):
         if not bool(m.get("autostart", False)):
