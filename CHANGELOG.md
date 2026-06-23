@@ -16,6 +16,23 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.23.3] - 2026-06-23
+
+### Fixed
+- **Cmd-W did not close chat / preferences / model-downloader / help windows.**
+  Root cause: MenuBarExtra-only apps have `NSApplication.shared.mainMenu == nil`
+  on launch, so Cocoa's standard keyboard routing for `Cmd-W` / `Cmd-Q` /
+  `Cmd-M` had no menu item to bind to and silently did nothing — there was
+  no File > Close Window for `performClose:` to be wired to.
+- Fix: `AppDelegate.applicationDidFinishLaunching` now installs a minimal
+  main menu with Application / File / Edit / Window submenus. The File >
+  Close Window item carries `Cmd-W` and uses the standard
+  `NSWindow.performClose(_:)` selector, so window delegates'
+  `windowWillClose` callbacks still fire (chat/preferences/downloader window
+  cleanup keeps working). Bonus: `Cmd-Q` quit, `Cmd-M` minimize, and the
+  Edit menu cut/copy/paste/select-all shortcuts also start working
+  everywhere — they were similarly broken before.
+
 ## [2026.06.23.2] - 2026-06-23
 
 ### Fixed (mlx-vlm chat — by Claude Sonnet 4.6 in commit 54ca96f)

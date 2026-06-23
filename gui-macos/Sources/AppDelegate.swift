@@ -16,4 +16,99 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The user quits explicitly via the "Quit" menu item.
         return false
     }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Install a minimal main menu so standard keyboard shortcuts route correctly
+        // for secondary windows (chat, preferences, model downloader, help, log
+        // viewer). Without this, MenuBarExtra apps have NSApp.mainMenu == nil, which
+        // means Cocoa's standard keyboard routing (Cmd-W -> performClose:,
+        // Cmd-Q -> terminate:, Cmd-M -> performMiniaturize:) has no menu item to
+        // bind to and silently does nothing.
+        installMainMenu()
+    }
+
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        // --- Application menu (first menu item; macOS picks up its name from the bundle) ---
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About llamaCPP Manager",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Hide llamaCPP Manager",
+                        action: #selector(NSApplication.hide(_:)),
+                        keyEquivalent: "h")
+        let hideOthers = appMenu.addItem(withTitle: "Hide Others",
+                                          action: #selector(NSApplication.hideOtherApplications(_:)),
+                                          keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(withTitle: "Show All",
+                        action: #selector(NSApplication.unhideAllApplications(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Quit llamaCPP Manager",
+                        action: #selector(NSApplication.terminate(_:)),
+                        keyEquivalent: "q")
+        appMenuItem.submenu = appMenu
+
+        // --- File menu (gives Cmd-W its target) ---
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+
+        let fileMenu = NSMenu(title: "File")
+        // `performClose:` is the standard Cocoa selector that respects
+        // window delegates' windowShouldClose / windowWillClose hooks, so our
+        // chat/preferences/downloader cleanup still fires when the user hits Cmd-W.
+        fileMenu.addItem(withTitle: "Close Window",
+                         action: #selector(NSWindow.performClose(_:)),
+                         keyEquivalent: "w")
+        fileMenuItem.submenu = fileMenu
+
+        // --- Edit menu (Cmd-C / Cmd-V / Cmd-X / Cmd-A on text inputs) ---
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo",
+                         action: Selector(("undo:")),
+                         keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: "Redo",
+                                     action: Selector(("redo:")),
+                                     keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cut",
+                         action: #selector(NSText.cut(_:)),
+                         keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy",
+                         action: #selector(NSText.copy(_:)),
+                         keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste",
+                         action: #selector(NSText.paste(_:)),
+                         keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All",
+                         action: #selector(NSText.selectAll(_:)),
+                         keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+
+        // --- Window menu (gives Cmd-M its target) ---
+        let windowMenuItem = NSMenuItem()
+        mainMenu.addItem(windowMenuItem)
+
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize",
+                           action: #selector(NSWindow.performMiniaturize(_:)),
+                           keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom",
+                           action: #selector(NSWindow.performZoom(_:)),
+                           keyEquivalent: "")
+        windowMenuItem.submenu = windowMenu
+        NSApplication.shared.windowsMenu = windowMenu
+
+        NSApplication.shared.mainMenu = mainMenu
+    }
 }
