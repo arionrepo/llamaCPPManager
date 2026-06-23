@@ -19,6 +19,10 @@ class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Deferred to windowDidClose — see ChatWindowDelegate for the reason.
+    }
+
+    func windowDidClose(_ notification: Notification) {
         onClose()
     }
 }
