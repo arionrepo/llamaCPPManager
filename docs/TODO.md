@@ -83,6 +83,14 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 
 ## Bugs (Inherited / Pre-existing, found 2026-06-22)
 
+### Open items from 2026-06-23 session
+
+- [ ] **LOW — Show the active `mode` label for running models** in the Native Models tab. When a model is up, the mode Picker is correctly hidden (mode is locked-in for a live server and can only change at restart), but currently there's no indication of what mode it was started with. Add a one-line `Mode: <basic|tools|performance|extended>` (or `basic|think` for MLX) display next to the uptime / health info. Source: `spec.mode` from the YAML row (also returned by `llamacpp-manager status --json` as `m["mode"]`). Small UX polish, ~15 min in `App.swift` around the row-render block.
+
+- [ ] **LOW — Add `--ctx-size` and `--n-gpu-layers` flags to `llamacpp-manager config update`.** Currently set via direct YAML edit only. The new fields exist on `ModelSpec` (since v2026.06.23.1) and are honored by `build_argv` — just no CLI affordance to set them. ~15 min in `cli.py` `cmd_config_update`.
+
+- [ ] **Delete the bash launcher after soak.** `restart-llm-interactive.sh` (outside repo, in `~/llms/`) and the `start-script` CLI subcommand are kept around as a safety net during the GGUF-source-of-truth migration (landed 2026-06-23 in v2026.06.23.1). Once a few models have been confirmed working under the new `start` path for GGUF, delete both. The CLI deletion involves: remove `sp_start_script` argparser registration in `cli.py`, remove `cmd_start_script` handler, and any tests referencing it.
+
 ### Open items from 2026-06-22 session
 
 - [ ] **MEDIUM — Download progress not visible in the Native Models tab (confirmed 2026-06-22)**
