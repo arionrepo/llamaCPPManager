@@ -299,7 +299,7 @@ struct DockerColimaView: View {
                                             .lineLimit(1)
 
                                         // Port info: show actual ports, or "no port" in gray if empty
-                                        let portText = container.ports.trimmingCharacters(in: .whitespaces)
+                                        let portText = container.ports.trimmingCharacters(in: .whitespacesAndNewlines)
                                         HStack(spacing: 4) {
                                             Image(systemName: portText.isEmpty ? "minus.circle" : "network")
                                                 .font(.caption2)
@@ -416,7 +416,11 @@ struct DockerColimaView: View {
 
 // MARK: - CreateProfileForm + window controller
 
-private struct CreateProfileForm: View {
+// Marked `internal` (default access) instead of `private` so that
+// `normalizeGiB` is testable from the test target via @testable import.
+// CreateProfileForm is still only constructed within this file by
+// CreateProfileWindowController, so the effective encapsulation is unchanged.
+struct CreateProfileForm: View {
     @ObservedObject var viewModel: DockerColimaViewModel
     var onClose: () -> Void
 
@@ -439,14 +443,16 @@ private struct CreateProfileForm: View {
     // Colima accepts memory as float GiB and disk as int GiB. Accept lenient
     // user input like "4G" / "4GiB" / "4 GB" and normalize to the bare number
     // that the colima CLI expects.
-    private static func normalizeGiB(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+    // Marked `internal` (default) instead of `private` so the unit test target
+    // can exercise it via @testable import.
+    static func normalizeGiB(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
         let stripped = trimmed
             .replacingOccurrences(of: "GiB", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "GB", with: "", options: .caseInsensitive)
             .replacingOccurrences(of: "G", with: "", options: .caseInsensitive)
-        return stripped.trimmingCharacters(in: .whitespaces)
+        return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // Apply the picked source profile's spec to the form fields. The new VM
@@ -581,7 +587,7 @@ private struct CreateProfileForm: View {
                 .buttonStyle(.bordered)
 
                 Button(isSubmitting ? "Creating…" : "Create") {
-                    let cpusInt = Int(cpus.trimmingCharacters(in: .whitespaces))
+                    let cpusInt = Int(cpus.trimmingCharacters(in: .whitespacesAndNewlines))
                     let memoryArg = Self.normalizeGiB(memory)
                     let diskArg = Self.normalizeGiB(disk)
                     isSubmitting = true
@@ -589,7 +595,7 @@ private struct CreateProfileForm: View {
                     progressLines = []
                     submitTask = Task {
                         let err = await viewModel.createProfile(
-                            name: profileName.trimmingCharacters(in: .whitespaces),
+                            name: profileName.trimmingCharacters(in: .whitespacesAndNewlines),
                             cpus: cpusInt,
                             memory: memoryArg.isEmpty ? nil : memoryArg,
                             disk: diskArg.isEmpty ? nil : diskArg,
@@ -613,7 +619,7 @@ private struct CreateProfileForm: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
+                .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.top, 8)

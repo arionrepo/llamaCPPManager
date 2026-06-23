@@ -302,7 +302,9 @@ final class DockerService {
     // (or with CancellationError when the cancel happens before run() succeeds).
     // Note: colima itself decides how to handle SIGTERM mid-creation. A partial
     // VM directory may remain in ~/.colima/<profile>/ and require `colima delete`.
-    private func runCommandStreaming(
+    // Marked `internal` (default) instead of `private` so the unit test target
+    // can exercise it via @testable import.
+    func runCommandStreaming(
         _ command: String,
         args: [String],
         onLine: ((String) -> Void)?
