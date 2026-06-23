@@ -81,6 +81,9 @@ elif [[ "$REBUILD" == "auto" ]]; then
         if find "$SCRIPT_DIR/Sources" -name "*.swift" -newer "$BUILT_BIN" -print -quit 2>/dev/null | grep -q .; then
             NEED_REBUILD="true"
             log "Sources newer than built binary; will rebuild"
+        elif [[ -f "$REPO_ROOT/VERSION" ]] && [[ "$REPO_ROOT/VERSION" -nt "$BUILT_BIN" ]]; then
+            NEED_REBUILD="true"
+            log "VERSION newer than built binary; will rebuild"
         else
             log "Build is up-to-date; skipping rebuild"
         fi
