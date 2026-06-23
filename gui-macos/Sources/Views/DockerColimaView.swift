@@ -434,6 +434,7 @@ private struct CreateProfileForm: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var progressLines: [String] = []
+    @State private var submitTask: Task<Void, Never>?
 
     // Colima accepts memory as float GiB and disk as int GiB. Accept lenient
     // user input like "4G" / "4GiB" / "4 GB" and normalize to the bare number
@@ -570,11 +571,14 @@ private struct CreateProfileForm: View {
             }
 
             HStack(spacing: 12) {
+                // Cancel is always enabled. If a create is in progress, cancelling
+                // also sends SIGTERM to the colima subprocess via the Task
+                // cancellation chain (see DockerService.runCommandStreaming).
                 Button("Cancel") {
+                    submitTask?.cancel()
                     onClose()
                 }
                 .buttonStyle(.bordered)
-                .disabled(isSubmitting)
 
                 Button(isSubmitting ? "Creating…" : "Create") {
                     let cpusInt = Int(cpus.trimmingCharacters(in: .whitespaces))
@@ -583,7 +587,7 @@ private struct CreateProfileForm: View {
                     isSubmitting = true
                     errorMessage = nil
                     progressLines = []
-                    Task {
+                    submitTask = Task {
                         let err = await viewModel.createProfile(
                             name: profileName.trimmingCharacters(in: .whitespaces),
                             cpus: cpusInt,
@@ -595,6 +599,9 @@ private struct CreateProfileForm: View {
                                 progressLines.append(line)
                             }
                         )
+                        // If the user clicked Cancel, the form is closing — skip
+                        // the UI state update (it would target a dismissed view).
+                        if Task.isCancelled { return }
                         await MainActor.run {
                             isSubmitting = false
                             if let err = err {
@@ -652,3 +659,58 @@ private final class CreateProfileWindowController: NSObject, NSWindowDelegate {
         self.window = nil
     }
 }
+
+// MARK: - Previews
+//
+// Per docs/SWIFT-AGENT-STANDARD.md §7.5 — reusable views should include
+// previews for relevant states. CreateProfileForm covers two cleanly here:
+// empty form and populated-view-model (which makes the "Copy spec from"
+// dropdown have options). The submitting-with-progress and error states
+// require mutation of CreateProfileForm's private `@State` (isSubmitting,
+// errorMessage, progressLines); accessing those from outside the type
+// would need a preview-only internal initializer. Tracked as a small
+// follow-up rather than reshaping the form's API for previews.
+
+#if DEBUG
+@MainActor
+private func previewViewModel(withProfiles profiles: [ColimaProfile] = []) -> DockerColimaViewModel {
+    let vm = DockerColimaViewModel()
+    vm.colimaProfiles = profiles
+    return vm
+}
+
+#Preview("CreateProfileForm — empty") {
+    CreateProfileForm(
+        viewModel: previewViewModel(),
+        onClose: {}
+    )
+}
+
+#Preview("CreateProfileForm — with source profiles") {
+    CreateProfileForm(
+        viewModel: previewViewModel(withProfiles: [
+            ColimaProfile(
+                id: "app",
+                name: "app",
+                status: "Running",
+                arch: "aarch64",
+                cpus: 6,
+                memory: "16GiB",
+                disk: "100GiB",
+                runtime: "docker"
+            ),
+            ColimaProfile(
+                id: "backups",
+                name: "backups",
+                status: "Running",
+                arch: "aarch64",
+                cpus: 1,
+                memory: "2GiB",
+                disk: "100GiB",
+                runtime: "docker"
+            ),
+        ]),
+        onClose: {}
+    )
+}
+#endif

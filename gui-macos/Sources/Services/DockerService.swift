@@ -294,83 +294,114 @@ final class DockerService {
     // Streaming variant: invokes `onLine` (on the main queue) for each
     // newline-terminated chunk of stdout/stderr. Used by long-running commands
     // (e.g. `colima start <new-profile>`) so the UI can show live progress.
+    //
+    // Cancellation: supports Swift Task cancellation via withTaskCancellationHandler.
+    // If the calling Task is cancelled (e.g. user clicks Cancel on the create form),
+    // the running subprocess receives SIGTERM via process.terminate() and the
+    // terminationHandler resumes the continuation with the resulting non-zero exit
+    // (or with CancellationError when the cancel happens before run() succeeds).
+    // Note: colima itself decides how to handle SIGTERM mid-creation. A partial
+    // VM directory may remain in ~/.colima/<profile>/ and require `colima delete`.
     private func runCommandStreaming(
         _ command: String,
         args: [String],
         onLine: ((String) -> Void)?
     ) async throws -> String {
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = [command] + args
+        // Shared Process reference so the cancellation handler (which may run
+        // on any executor) can terminate the subprocess. ProcessBox is defined
+        // below the function (see "ProcessBox" comment for the safety argument).
+        let processBox = ProcessBox()
 
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
+        return try await withTaskCancellationHandler {
+            return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    process.arguments = [command] + args
 
-                let bufferLock = NSLock()
-                var lineBuffer = ""
-                var collected = ""
+                    let pipe = Pipe()
+                    process.standardOutput = pipe
+                    process.standardError = pipe
 
-                pipe.fileHandleForReading.readabilityHandler = { handle in
-                    let data = handle.availableData
-                    guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
-                    bufferLock.lock()
-                    lineBuffer += chunk
-                    collected += chunk
-                    var lines: [String] = []
-                    while let nl = lineBuffer.firstIndex(of: "\n") {
-                        lines.append(String(lineBuffer[..<nl]))
-                        lineBuffer = String(lineBuffer[lineBuffer.index(after: nl)...])
+                    let stored = processBox.store(process)
+                    if !stored {
+                        // Cancellation arrived between Task start and now; skip
+                        // run() and resume with CancellationError.
+                        continuation.resume(throwing: CancellationError())
+                        return
                     }
-                    bufferLock.unlock()
-                    if let onLine = onLine {
-                        for line in lines {
-                            let l = line
-                            DispatchQueue.main.async { onLine(l) }
+
+                    let bufferLock = NSLock()
+                    var lineBuffer = ""
+                    var collected = ""
+
+                    pipe.fileHandleForReading.readabilityHandler = { handle in
+                        let data = handle.availableData
+                        guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+                        bufferLock.lock()
+                        lineBuffer += chunk
+                        collected += chunk
+                        var lines: [String] = []
+                        while let nl = lineBuffer.firstIndex(of: "\n") {
+                            lines.append(String(lineBuffer[..<nl]))
+                            lineBuffer = String(lineBuffer[lineBuffer.index(after: nl)...])
+                        }
+                        bufferLock.unlock()
+                        if let onLine = onLine {
+                            for line in lines {
+                                let l = line
+                                DispatchQueue.main.async { onLine(l) }
+                            }
                         }
                     }
-                }
 
-                var didResume = false
-                let resumeOnce: (Result<String, Error>) -> Void = { result in
-                    guard !didResume else { return }
-                    didResume = true
-                    pipe.fileHandleForReading.readabilityHandler = nil
-                    switch result {
-                    case .success(let s): continuation.resume(returning: s)
-                    case .failure(let e): continuation.resume(throwing: e)
+                    var didResume = false
+                    let resumeOnce: (Result<String, Error>) -> Void = { result in
+                        guard !didResume else { return }
+                        didResume = true
+                        pipe.fileHandleForReading.readabilityHandler = nil
+                        switch result {
+                        case .success(let s): continuation.resume(returning: s)
+                        case .failure(let e): continuation.resume(throwing: e)
+                        }
                     }
-                }
 
-                process.terminationHandler = { proc in
-                    bufferLock.lock()
-                    let tail = lineBuffer
-                    lineBuffer = ""
-                    let allOutput = collected
-                    bufferLock.unlock()
-                    if !tail.isEmpty, let onLine = onLine {
-                        DispatchQueue.main.async { onLine(tail) }
+                    process.terminationHandler = { proc in
+                        bufferLock.lock()
+                        let tail = lineBuffer
+                        lineBuffer = ""
+                        let allOutput = collected
+                        bufferLock.unlock()
+                        if !tail.isEmpty, let onLine = onLine {
+                            DispatchQueue.main.async { onLine(tail) }
+                        }
+                        if proc.terminationStatus == 0 {
+                            resumeOnce(.success(allOutput))
+                        } else if proc.terminationReason == .uncaughtSignal {
+                            // SIGTERM from our cancellation handler (or another
+                            // external signal). Surface as CancellationError so
+                            // callers can distinguish user-initiated cancel from
+                            // a real subprocess failure.
+                            resumeOnce(.failure(CancellationError()))
+                        } else {
+                            let err = NSError(
+                                domain: "DockerService",
+                                code: Int(proc.terminationStatus),
+                                userInfo: [NSLocalizedDescriptionKey: allOutput]
+                            )
+                            resumeOnce(.failure(err))
+                        }
                     }
-                    if proc.terminationStatus == 0 {
-                        resumeOnce(.success(allOutput))
-                    } else {
-                        let err = NSError(
-                            domain: "DockerService",
-                            code: Int(proc.terminationStatus),
-                            userInfo: [NSLocalizedDescriptionKey: allOutput]
-                        )
-                        resumeOnce(.failure(err))
-                    }
-                }
 
-                do {
-                    try process.run()
-                } catch {
-                    resumeOnce(.failure(error))
+                    do {
+                        try process.run()
+                    } catch {
+                        resumeOnce(.failure(error))
+                    }
                 }
             }
+        } onCancel: {
+            processBox.terminate()
         }
     }
 
@@ -413,6 +444,45 @@ final class DockerService {
                 memoryUsage: nil,
                 colimaProfile: profileName
             )
+        }
+    }
+
+    // Thread-safe Process reference for sharing between the spawn closure and
+    // the Task cancellation handler in runCommandStreaming.
+    //
+    // SAFETY (justifies @unchecked Sendable per docs/SWIFT-AGENT-STANDARD.md §9.4):
+    //   - Process itself is not Sendable, but every access here goes through
+    //     `lock` (NSLock). All operations are atomic with respect to each other.
+    //   - terminate() is idempotent — calling on an exited Process is a no-op
+    //     handled by Foundation.
+    //
+    // RACE HANDLING: store() returns false if terminate() was already called.
+    // This closes the window between Task start and process.run() being invoked
+    // by the spawn closure — a caller that observes a false return must not
+    // call process.run() and must resume with CancellationError instead.
+    private final class ProcessBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var process: Process?
+        private var cancelRequested = false
+
+        /// Stores the Process. Returns true if storage succeeded. Returns false
+        /// if cancellation was already requested before store; in that case the
+        /// caller must NOT call process.run().
+        func store(_ p: Process) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if cancelRequested { return false }
+            process = p
+            return true
+        }
+
+        /// Marks the box as cancelled and terminates the Process if it has
+        /// already been stored and run.
+        func terminate() {
+            lock.lock()
+            defer { lock.unlock() }
+            cancelRequested = true
+            process?.terminate()
         }
     }
 
