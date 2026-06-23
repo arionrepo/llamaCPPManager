@@ -16,6 +16,21 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.23.2] - 2026-06-23
+
+### Fixed (mlx-vlm chat — by Claude Sonnet 4.6 in commit 54ca96f)
+
+- **mlx-vlm chat returned 422 Unprocessable Content on every request.**
+  `mlx_vlm.server`'s `ChatRequest` schema inherits from `VLMRequest`,
+  which makes the `model` field required with no default. The CLI's
+  `query_model_chat()` never sent it. Now, for `deployment_type: mlx-vlm`
+  models, `model_path` is looked up from config and injected as the
+  `model` field in the JSON payload before the POST. Standard llama.cpp
+  and mlx-lm chat paths are unaffected.
+- Files changed: `src/llamacpp_manager/query.py`, `VERSION`.
+- This entry was backfilled by the update-trackers handoff workflow —
+  the original commit shipped a VERSION bump without a CHANGELOG entry.
+
 ## [2026.06.23.1] - 2026-06-23
 
 ### Changed — GGUF start path now YAML-driven (matches MLX architecture)
