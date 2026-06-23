@@ -28,6 +28,18 @@ def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
 
     argv: List[str] = [llama_server_path, "-m", model_path]
 
+    # GPU offload — default to "all layers to Metal" on Apple Silicon. The
+    # bash launcher restart-llm-interactive.sh always passed `--n-gpu-layers 999`
+    # for the same reason. Per-model override available via spec.n_gpu_layers.
+    n_gpu_layers = spec.n_gpu_layers if spec.n_gpu_layers is not None else 999
+    argv.extend(["--n-gpu-layers", str(n_gpu_layers)])
+
+    # Context size — default 32768 (matches the bash launcher's general-case
+    # default). Per-model override via spec.ctx_size (e.g. phi3 needs 8192
+    # because Phi-3-mini-4k natively supports 4k and only RoPE-extends to 8k).
+    ctx_size = spec.ctx_size if spec.ctx_size is not None else 32768
+    argv.extend(["--ctx-size", str(ctx_size)])
+
     # Add mode-specific arguments before user-specified args
     mode = getattr(spec, 'mode', 'basic')
     if mode == "tools":

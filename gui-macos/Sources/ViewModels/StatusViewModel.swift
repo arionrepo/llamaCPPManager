@@ -425,8 +425,13 @@ final class StatusViewModel: ObservableObject {
                 // `start-script` only supports llama-server / GGUF, so MLX models silently fail there.
                 command = ["start", name]
             } else {
-                let effectiveMode = mode ?? selectedModes[name] ?? "basic"
-                command = ["start-script", name, "--mode", effectiveMode]
+                // GGUF / native llama.cpp models now go through `start` (same path as MLX)
+                // so the launcher is fully YAML-driven. The previous `start-script`
+                // path delegated to an external bash script with a hardcoded model
+                // list, requiring manual script edits for every newly-added model.
+                // Mode is read from spec.mode in YAML; the picker's saveMode() has
+                // already written the current selection before this fires.
+                command = ["start", name]
             }
 
             LifecycleLog.log("ui.start.cli_invoke", model: name, [

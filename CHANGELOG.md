@@ -16,6 +16,47 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   against the standard but were inspected for no force-unwraps, no
   secrets, no `@unchecked Sendable` introductions.
 
+## [2026.06.23.1] - 2026-06-23
+
+### Changed — GGUF start path now YAML-driven (matches MLX architecture)
+
+**Architectural cleanup, no behavior change for working models.** Previously GGUF
+models started via `llamacpp-manager start-script` → `/Users/liborballaty/llms/restart-llm-interactive.sh`
+which had a **hardcoded `case "$MODEL_NAME"` list of 10 models**. Any model
+added via `llamacpp-manager config add` that wasn't in that case statement
+failed with `Error: Unknown model 'X'`. This bit `llama-4-scout-17b-q8` today.
+
+MLX models already used the YAML-driven `start` path with no hardcoded list.
+This change makes GGUF match MLX:
+
+- `ModelSpec` (`config.py`) gained `ctx_size: Optional[int]` and
+  `n_gpu_layers: Optional[int]` fields.
+- `process.build_argv` now passes `--n-gpu-layers <N>` (default 999, matching
+  what the bash script always did for Apple Silicon) and `--ctx-size <N>`
+  (default 32768, per-model override via the new YAML field).
+- `cmd_start` (cli.py) threads the two new fields from YAML into the
+  `ModelSpec` it builds. Same for the config-show argv preview path.
+- `phi3`'s YAML entry now has `ctx_size: 8192` (matches the special-case the
+  bash script had — Phi-3-mini-4k natively supports 4k, RoPE-extends to 8k).
+- `StatusViewModel.startWithScript` (Swift) now routes GGUF rows to
+  `["start", name]` instead of `["start-script", name, "--mode", mode]`. Mode
+  is read from YAML (which the picker's `saveMode` always writes before Start
+  fires).
+
+Result: adding a new GGUF model via `llamacpp-manager config add` (or the
+hand-edit of `~/Library/Application Support/llamaCPPManager/config.yaml`)
+now just works — no bash script edit needed.
+
+### Soak / future cleanup
+
+- `restart-llm-interactive.sh` and the `start-script` CLI command are kept
+  around as a safety net during a soak period. Plan: confirm a few GGUF
+  models behave identically under the new path, then delete the bash script
+  and the `cmd_start_script` handler in a follow-up commit.
+- `config update --ctx-size N` / `--n-gpu-layers N` CLI flags not yet
+  added. For now, edit YAML directly to override defaults. Tracked as a
+  small follow-up; not blocking.
+
 ## [2026.06.22.6] - 2026-06-22
 
 ### Fixed — external-download visibility in the GUI

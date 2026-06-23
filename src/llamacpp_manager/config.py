@@ -23,6 +23,8 @@ class ModelSpec:
     autostart: bool = False
     deployment_type: str = "native"  # "native" or "container"
     mode: str = "basic"  # "basic", "tools", "performance", or "extended"
+    ctx_size: Optional[int] = None  # Context window override; if None, build_argv picks a sensible default per server family
+    n_gpu_layers: Optional[int] = None  # GPU layer offload count; if None, defaults to 999 (offload all — correct for Apple Silicon Metal)
     group: Optional[str] = None  # Model group name for mutual exclusion
     metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
     logging: Optional[Dict[str, Any]] = None  # enabled, max_bytes, backups
