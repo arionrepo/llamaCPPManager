@@ -14,10 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu-bar app — never auto-terminate when secondary windows close.
         // The user quits explicitly via the "Quit" menu item.
+        let policy = sender.activationPolicy().rawValue
+        LifecycleLog.log("ui.app.last_window_closed",
+                         ["activation_policy": policy, "returning": false])
         return false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        let policy = NSApp.activationPolicy().rawValue
+        LifecycleLog.log("ui.app.will_terminate",
+                         ["activation_policy": policy,
+                          "windows_open": NSApp.windows.filter { $0.isVisible }.count])
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LifecycleLog.log("ui.app.did_finish_launching",
+                         ["activation_policy": NSApp.activationPolicy().rawValue])
         // Install a minimal main menu so standard keyboard shortcuts route correctly
         // for secondary windows (chat, preferences, model downloader, help, log
         // viewer). Without this, MenuBarExtra apps have NSApp.mainMenu == nil, which

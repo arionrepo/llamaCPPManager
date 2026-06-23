@@ -881,7 +881,11 @@ final class StatusViewModel: ObservableObject {
         if let existingWindow = chatWindows[name] {
             existingWindow.level = .floating
             existingWindow.makeKeyAndOrderFront(nil)
+            let policyBefore = NSApp.activationPolicy().rawValue
             NSApp.activate(ignoringOtherApps: true)
+            LifecycleLog.log("ui.chat.window_reactivated", model: name,
+                             ["activation_policy_before": policyBefore,
+                              "activation_policy_after": NSApp.activationPolicy().rawValue])
             return
         }
 
@@ -902,13 +906,18 @@ final class StatusViewModel: ObservableObject {
         window.center()
         window.level = .floating
         window.makeKeyAndOrderFront(nil)
+
+        let policyBefore = NSApp.activationPolicy().rawValue
         NSApp.activate(ignoringOtherApps: true)
+        LifecycleLog.log("ui.chat.window_opened", model: name,
+                         ["activation_policy_before": policyBefore,
+                          "activation_policy_after": NSApp.activationPolicy().rawValue])
 
         // Store window reference
         chatWindows[name] = window
 
         // Set up window delegate to clean up when closed
-        let delegate = ChatWindowDelegate { [weak self] in
+        let delegate = ChatWindowDelegate(modelName: name) { [weak self] in
             self?.chatWindows.removeValue(forKey: name)
             self?.windowDelegates.removeValue(forKey: name)
         }
