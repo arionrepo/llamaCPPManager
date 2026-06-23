@@ -16,6 +16,10 @@ gui-macos/build/*.dmg
 gui-macos/build/README.txt
 *.dSYM/
 
+# Python build artifacts (setup.py / uv build / pip wheel)
+build/
+*.egg-info/
+
 # Logs
 logs/
 *.log
