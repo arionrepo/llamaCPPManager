@@ -16,6 +16,39 @@ is in the repo's `VERSION` file. Use `/version-bump` or
   `StatusViewModel.openChat(name:)`, applied to both the existing-window
   reactivate path and the new-window creation path.
 
+### Changed (Swift Agent Standard conformance — audit of v2026.06.19.6/7 diffs)
+
+- **`CreateProfileForm` now supports cancellation mid-create.** Previously the
+  Cancel button only closed the window; the `colima start <new-vm>` subprocess
+  kept running to completion in the background. Now Cancel propagates Task
+  cancellation through `runCommandStreaming`, which terminates the subprocess
+  via SIGTERM. Closes §9.3 conformance gap identified in the audit.
+  - New `ProcessBox` helper in `DockerService.swift` shares the Process
+    reference between the spawn closure and the cancel handler under NSLock.
+    `@unchecked Sendable` with documented safety argument per §9.4. Race
+    handling: `ProcessBox.store()` returns `false` if `terminate()` was
+    already called, so a start-before-cancel race resolves cleanly with
+    `CancellationError` instead of an unkillable subprocess.
+  - Caveat: colima itself decides how to handle SIGTERM mid-VM-creation. A
+    partial `~/.colima/<profile>/` may remain and need `colima delete` to
+    clean up. Documented in `runCommandStreaming` docstring.
+- **`CreateProfileForm` now has SwiftUI Previews.** Two `#Preview` blocks
+  (empty form, populated view model with source profiles for the Copy-spec
+  dropdown). Helper marked `@MainActor` and `#if DEBUG` gated. Closes §7.5
+  conformance gap.
+
+### Audit deliverable
+
+- Section-by-section audit of v2026.06.19.6 + v2026.06.19.7 Swift changes
+  against `docs/SWIFT-AGENT-STANDARD.md` v1.0 — verdict CONFORMANT WITH
+  GAPS, no bugs requiring immediate fix. Three concrete gaps identified;
+  two shipped in this version (cancellation + previews). Item 3 (unit
+  tests for `normalizeGiB` and `runCommandStreaming`) deferred — blocked
+  on GUI `Package.swift` having no test target wired up; 8 orphaned test
+  files exist in `gui-macos/Tests/` from before the Phase 4 `Sources/`
+  refactor and need triage before a test target can be added. Tracked
+  as a focused follow-up for a separate session.
+
 ## [2026.06.23.7] - 2026-06-23
 
 ### Fixed
