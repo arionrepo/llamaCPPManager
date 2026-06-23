@@ -114,13 +114,20 @@ def query_model_chat(
     host, port = get_model_endpoint(name)
     url = f"http://{host}:{port}/v1/chat/completions"
 
-    payload = {
+    payload: Dict[str, Any] = {
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
         "stream": stream,
         **kwargs
     }
+
+    # mlx_vlm.server requires a 'model' field (required in its ChatRequest schema);
+    # standard llama.cpp and mlx-lm servers don't need it.
+    cfg = load_config()
+    _model_cfg = next((m for m in cfg.get("models", []) if m.get("name") == name), None)
+    if _model_cfg and _model_cfg.get("deployment_type") == "mlx-vlm":
+        payload.setdefault("model", _model_cfg.get("model_path", name))
 
     try:
         with httpx.Client(timeout=timeout, trust_env=False) as client:
