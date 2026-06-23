@@ -905,6 +905,7 @@ final class StatusViewModel: ObservableObject {
         window.contentViewController = hostingController
         window.center()
         window.level = .floating
+        window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
 
         let policyBefore = NSApp.activationPolicy().rawValue
@@ -954,6 +955,7 @@ final class StatusViewModel: ObservableObject {
         window.contentViewController = hostingController
         window.center()
         window.level = .floating
+        window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -1463,6 +1465,7 @@ final class StatusViewModel: ObservableObject {
         window.styleMask = [.titled, .closable]
         window.center()
         window.level = .floating
+        window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
