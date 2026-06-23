@@ -39,4 +39,8 @@ def test_status_json_with_health_and_pid(tmp_path, monkeypatch, capsys):
     assert models[0]["name"] == "m1"
     assert models[0]["up"] is True
     assert models[0]["pid"] == 4242
-    assert models[0]["mode"] == "direct"
+    # Field semantics changed: `mode` is now performance mode (basic/tools/
+    # performance/extended). The direct/launchd distinction moved to
+    # `process_source`. Asserting both preserves the original test intent.
+    assert models[0]["mode"] == "basic"
+    assert models[0]["process_source"] == "direct"

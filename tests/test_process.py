@@ -36,11 +36,12 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
 
     recorded = {}
 
-    def fake_popen(args, stdout=None, stderr=None, env=None):
+    def fake_popen(args, stdout=None, stderr=None, env=None, start_new_session=False):
         recorded["args"] = args
         recorded["stdout"] = stdout
         recorded["stderr"] = stderr
         recorded["env"] = env
+        recorded["start_new_session"] = start_new_session
         return DummyPopen(args, stdout=stdout, stderr=stderr, env=env)
 
     monkeypatch.setenv("LLAMACPP_MANAGER_LOG_DIR", str(tmp_path / "logs"))

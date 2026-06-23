@@ -98,7 +98,7 @@ class TestQueryCompleteCommand:
                 max_tokens=512,
                 temperature=0.7,
                 stream=False,
-                timeout=30.0
+                timeout=90.0
             )
 
     def test_query_complete_with_custom_params(self, temp_config_with_models, capsys):
@@ -145,7 +145,7 @@ class TestQueryCompleteCommand:
                 max_tokens=512,
                 temperature=0.7,
                 stream=True,
-                timeout=30.0
+                timeout=90.0
             )
 
     def test_query_complete_model_error(self, temp_config_with_models, capsys):
@@ -189,7 +189,7 @@ class TestQueryChatCommand:
                 max_tokens=512,
                 temperature=0.7,
                 stream=False,
-                timeout=30.0
+                timeout=90.0
             )
 
     def test_query_chat_multiple_messages(self, temp_config_with_models, capsys):
@@ -221,7 +221,7 @@ class TestQueryChatCommand:
                 max_tokens=512,
                 temperature=0.7,
                 stream=False,
-                timeout=30.0
+                timeout=90.0
             )
 
     def test_query_chat_streaming(self, temp_config_with_models, capsys):

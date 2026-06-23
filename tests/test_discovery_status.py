@@ -29,5 +29,9 @@ def test_status_uses_process_discovery_when_no_pid(tmp_path, monkeypatch, capsys
     assert main(["status", "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["models"][0]["pid"] == 1234
-    assert data["models"][0]["mode"] == "direct"
+    # Field semantics changed: `mode` is now performance mode (basic/tools/
+    # performance/extended). The direct/launchd distinction moved to
+    # `process_source`. Process-discovery semantics are tested via process_source.
+    assert data["models"][0]["mode"] == "basic"
+    assert data["models"][0]["process_source"] == "direct"
 

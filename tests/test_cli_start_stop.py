@@ -32,7 +32,7 @@ def test_start_stop_dry_run_and_pidfile(tmp_path, monkeypatch, capsys):
     import llamacpp_manager.cli as cli
     called = {}
 
-    def fake_start(llama, spec, logdir):
+    def fake_start(llama, spec, logdir, logging_config=None):
         called["start"] = (llama, spec.name)
         return 55555
 

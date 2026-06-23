@@ -26,7 +26,7 @@ def test_ensure_running_starts_missing_autostart_direct(tmp_path, monkeypatch, c
     monkeypatch.setattr(cli, "check_endpoint", lambda host, port, timeout_ms=2000: {"up": False})
     # Start process stub
     called = {}
-    def fake_start(llama, spec, logdir):
+    def fake_start(llama, spec, logdir, logging_config=None):
         called["start"] = (spec.name, spec.port)
         return 77777
     monkeypatch.setattr(cli, "start_process", fake_start)

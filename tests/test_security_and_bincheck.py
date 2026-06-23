@@ -44,7 +44,7 @@ def test_refuse_remote_bind_without_flag(tmp_path, monkeypatch, capsys):
     assert "refusing to bind non-local host" in err
     # but allow with flag (mock start)
     import llamacpp_manager.cli as cli
-    monkeypatch.setattr(cli, "start_process", lambda lp, spec, ld: 123)
+    monkeypatch.setattr(cli, "start_process", lambda lp, spec, ld, logging_config=None: 123)
     rc2 = main(["start", "m2", "--allow-remote"])  # ok
     assert rc2 == 0
 
