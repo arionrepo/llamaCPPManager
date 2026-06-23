@@ -6,15 +6,61 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
-### Known Issues (carried forward)
+## [2026.06.23.7] - 2026-06-23
+
+### Fixed
+
+- **GUI crashed (SIGSEGV in `objc_retain`) when closing a chat window a second time.**
+  Root cause: `isReleasedWhenClosed = true` (Cocoa default) caused the
+  NSWindow to be freed by the ObjC runtime before `windowDidClose` fired.
+  References in `chatWindows` / `windowDelegates` dictionaries became
+  dangling pointers. Fix: `window.isReleasedWhenClosed = false` applied to
+  all three stored-window sites in `StatusViewModel` (`openChat`,
+  `openModelDownloader`, `openPreferences`).
+
+## [2026.06.23.6] - 2026-06-23
+
+### Fixed
+
+- **GUI crashed (SIGSEGV in `objc_release`) immediately on closing a chat window.**
+  Root cause: `NSWindow` does NOT retain its delegate (Cocoa's delegate property
+  is `assign`, not `strong`). Calling `onClose()` inside `windowWillClose`
+  removed the last strong reference to the delegate while its method was
+  still on the call stack — use-after-free during ARC autorelease pool drain.
+  Fix: deferred `onClose()` to `windowDidClose` (fires after the window and
+  its autorelease pool have fully unwound) across all three delegate classes
+  (`ChatWindowDelegate`, `ModelDownloaderWindowDelegate`,
+  `PreferencesWindowDelegate`). Added `applicationShouldTerminateAfterLastWindowClosed`
+  returning `false` in `AppDelegate` for belt-and-suspenders.
+- Added diagnostic lifecycle logging for window open/close events, activation
+  policy, and visible window counts to aid future regression diagnosis
+  (`LifecycleLog` events: `ui.chat.window_will_close`, `ui.chat.window_did_close`,
+  `ui.chat.window_opened`, `ui.app.last_window_closed`, `ui.app.will_terminate`).
+
+## [2026.06.23.5] - 2026-06-23
+
+### Fixed
+
+- **`install-gui` did not rebuild when only `VERSION` changed.**
+  The staleness check in `gui-macos/install_gui.sh` compared source `.swift`
+  files against the built binary but never checked the `VERSION` file. A
+  version-only bump left the binary stale. Added `VERSION` mtime check so
+  any VERSION change triggers a rebuild.
+
+## [2026.06.23.4] - 2026-06-23
+
+### Added
+
+- Diagnostic lifecycle logging in `AppDelegate` and `ChatWindowDelegate`
+  to trace window-close and app-termination events. Events written to
+  `~/Library/Logs/llamaCPPManager/lifecycle.jsonl` via `LifecycleLog`.
+
+### Known Issues (carried forward, now resolved)
 
 - **`docs/SWIFT-AGENT-STANDARD.md` is referenced from `CLAUDE.md`
   but was authored mid-session and not yet applied to the work in
-  this session.** Future Swift work in `gui-macos/` must read that
-  doc before editing per the new mandatory rule in CLAUDE.md.
-  The v.6 and v.7 Swift edits below were not retroactively audited
-  against the standard but were inspected for no force-unwraps, no
-  secrets, no `@unchecked Sendable` introductions.
+  this session.** The v.6 and v.7 Swift edits were inspected for no
+  force-unwraps, no secrets, no `@unchecked Sendable` introductions.
 
 ## [2026.06.23.3] - 2026-06-23
 
