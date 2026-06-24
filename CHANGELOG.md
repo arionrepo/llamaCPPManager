@@ -6,6 +6,36 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.24.4] - 2026-06-24
+
+### Added (E2E Slice A — App Launch & Boot)
+
+- **First real-stack vertical-slice E2E test landed.** User flow: open the
+  app. Verifies the installed `/Applications/llamaCPP Manager.app` launches,
+  emits `ui.app.did_finish_launching`, and the first real CLI status fetch
+  (against the real Python `llamacpp-manager` CLI on this machine) completes
+  and emits the new `cli.status.fetched` event with `model_count` and
+  `infrastructure_count` fields. No mocks, no fakes, no protocol seams.
+  2/2 tests passing in 7 seconds.
+- **New `cli.status.fetched` LifecycleLog event** emitted from
+  `StatusViewModel.refresh()` after each successful CLI fetch. Provides a
+  deterministic signal for E2E slices to key off "first status refresh
+  completed". Carries `model_count` + `infrastructure_count`.
+- **New `E2ETests` test target** in `gui-macos/Package.swift` (path
+  `Tests/E2E/`). Independent from the existing `llamacpp-guiTests` target.
+  Slice tests launch the installed app via `Process`, drive it via
+  `osascript` / System Events, and inspect
+  `~/Library/Logs/llamaCPPManager/lifecycle.jsonl` for assertions.
+- **Shared helpers in `Tests/E2E/E2EHelpers.swift`**: `launchApp()`,
+  `quitApp(_:)`, `snapshotLogOffset()`, `waitForLogEvent(_:after:timeout:)`,
+  `runAppleScript(_:)`, `clickStatusBarItem()`, `sendCmdW()`, `typeString(_:)`,
+  `sendReturn()`. Status-bar click and keystroke driving handle the
+  MenuBarExtra pattern that XCUITest struggles with.
+- **Strategy.** SwiftPM does not host true Apple XCUITest; rather than convert
+  the project to Xcode, we use this pragmatic real-stack hybrid: real
+  `Process` launch + osascript driving + log inspection. Works for menu-bar
+  apps, stays inside `swift test`, no separate harness needed.
+
 ## [2026.06.24.3] - 2026-06-24
 
 ### Reverted

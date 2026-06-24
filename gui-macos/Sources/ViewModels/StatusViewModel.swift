@@ -274,6 +274,11 @@ final class StatusViewModel: ObservableObject {
                 self.infrastructureRows = response.infrastructure
                 self.loggingConfig = response.logging
 
+                // Emit a deterministic signal for E2E slice tests waiting on
+                // "first status refresh completed". Slice A keys off this event.
+                LifecycleLog.log("cli.status.fetched", ["model_count": response.models.count,
+                                                        "infrastructure_count": response.infrastructure.count])
+
                 // Load saved modes for native models
                 for model in response.models {
                     if let savedMode = model.mode {

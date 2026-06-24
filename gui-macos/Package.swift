@@ -24,6 +24,16 @@ let package = Package(
             name: "llamacpp-guiTests",
             dependencies: ["llamacpp-gui"],
             path: "Tests/DockerColimaTests"
+        ),
+        // Real-stack vertical-slice E2E tests. Each test launches the
+        // installed app, drives it via osascript / System Events, and asserts
+        // via inspection of ~/Library/Logs/llamaCPPManager/lifecycle.jsonl
+        // and (where applicable) accessibility queries.
+        // See docs/E2E-SLICES.md for the test contract.
+        .testTarget(
+            name: "E2ETests",
+            dependencies: ["llamacpp-gui"],
+            path: "Tests/E2E"
         )
     ]
 )
