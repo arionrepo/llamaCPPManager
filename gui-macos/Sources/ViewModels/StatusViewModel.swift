@@ -25,7 +25,7 @@ final class StatusViewModel: ObservableObject {
 
     // Persistent download view model — survives catalog window closes
     let downloadViewModel: DownloadViewModel
-    private let service = CLIService()
+    private let service: CLIServicing = CLIService()
     private var timer: Timer?
     private var chatWindows: [String: NSWindow] = [:]
     private var windowDelegates: [String: ChatWindowDelegate] = [:]

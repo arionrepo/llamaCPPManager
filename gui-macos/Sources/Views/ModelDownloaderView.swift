@@ -99,7 +99,7 @@ final class DownloadViewModel: ObservableObject {
     @Published var catalogFetchedAt: String?
     @Published var catalogSource: String?
 
-    private let cliService: CLIService
+    private let cliService: CLIServicing
 
     let formatFilters = ["All Formats", "GGUF (llama.cpp)", "MLX (Apple Silicon)"]
     let sizeFilters = ["All Sizes", "Tiny (<2GB)", "Small (2-10GB)", "Medium (10-25GB)", "Large (25-50GB)", "Very Large (>50GB)"]
@@ -107,7 +107,7 @@ final class DownloadViewModel: ObservableObject {
 
     private var externalScanTask: Task<Void, Never>?
 
-    init(cliService: CLIService) {
+    init(cliService: CLIServicing) {
         self.cliService = cliService
         startExternalDownloadScanner()
     }

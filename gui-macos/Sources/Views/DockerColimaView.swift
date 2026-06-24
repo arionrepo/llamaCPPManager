@@ -12,7 +12,7 @@ class DockerColimaViewModel: ObservableObject {
     @Published var containerStats: [String: (cpu: Double, memory: String)] = [:]
     @Published var isLoading = false
 
-    private let dockerService = DockerService()
+    private let dockerService: DockerServicing = DockerService()
     private var refreshTask: Task<Void, Never>?
 
     func startPolling() {

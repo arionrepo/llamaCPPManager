@@ -6,6 +6,34 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.24.2] - 2026-06-24
+
+### Changed (Swift Conformance Plan — Phase 6: Test Scaffolding)
+
+- **Introduced `CLIServicing` and `DockerServicing` protocol seams** so
+  view models can be unit-tested with mocks (Standard §10.3, §18.2).
+  - New `Sources/Services/CLIServicing.swift` declares the 10 methods
+    on `CLIService` that view models currently call: `fetchStatus`,
+    `fetchDockerStatus`, `startInfrastructure`, `stopInfrastructure`,
+    `restartInfrastructure`, `run`, `runAndCapture`, `configDirURL`,
+    `queryChat`, `dockerLogs`. Concrete `CLIService` conforms via
+    empty extension — no method signature changes.
+  - New `Sources/Services/DockerServicing.swift` declares the 11
+    methods on `DockerService` that `DockerColimaView` calls. Concrete
+    `DockerService` conforms via empty extension.
+  - View-model property type widening (one-line per file): `StatusViewModel.service`,
+    `ChatViewModel.cliService`, `DownloadViewModel.cliService`,
+    `DockerColimaViewModel.dockerService` are now typed against the
+    protocol instead of the concrete service. No call sites changed
+    because every method used appears in the protocol. No behavior
+    change at runtime — the same concrete instances flow through.
+- **Verification.** Baseline `swift test` → 14/14 passing. Post-change
+  `swift test` → 14/14 passing (identical). `swift build` clean. App
+  build via `install-gui` clean. Pre-existing dead-code warnings in
+  `ModelDownloaderView.swift:489` (`try`/`catch` on non-throwing
+  `cliService.run`) unchanged. Phase 7 (new unit tests with mocks)
+  is the follow-up that will exercise these seams.
+
 ## [2026.06.24.1] - 2026-06-24
 
 ### Changed
