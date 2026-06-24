@@ -84,7 +84,7 @@ Examples:
 | Unknown deployment target       | Inspect project settings. Do not use APIs unavailable to the target.                                |
 | Unknown architecture preference | Follow existing architecture. If no architecture exists, use simple SwiftUI plus testable services. |
 | Unknown distribution path       | Do not change signing. Document App Store versus Developer ID implications.                         |
-| Unknown backend API contract    | Create protocol boundaries and mock data. Do not invent production endpoints.                       |
+| Unknown backend API contract    | Ask the operator. Do not invent production endpoints, and do not paper over the gap with mock data — this project tests against the real stack (see §18). |
 
 ---
 
@@ -240,24 +240,12 @@ Do not use SwiftData just because it is modern. Use it when its OS support, migr
 
 ### 4.4 Testing Framework Decision
 
-> **Project caveat (added 2026-06-24, llamaCPPManager):** This project rejects
-> mock/fake-based service tests in favor of **real-stack vertical-slice E2E
-> tests**. The "Service tests with mocks/fakes" item below — and the other
-> mock/protocol-mocking guidance elsewhere in this standard (see lines
-> referencing "mock", "fake", "protocol so it can be mocked") — does not
-> apply to this codebase. Use real subprocesses, real CLI invocations, and
-> real model servers; cover error paths with structured `CLIError` cases
-> and `LifecycleLog` logging rather than mocks. A full rewrite of the
-> testing sections (§4.4 + later "Testing" sections) is tracked as a TODO
-> follow-up.
-
 Use Swift Testing for:
 
-1. New pure Swift unit tests.
+1. New pure Swift unit tests for domain logic and pure functions.
 2. Package tests.
 3. Parameterized tests.
-4. Domain logic tests.
-5. Service tests with mocks/fakes.
+4. Real-stack vertical-slice E2E tests — single `@Test` functions that drive the real installed app, invoke real services, and assert via inspection of the production log surface. See §18 and `docs/E2E-SLICES.md` for the contract.
 
 Use XCTest for:
 
@@ -636,7 +624,7 @@ Use actors for shared mutable state accessed from concurrent contexts. Do not pu
 
 ### 10.1 API Client Pattern
 
-Use `URLSession` with `async/await`, behind a protocol so it can be mocked.
+Use `URLSession` with `async/await`. A protocol seam is only justified when there is a *real* concrete second implementation (e.g. one client for production and one for a different backend). Do not add a protocol whose only consumer is a test mock — this project does not mock service layers. See §18.
 
 ### 10.2 Required Network Handling
 
@@ -644,9 +632,15 @@ The agent must handle: invalid URL, missing response, non-2xx HTTP status, empty
 
 ### 10.3 Network Testing
 
-Do not unit test against live APIs. Use protocol-based API clients, mock services, fake URL protocol where appropriate, local fixtures, deterministic JSON samples.
+Test against real endpoints whenever the dependency is cheap, deterministic, and locally available (e.g. a service this project itself manages on `localhost`). This project's CLI + local model servers fit that description and are exercised by real-stack vertical slices (see §18 and `docs/E2E-SLICES.md`).
 
-Required tests: successful response, HTTP error, invalid JSON, empty response, network thrown error, cancellation where practical, date decoding, optional/missing fields, authentication failure, retry behavior if implemented.
+For genuinely external APIs that cannot be hit cheaply from a test:
+- Accept that those code paths are covered by production observability, not by tests. Invest in structured error types and comprehensive logging instead of building mock infrastructure that lies the moment the upstream service changes shape.
+- Trigger the realistic failure modes you *can* trigger naturally — pass an invalid URL, point at an unreachable host, send malformed input, force authentication failure with bad credentials — and assert the real error path.
+
+Required coverage (against the real stack where possible, or via natural-trigger failure injection): successful response, HTTP error, invalid JSON, empty response, network thrown error, cancellation where practical, date decoding, optional/missing fields, authentication failure, retry behavior if implemented.
+
+Do **not** use protocol seams, mock URL protocol stubs, or test-only fakes to simulate response shapes — these become maintenance debt and lie when the real service changes.
 
 ---
 
@@ -773,7 +767,7 @@ Use Swift Package Manager. Do not introduce CocoaPods or Carthage unless already
 
 ### 17.2 Acceptance Checklist
 
-Before adding a dependency: problem solved? Apple framework alternative? maintenance? platform support? deployment-target support? license? transitive dependencies? app size? privacy disclosures? mockable in tests?
+Before adding a dependency: problem solved? Apple framework alternative? maintenance? platform support? deployment-target support? license? transitive dependencies? app size? privacy disclosures? exercisable end-to-end against the real stack in a vertical slice (see §18)?
 
 ### 17.3 Rejection Rules
 
@@ -783,17 +777,55 @@ Reject if unmaintained, duplicates a native framework, needs unnecessary permiss
 
 ## 18. Testing Standard
 
-### 18.1 Required Test Layers
+### 18.1 Testing Philosophy
 
-Unit, integration, UI, performance, accessibility, manual.
+This project tests against the **real stack**. No mocks. No fakes. No protocol seams whose only purpose is to enable test injection.
 
-### 18.2 Unit Test Requirements
+Reasoning:
+- Mocks are parallel implementations. They lie the moment the real service changes shape. They couple tests to internal call patterns rather than user-observable behavior. Every mock is future cleanup debt.
+- A small team that knows the codebase, working agentically, doesn't benefit from the textbook unit-test economics (fast localization, defensive documentation). Agents read the full stack fluently; the team shares mental models.
+- Real-stack tests prove the *system* works, not the unit-in-isolation. A passing slice means the real CLI, real subprocesses, real model servers, and the view-model glue all line up. That's the only signal that actually matters at release time.
 
-For each non-trivial domain function or service, test: success, empty input, invalid input, boundary values, error mapping, cancellation, decoding failure, persistence failure, permission denied, concurrency-sensitive behavior.
+What this implies in practice:
+- Pure-logic tests stay pure-logic tests (Swift Testing `@Test` over literal inputs and expected outputs).
+- Anything that touches IO, subprocesses, the network, or the file system is tested as a **vertical-slice E2E test** that drives the real installed app and asserts via production observability surfaces (`LifecycleLog`, structured error types).
+- Hard-to-trigger failure modes (subprocess hang, OOM, network partition mid-stream) are accepted as untested in CI. They are covered by structured error types and comprehensive logging in production code so that when they happen in the wild, the log+error tells the story.
 
-### 18.5 UI Test Rules
+### 18.2 Required Test Layers
 
-Use accessibility identifiers for stable elements. No arbitrary sleeps; use `waitForExistence`. Reset app state before tests. Keep UI tests focused on critical flows.
+1. **Pure-logic tests.** Domain functions, data transformations, filters, parsers, state-transition logic. No IO. Use Swift Testing.
+2. **Vertical-slice E2E tests.** One `@Test` per user-visible flow, starting at "user opens the app". Drive the real app, assert via the production log. See `docs/E2E-SLICES.md` for the contract and `gui-macos/Tests/E2E/` for the implementation pattern.
+3. **Manual smoke checklist.** UI concerns that can't reasonably be driven from `swift test` (visual polish, animation timing, drag-and-drop, specific accessibility behavior) live as a documented checklist exercised before release.
+
+### 18.3 Pure-Logic Test Requirements
+
+For each non-trivial pure function, test: success, empty input, invalid input, boundary values, error mapping where applicable. Decoding-failure tests use literal malformed strings, not mocked decoders.
+
+### 18.4 Vertical-Slice E2E Test Requirements
+
+Each slice:
+1. Starts with the app launched fresh.
+2. Drives a single user-visible flow (click sequence, keystrokes, menu navigation).
+3. Asserts via inspection of the production log surface (`LifecycleLog` in this project) and accessibility queries where applicable. Never adds test-only hooks to production code; if a slice needs a deterministic signal, the production code emits a `LifecycleLog` event that *also* improves real-user debuggability.
+4. Uses the real installed application bundle, real subprocesses, real CLI invocations, real model servers wherever those are part of the flow.
+
+Slices that require user-grant permissions (Accessibility, Screen Recording, etc.) for the test runner are gated behind an opt-in environment variable so the default `swift test` remains CI-safe. See `docs/E2E-SLICES.md`.
+
+### 18.5 Coverage Expectations
+
+Coverage is measured by **user flows verified end-to-end**, not by line/branch percentage. A passing slice for "open chat, send message, receive reply" is worth more than 80% line coverage of `ChatViewModel` against mocks.
+
+For each user-visible feature there should be one slice covering the happy path. Error-path slices are added when the natural-trigger failure (invalid input, missing dependency, stopped server) is cheap to set up; otherwise the error path relies on structured logging.
+
+### 18.6 Anti-Patterns
+
+The following are explicitly not allowed in new code:
+
+- Mock/fake/stub objects substituting for real service classes. If you find yourself wanting one, add structured logging to the real service instead, then exercise the real service.
+- Protocol seams whose only consumer is a test mock. Protocol seams are only justified when there is a real concrete second implementation.
+- Test-only public methods, parameters, or flags on production types. Use real construction paths.
+- "Fake URL protocol" / `URLSessionConfiguration` swap-ins for canned HTTP responses. Test against real endpoints (when the dependency is local and cheap) or accept the gap.
+- Synthetic JSON fixtures used as the source of truth for response shape. The real service is the source of truth; if response shape needs to be documented, write it as a versioned schema, not a fixture file consumed by tests.
 
 ---
 

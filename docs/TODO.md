@@ -184,7 +184,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
     5. Product question to answer before building: are the existing 8 tools sufficient, or are `compare_models` / `chat_history` / `query_multi` agent tools also needed?
   - Explicitly out of scope: reimplementing the MCP server in Swift inside the macOS app. That was evaluated and rejected as overkill.
   - Dependency: do *not* start before `docs/SWIFT-CONFORMANCE-PLAN.md` phases 0–4 are complete.
-- [ ] **Rewrite SWIFT-AGENT-STANDARD testing sections to remove mock guidance** (added 2026-06-24)
+- [x] **Rewrite SWIFT-AGENT-STANDARD testing sections to remove mock guidance** (added 2026-06-24, completed 2026-06-24)
   - Trigger: testing-strategy decision this session — real-stack vertical-slice E2E tests, no mocks/fakes/protocol-mocking.
   - Affected canonical doc: `docs/SWIFT-AGENT-STANDARD.md` §4.4 + every other mention of "mock"/"fake"/"protocol so it can be mocked" (currently lines 87, 249, 628, 636, 765).
   - Affected derived doc: `docs/SWIFT-CONFORMANCE-PLAN.md` §9 (Phase 6) + §10 (Phase 7) — both now annotated SUPERSEDED with forward pointers; full rewrite still pending.
