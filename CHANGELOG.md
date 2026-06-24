@@ -6,6 +6,32 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.24.1] - 2026-06-24
+
+### Changed
+
+- **Pre-commit hook validates against `VERSION` file, not git tag.**
+  The previous hook compared `git describe --tags` against
+  `AppConstants.swift` and `Info.plist`, which forced `--no-verify` on
+  every release commit (no `vN+1` tag exists at the moment of the bump
+  commit). The rewritten hook in `scripts/pre-commit-version-check.sh`
+  reads `VERSION` directly, validates `AppConstants.swift` matches, and
+  intentionally does NOT check `Info.plist` (build artifact, gitignored).
+  Closes the structural chicken-and-egg.
+- **`.versionbump.yaml` declares the Swift `APP_VERSION` literal.**
+  The global `~/.ai-dev-dotfiles/tools/version-bump.py` now reads
+  `.versionbump.yaml` at repo root and patches each declared literal
+  via named-group regex during `version-bump`. A single bump invocation
+  now updates `VERSION` + `AppConstants.swift` atomically — no separate
+  `install-gui` sync step required. `Info.plist` continues to be updated
+  by `gui-macos/build_app.sh` since it lives in the build artifact tree.
+
+### Notes
+
+- This release-engineering work is part of the cross-repo standardization
+  tracked as aidevops `design/TODO.md` #122. Spec stub at
+  `~/.ai-dev-dotfiles/repo-specs/release-engineering/CLAUDE.md`.
+
 ## [2026.06.23.8] - 2026-06-23
 
 ### Fixed

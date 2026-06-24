@@ -1,57 +1,65 @@
 #!/bin/bash
-# Pre-commit hook to validate version consistency
+# File: scripts/pre-commit-version-check.sh
+# Description: Pre-commit hook (symlinked from .git/hooks/pre-commit) that
+#              validates embedded version literals against the VERSION file.
+#              VALIDATES ONLY — never mutates. Per the release-engineering
+#              spec, version bumps must run BEFORE commit via /commit-and-sync
+#              (which invokes version-bump.py + .versionbump.yaml), not here.
+# Author: Libor Ballaty <libor@arionetworks.com>
+# Updated: 2026-06-24 — rewritten to compare against VERSION file instead of
+#                      git describe --tags. Closes the chicken-and-egg that
+#                      forced --no-verify on every release commit. Reference:
+#                      ~/.ai-dev-dotfiles/repo-specs/release-engineering/CLAUDE.md
 
 set -e
 
-# Function to log version details
-log_version_details() {
-    echo "Git Tag Version:        $GIT_VERSION"
-    echo "Info.plist Version:     $PLIST_VERSION"
-    echo "App.swift Version:      $APP_SWIFT_VERSION"
-    echo "AboutView Version:      $ABOUT_VIEW_VERSION"
-}
-
-# Check if this is a GUI-related commit
-if git diff --cached --name-only | grep -q "gui-macos/"; then
-    # Get the latest git tag
-    GIT_TAG=$(git describe --tags --abbrev=0)
-
-    # Remove 'v' prefix if present
-    GIT_VERSION="${GIT_TAG#v}"
-
-    # Check Info.plist version
-    PLIST_VERSION=$(grep -A1 CFBundleShortVersionString gui-macos/build/llamaCPP\ Manager.app/Contents/Info.plist | tail -n1 | sed -E 's/.*<string>(.*)<\/string>.*/\1/')
-
-    # Check APP_VERSION literal (lives in AppConstants.swift as of Conformance Phase 4)
-    APP_SWIFT_VERSION=$(grep 'return "' gui-macos/Sources/AppConstants.swift 2>/dev/null | head -1 | sed -E 's/.*return "(.*)".*/\1/')
-
-    # Check that the About dialog uses APP_VERSION interpolation
-    # (openAbout() moved to ViewModels/StatusViewModel.swift in Conformance Phase 4)
-    if ! grep -q 'llamaCPP Manager v\\(APP_VERSION)' gui-macos/Sources/ViewModels/StatusViewModel.swift 2>/dev/null; then
-        echo "Warning: About dialog does not use APP_VERSION interpolation"
-    fi
-
-    # Validate versions match
-    MISMATCH=0
-
-    if [[ "$GIT_VERSION" != "$PLIST_VERSION" ]]; then
-        echo "Error: Git Version and Info.plist Version do not match!"
-        MISMATCH=1
-    fi
-
-    if [[ "$GIT_VERSION" != "$APP_SWIFT_VERSION" ]]; then
-        echo "Error: Git Version and App.swift Version do not match!"
-        MISMATCH=1
-    fi
-
-    if [[ $MISMATCH -eq 1 ]]; then
-        echo
-        echo "Version Details:"
-        log_version_details
-        echo
-        echo "Please update all versions to match the latest git tag before committing."
-        exit 1
-    fi
+# Only validate when GUI files are part of this commit.
+if ! git diff --cached --name-only | grep -q "gui-macos/"; then
+    exit 0
 fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 1. Read canonical version from VERSION file.
+if [[ ! -f "$REPO_ROOT/VERSION" ]]; then
+    echo "Error: VERSION file missing at repo root."
+    exit 1
+fi
+CANONICAL_VERSION="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+
+# 2. Read APP_VERSION literal from AppConstants.swift.
+APP_SWIFT_FILE="$REPO_ROOT/gui-macos/Sources/AppConstants.swift"
+APP_SWIFT_VERSION=""
+if [[ -f "$APP_SWIFT_FILE" ]]; then
+    APP_SWIFT_VERSION=$(grep 'return "' "$APP_SWIFT_FILE" | head -1 | sed -E 's/.*return "(.*)".*/\1/')
+fi
+
+# 3. About-dialog interpolation sanity check (warning only).
+ABOUT_FILE="$REPO_ROOT/gui-macos/Sources/ViewModels/StatusViewModel.swift"
+if [[ -f "$ABOUT_FILE" ]] && ! grep -q 'llamaCPP Manager v\\(APP_VERSION)' "$ABOUT_FILE"; then
+    echo "Warning: About dialog does not use APP_VERSION interpolation"
+fi
+
+# 4. Validate.
+if [[ -z "$APP_SWIFT_VERSION" ]]; then
+    echo "Error: Could not read APP_VERSION from $APP_SWIFT_FILE"
+    exit 1
+fi
+
+if [[ "$CANONICAL_VERSION" != "$APP_SWIFT_VERSION" ]]; then
+    echo "Error: VERSION file and AppConstants.swift APP_VERSION do not match!"
+    echo
+    echo "Version Details:"
+    echo "  VERSION file:           $CANONICAL_VERSION"
+    echo "  AppConstants.swift:     $APP_SWIFT_VERSION"
+    echo
+    echo "Run version-bump.py before committing, or rerun install-gui to sync"
+    echo "AppConstants.swift to the current VERSION."
+    exit 1
+fi
+
+# Info.plist is a build artifact (gitignored), updated by build_app.sh during
+# install-gui. We deliberately do NOT validate it here — it may not exist on a
+# fresh clone, and it always trails VERSION until the next build.
 
 exit 0

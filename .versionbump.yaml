@@ -1,0 +1,17 @@
+# File: .versionbump.yaml
+# Description: Declares embedded version literal locations for ~/.ai-dev-dotfiles/tools/version-bump.py
+# Author: Libor Ballaty <libor@arionetworks.com>
+# Created: 2026-06-24
+# Reference: ~/.ai-dev-dotfiles/repo-specs/release-engineering/CLAUDE.md
+#
+# The bump tool patches the named (?P<version>...) group in each declared
+# pattern. Files not declared here are left alone. Info.plist is a build
+# artifact (gitignored) and is synced by gui-macos/build_app.sh on
+# install-gui — do not declare it here.
+
+literals:
+  - file: gui-macos/Sources/AppConstants.swift
+    pattern: 'return "(?P<version>[^"]+)"'
+
+tag:
+  create: false  # tagging is optional per the release-engineering spec
