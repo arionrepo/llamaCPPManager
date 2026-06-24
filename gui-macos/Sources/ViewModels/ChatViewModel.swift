@@ -19,9 +19,9 @@ final class ChatViewModel: ObservableObject {
     @Published var errorMessage: String? = nil
 
     let modelName: String
-    private let cliService: CLIServicing
+    private let cliService: CLIService
 
-    init(modelName: String, cliService: CLIServicing) {
+    init(modelName: String, cliService: CLIService) {
         self.modelName = modelName
         self.cliService = cliService
 

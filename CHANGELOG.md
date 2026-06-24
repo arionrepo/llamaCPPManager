@@ -6,6 +6,22 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.24.3] - 2026-06-24
+
+### Reverted
+
+- **Phase 6 protocol seams (`CLIServicing`, `DockerServicing`) removed.**
+  Their sole purpose was to enable mock-injection for Phase 7 unit
+  tests. After a testing-strategy discussion the team decided to use
+  real-stack vertical-slice E2E tests (no mocks, no fakes) — making the
+  protocols dead code with no consumer. Property types reverted to
+  concrete `CLIService` / `DockerService` in `StatusViewModel`,
+  `ChatViewModel`, `DownloadViewModel`, and `DockerColimaViewModel`.
+  Build clean. `swift test`: 14/14 passing (identical to pre-Phase-6
+  baseline). Removing now while the change is fresh — every line of
+  unused code is future cleanup debt. Future testing plan to be
+  redefined.
+
 ## [2026.06.24.2] - 2026-06-24
 
 ### Changed (Swift Conformance Plan — Phase 6: Test Scaffolding)
