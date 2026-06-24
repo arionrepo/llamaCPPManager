@@ -41,13 +41,21 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 - Section-by-section audit of v2026.06.19.6 + v2026.06.19.7 Swift changes
   against `docs/SWIFT-AGENT-STANDARD.md` v1.0 — verdict CONFORMANT WITH
-  GAPS, no bugs requiring immediate fix. Three concrete gaps identified;
-  two shipped in this version (cancellation + previews). Item 3 (unit
-  tests for `normalizeGiB` and `runCommandStreaming`) deferred — blocked
-  on GUI `Package.swift` having no test target wired up; 8 orphaned test
-  files exist in `gui-macos/Tests/` from before the Phase 4 `Sources/`
-  refactor and need triage before a test target can be added. Tracked
-  as a focused follow-up for a separate session.
+  GAPS, no bugs requiring immediate fix. Three concrete gaps identified:
+  cancellation, previews, and unit tests. **All three shipped under
+  v2026.06.23.8.** Cancellation + previews landed in commit 65aab43;
+  unit tests + SPM test target landed in commit 1803fbe (14 tests for
+  `normalizeGiB` + `runCommandStreaming` passing; minor production
+  refactors to make functions internal-accessible for `@testable
+  import`; one production defense-in-depth fix surfaced by the new
+  tests — `normalizeGiB` now strips `.whitespacesAndNewlines` instead
+  of just `.whitespaces`).
+- **Remaining follow-up**: 9 orphan test files under
+  `gui-macos/Tests/{UI,Unit,llamacpp_guiTests,JSONParsingTests.swift}`
+  are NOT in the new test target. They reference outdated type
+  signatures (e.g. `StatusRow` had 10 fields, now 21) from before
+  the Phase 4 `Sources/` refactor. They need refresh before they
+  can be re-enabled. Tracked as a focused follow-up.
 
 ## [2026.06.23.7] - 2026-06-23
 
