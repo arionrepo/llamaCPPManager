@@ -184,6 +184,16 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
     5. Product question to answer before building: are the existing 8 tools sufficient, or are `compare_models` / `chat_history` / `query_multi` agent tools also needed?
   - Explicitly out of scope: reimplementing the MCP server in Swift inside the macOS app. That was evaluated and rejected as overkill.
   - Dependency: do *not* start before `docs/SWIFT-CONFORMANCE-PLAN.md` phases 0–4 are complete.
+- [ ] **Rewrite SWIFT-AGENT-STANDARD testing sections to remove mock guidance** (added 2026-06-24)
+  - Trigger: testing-strategy decision this session — real-stack vertical-slice E2E tests, no mocks/fakes/protocol-mocking.
+  - Affected canonical doc: `docs/SWIFT-AGENT-STANDARD.md` §4.4 + every other mention of "mock"/"fake"/"protocol so it can be mocked" (currently lines 87, 249, 628, 636, 765).
+  - Affected derived doc: `docs/SWIFT-CONFORMANCE-PLAN.md` §9 (Phase 6) + §10 (Phase 7) — both now annotated SUPERSEDED with forward pointers; full rewrite still pending.
+  - Required rewrite shape (sketch, to confirm before doing):
+    1. §4.4 testing framework table: drop "Service tests with mocks/fakes"; replace with "Service tests against real subprocesses / real CLI / real model server (vertical-slice E2E)".
+    2. Wherever the standard recommends "behind a protocol so it can be mocked", restate as "structured `CLIError` + comprehensive `LifecycleLog` coverage" so error paths stay debuggable without fakes.
+    3. New section on vertical-slice E2E: setUp picks an already-configured model, exercises the real stack, asserts shape-only outcomes (non-empty rows, non-empty assistant message, state transition).
+    4. Reference the existing real-subprocess tests (`RunCommandStreamingTests` against `/bin/echo`, `/bin/sleep`, `/usr/bin/false`) as the existing in-tree model.
+  - Reference: today's session ended with this decision but did not write the rewrite. The minimal-safe annotations on the plan + standard are in place to prevent future agents from being pulled back to mocks.
 - [ ] Prometheus endpoint/sidecar for metrics
 - [ ] Workspace profiles (multiple configs)
 - [ ] Raycast commands / VS Code tasks

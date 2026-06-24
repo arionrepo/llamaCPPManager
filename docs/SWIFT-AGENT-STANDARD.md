@@ -240,6 +240,17 @@ Do not use SwiftData just because it is modern. Use it when its OS support, migr
 
 ### 4.4 Testing Framework Decision
 
+> **Project caveat (added 2026-06-24, llamaCPPManager):** This project rejects
+> mock/fake-based service tests in favor of **real-stack vertical-slice E2E
+> tests**. The "Service tests with mocks/fakes" item below — and the other
+> mock/protocol-mocking guidance elsewhere in this standard (see lines
+> referencing "mock", "fake", "protocol so it can be mocked") — does not
+> apply to this codebase. Use real subprocesses, real CLI invocations, and
+> real model servers; cover error paths with structured `CLIError` cases
+> and `LifecycleLog` logging rather than mocks. A full rewrite of the
+> testing sections (§4.4 + later "Testing" sections) is tracked as a TODO
+> follow-up.
+
 Use Swift Testing for:
 
 1. New pure Swift unit tests.

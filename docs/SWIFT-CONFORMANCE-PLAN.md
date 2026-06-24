@@ -303,6 +303,15 @@ If/when scheduled, this phase will get its own follow-up plan document with the 
 
 ## 9. Phase 6 — Test Scaffolding (Standard §10.3, §18.2)
 
+> **STATUS: SUPERSEDED 2026-06-24.** Phase 6 was implemented (commit `38c4f56`)
+> then reverted in full (commit `410c96e`, v2026.06.24.3) after a testing-strategy
+> discussion. The team chose **real-stack vertical-slice E2E tests, no mocks,
+> no fakes, no protocol seams**. Without mock consumers, the protocols
+> `CLIServicing` and `DockerServicing` were dead code and were removed. Do not
+> reintroduce protocol seams unless the testing philosophy changes again.
+> See the §11 manual smoke-test checklist for the current approach, and the
+> TODO follow-up entry for the planned standard rewrite.
+
 **Goal:** Introduce protocol seams that allow view models to be unit-tested without spawning real subprocesses.
 
 ### Changes
@@ -328,6 +337,17 @@ If/when scheduled, this phase will get its own follow-up plan document with the 
 ---
 
 ## 10. Phase 7 — New Unit Tests
+
+> **STATUS: SUPERSEDED 2026-06-24.** Phase 7 as originally written prescribed
+> mock-based unit tests against the protocol seams introduced in Phase 6.
+> Since Phase 6 was reverted (see §9 superseded note) and the project chose
+> real-stack vertical-slice E2E tests instead, this section no longer
+> represents the testing direction. **Do not implement mock-based view-model
+> tests.** A revised testing approach lives in conversation context and a
+> tracked follow-up TODO; this plan will be rewritten when that work picks
+> up. The existing 14 tests (NormalizeGiB + RunCommandStreaming) already
+> use real subprocesses against `/bin/echo`, `/bin/sleep`, `/usr/bin/false`
+> — they are the model for any new tests.
 
 **Goal:** Add focused unit tests that exercise view-model logic against mock services. Tests are additive — no production code changes in this phase.
 
