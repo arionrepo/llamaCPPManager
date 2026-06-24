@@ -47,10 +47,17 @@ final class ChatViewModel: ObservableObject {
         Task { @MainActor in
             do {
                 let response = try await cliService.queryChat(modelName: modelName, messages: messages)
-                let assistantMessage = ChatMessage(role: "assistant", content: response.trimmingCharacters(in: .whitespacesAndNewlines))
+                let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                let assistantMessage = ChatMessage(role: "assistant", content: trimmed)
                 messages.append(assistantMessage)
+                // Deterministic signal for E2E slice C: a real reply
+                // round-tripped through the CLI and back to the view model.
+                LifecycleLog.log("cli.chat.reply_received", model: modelName,
+                                 ["reply_length": trimmed.count])
             } catch {
                 errorMessage = "Failed to send message: \(error.localizedDescription)"
+                LifecycleLog.log("cli.chat.reply_failed", model: modelName,
+                                 ["error": String(describing: error)])
                 // Remove the user message if the API call failed
                 if let lastIndex = messages.lastIndex(where: { $0.content == inputText && $0.role == "user" }) {
                     messages.remove(at: lastIndex)

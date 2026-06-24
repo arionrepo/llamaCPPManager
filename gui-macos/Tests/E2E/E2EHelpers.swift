@@ -28,6 +28,22 @@ enum E2EError: Error, CustomStringConvertible {
     }
 }
 
+/// Whether the developer has opted in to interactive slices that require
+/// Accessibility permission for the test runner. Set `RUN_E2E_INTERACTIVE=1`
+/// in the environment to enable. See docs/E2E-SLICES.md for one-time setup.
+var interactiveSlicesEnabled: Bool {
+    ProcessInfo.processInfo.environment["RUN_E2E_INTERACTIVE"] != nil
+}
+
+/// Reason text printed when an interactive slice is skipped.
+let interactiveSkipMessage = """
+SKIPPED: this slice drives the real UI via osascript / System Events and \
+requires the test runner (Terminal / IDE) to have Accessibility permission. \
+To enable: \
+  1) System Settings → Privacy & Security → Accessibility → add your terminal/IDE, \
+  2) run with: RUN_E2E_INTERACTIVE=1 swift test
+"""
+
 /// Path to the installed app bundle. The test harness expects the app already
 /// installed via `llamacpp-manager install-gui` — slices do not build/install
 /// themselves so that one test failure can be localized cleanly.
@@ -194,6 +210,50 @@ func typeString(_ s: String) throws -> String {
     tell application "System Events"
         tell process "llamacpp-gui"
             keystroke "\(escaped)"
+        end tell
+    end tell
+    """
+    return try runAppleScript(script)
+}
+
+/// Click the first SwiftUI Button labeled "Chat" inside the MenuBarExtra
+/// popover. Used by slices B and C. The MenuBarExtra popover hosts SwiftUI
+/// Button views with the literal title "Chat" which are visible to System
+/// Events via accessibility.
+@discardableResult
+func clickChatButton() throws -> String {
+    let script = """
+    tell application "System Events"
+        tell process "llamacpp-gui"
+            set clickedCount to 0
+            repeat with w in windows
+                try
+                    set chatBtns to (every button of w whose name is "Chat")
+                    if (count of chatBtns) > 0 then
+                        click (item 1 of chatBtns)
+                        set clickedCount to clickedCount + 1
+                        exit repeat
+                    end if
+                end try
+                try
+                    -- Probe one level deeper for buttons inside scroll
+                    -- areas / groups, common in SwiftUI layouts.
+                    repeat with grp in (every UI element of w)
+                        try
+                            set chatBtns to (every button of grp whose name is "Chat")
+                            if (count of chatBtns) > 0 then
+                                click (item 1 of chatBtns)
+                                set clickedCount to clickedCount + 1
+                                exit repeat
+                            end if
+                        end try
+                    end repeat
+                    if clickedCount > 0 then exit repeat
+                end try
+            end repeat
+            if clickedCount = 0 then
+                error "Could not find a Chat button in any open window"
+            end if
         end tell
     end tell
     """

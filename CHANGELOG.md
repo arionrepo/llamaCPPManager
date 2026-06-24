@@ -6,6 +6,43 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.24.5] - 2026-06-24
+
+### Added (E2E Slices B + C; full contract documented)
+
+- **Slice B — Chat Window Open + Cmd-W Close** (`Tests/E2E/SliceB_ChatWindowTests.swift`).
+  User flow: launch app → click menu bar icon → click Chat on a configured
+  model → verify chat window opened → send Cmd-W → verify window closed.
+  Regression-tests the v2026.06.23.7 / .8 window-lifecycle fixes. Opt-in:
+  `RUN_E2E_INTERACTIVE=1 swift test`. Requires Accessibility permission for
+  the terminal/IDE running `swift test` (one-time macOS setup). When
+  `RUN_E2E_INTERACTIVE` is unset the slice cleanly skips with a clear
+  setup message — so default `swift test` remains CI-safe.
+- **Slice C — Chat Send + Receive** (`Tests/E2E/SliceC_ChatSendReceiveTests.swift`).
+  User flow: open chat window → type "hi" → press Return → verify assistant
+  reply arrived via `cli.chat.reply_received` event. Real CLI → real
+  subprocess → real llama.cpp/MLX server → real network. Same opt-in gate as
+  slice B, plus a model server must be running.
+- **New `cli.chat.reply_received` / `cli.chat.reply_failed` LifecycleLog
+  events** emitted from `ChatViewModel.sendMessage` after each chat
+  round-trip. Provides slice C's deterministic signal and improves
+  production debuggability of failed chat round-trips.
+- **`clickChatButton()` helper** promoted from `fileprivate` in slice B
+  to shared in `E2EHelpers.swift` for reuse by slice C.
+- **`interactiveSlicesEnabled` flag + `interactiveSkipMessage`** in
+  `E2EHelpers.swift`: gates accessibility-dependent slices behind the
+  `RUN_E2E_INTERACTIVE` env var and prints clear one-time setup
+  instructions when skipped.
+- **`docs/E2E-SLICES.md`**: full contract documenting what a slice is,
+  the osascript + log-inspection strategy, per-slice setup requirements,
+  how to run (default vs opt-in), and how to add new slices.
+
+### Verification
+
+- Default `swift test`: 14 XCTest + 4 Swift Testing (2 executed, 2 skipped
+  cleanly) — 18 tests, 0 failures. ~7 seconds total.
+- Build clean. install-gui --force clean at v2026.06.24.5.
+
 ## [2026.06.24.4] - 2026-06-24
 
 ### Added (E2E Slice A — App Launch & Boot)
