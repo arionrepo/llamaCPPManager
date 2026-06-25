@@ -1587,6 +1587,8 @@ def cmd_stop(args: argparse.Namespace) -> int:
                                     os.kill(child_pid, signal.SIGTERM)
                                 except (ValueError, ProcessLookupError, PermissionError):
                                     pass
+                except FileNotFoundError:
+                    print(f"warning: pgrep not found; skipping child-process cleanup for {name}", file=sys.stderr)
                 except subprocess.TimeoutExpired:
                     pass
 
@@ -1999,6 +2001,8 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
     models_status = []
     infrastructure_status = []
 
+    from .infrastructure import get_process_uptime
+
     # Gather model status
     for m in cfg.get("models", []):
         name = m.get("name")
@@ -2045,7 +2049,6 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
 
         # Get uptime if process is running
-        from .infrastructure import get_process_uptime
         uptime = get_process_uptime(pid) if pid else None
 
         # Get startup mode from config (basic/tools/performance/extended)

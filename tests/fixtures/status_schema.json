@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llamacpp-manager.local/schemas/status/v1",
+  "title": "llamacpp-manager status payload",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "models",
+    "infrastructure",
+    "logging"
+  ],
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "pid",
+          "host",
+          "port",
+          "up",
+          "latency_ms",
+          "http_status",
+          "version",
+          "mode",
+          "format",
+          "process_source",
+          "log_path",
+          "health_state",
+          "uptime",
+          "model_path",
+          "model_filename",
+          "file_size_gb",
+          "quantization",
+          "deployment_type",
+          "ram_mb",
+          "cpu_percent",
+          "description"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "pid": { "type": ["integer", "null"] },
+          "host": { "type": "string", "minLength": 1 },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "up": { "type": "boolean" },
+          "latency_ms": { "type": ["integer", "number", "null"] },
+          "http_status": { "type": ["integer", "null"] },
+          "version": { "type": ["string", "null"] },
+          "mode": {
+            "type": "string",
+            "enum": ["basic", "tools", "performance", "extended"]
+          },
+          "format": {
+            "type": "string",
+            "enum": ["gguf", "mlx", "moe", "unknown"]
+          },
+          "process_source": {
+            "type": "string",
+            "enum": ["direct", "launchd", "stopped"]
+          },
+          "log_path": { "type": "string", "minLength": 1 },
+          "health_state": { "type": "string", "minLength": 1 },
+          "uptime": { "type": ["string", "null"] },
+          "model_path": { "type": "string" },
+          "model_filename": { "type": ["string", "null"] },
+          "file_size_gb": { "type": ["number", "null"] },
+          "quantization": { "type": ["string", "null"] },
+          "deployment_type": {
+            "type": "string",
+            "enum": ["native", "container", "mlx", "mlx-vlm"]
+          },
+          "ram_mb": { "type": ["number", "null"] },
+          "cpu_percent": { "type": ["number", "null"] },
+          "description": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "infrastructure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "type",
+          "enabled",
+          "running",
+          "healthy",
+          "status",
+          "health_status",
+          "latency_ms",
+          "details",
+          "uptime"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "enabled": { "type": "boolean" },
+          "running": { "type": "boolean" },
+          "healthy": { "type": "boolean" },
+          "status": { "type": "string" },
+          "health_status": { "type": "string" },
+          "latency_ms": { "type": ["integer", "number"] },
+          "details": {
+            "type": "object"
+          },
+          "uptime": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "max_bytes",
+        "backups",
+        "timestamps"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_bytes": { "type": "integer", "minimum": 0 },
+        "backups": { "type": "integer", "minimum": 0 },
+        "timestamps": { "type": "boolean" }
+      }
+    }
+  }
+}

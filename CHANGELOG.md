@@ -6,6 +6,41 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.25.1] - 2026-06-25
+
+### Fixed
+
+- **`status --json` no longer crashes on an empty config.** The infrastructure
+  uptime path in `src/llamacpp_manager/cli.py` now resolves
+  `get_process_uptime` outside the per-model loop, so status collection works
+  whether there are zero configured models or many.
+
+### Added
+
+- **Canonical status schema lock** in `tests/fixtures/status_schema.json` plus
+  expanded `tests/test_status.py` coverage for empty-config output, every
+  declared `deployment_type`, mixed running/stopped rows, infrastructure
+  presence, optional nullable fields, and JSON-vs-table consistency.
+- **External CLI contract coverage** in
+  `tests/test_cli_external_invocation.py` and `docs/CLI-EXIT-CODES.md`,
+  locking subprocess invocation behavior for piped JSON output, UTF-8 model
+  names, concurrent read-only invocations, stable exit codes, and
+  stdout/stderr separation.
+
+### Changed
+
+- **Typed `pgrep` degradation warning on `stop`.** If `pgrep` is unavailable,
+  the CLI now emits a stable warning to `stderr` and continues with the main
+  stop path instead of silently swallowing the missing helper.
+
+### Verification
+
+- `pytest tests/test_status.py -q`
+- `pytest tests/test_status.py tests/test_status_watch.py -q`
+- `pytest tests/test_lifecycle_log_schema.py -q`
+- `pytest tests/test_cli_external_invocation.py -q`
+- `pytest tests/test_cli_start_stop.py tests/test_security_and_bincheck.py tests/test_ports_and_warnings.py -q`
+
 ## [2026.06.24.5] - 2026-06-24
 
 ### Added (E2E Slices B + C; full contract documented)
