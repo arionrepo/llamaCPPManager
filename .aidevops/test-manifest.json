@@ -1,0 +1,220 @@
+{
+  "schema_version": "1.1",
+  "repo": "llamaCPPManager",
+  "generated_at": "2026-06-25T14:46:02Z",
+  "generated_by": "codex",
+  "test_roots": [
+    {
+      "path": "tests",
+      "framework": "pytest",
+      "notes": "Python CLI, contract, deployment, and backend regression coverage."
+    },
+    {
+      "path": "gui-macos/Tests",
+      "framework": "custom",
+      "notes": "Swift Testing and XCTest suites for GUI vertical slices and package-level checks. Registered as custom until aidevops adds native swift runner support."
+    }
+  ],
+  "suites": [
+    {
+      "name": "GUI Slice Smoke — Launch + Install",
+      "suite_type": "smoke",
+      "runner_kind": "custom",
+      "entrypoint": "swift test --filter SliceA && swift test --filter SliceInst",
+      "working_dir": "gui-macos",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/SLICE-IMPLEMENTATION-PLAN.md",
+        "docs/DEPLOY-SCRIPT.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "A.1",
+        "Inst.1",
+        "Inst.5",
+        "Inst.8"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "swift",
+        "gui",
+        "slice",
+        "smoke",
+        "install"
+      ],
+      "notes": "Custom runner for now. Convert to runner_kind=swift after aidevops Step 12.2 lands."
+    },
+    {
+      "name": "GUI Slice B — Chat Window Lifecycle",
+      "suite_type": "regression",
+      "runner_kind": "custom",
+      "entrypoint": "env RUN_E2E_INTERACTIVE=1 swift test --filter SliceB",
+      "working_dir": "gui-macos",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/SLICE-IMPLEMENTATION-PLAN.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "B.1"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "swift",
+        "gui",
+        "interactive",
+        "slice"
+      ],
+      "notes": "Requires Accessibility-granted runner and a machine where MenuBarExtra popover controls are visible to System Events."
+    },
+    {
+      "name": "GUI Slice C — Chat Send + Receive",
+      "suite_type": "regression",
+      "runner_kind": "custom",
+      "entrypoint": "env RUN_E2E_INTERACTIVE=1 swift test --filter SliceC",
+      "working_dir": "gui-macos",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/SLICE-IMPLEMENTATION-PLAN.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "C.1"
+      ],
+      "determinism_class": "bounded_llm",
+      "tags": [
+        "swift",
+        "gui",
+        "interactive",
+        "slice",
+        "chat"
+      ],
+      "notes": "Requires Accessibility-granted runner, visible MenuBarExtra popover controls, and a working local model server."
+    },
+    {
+      "name": "GUI Slice D — Start/Stop Consistency",
+      "suite_type": "regression",
+      "runner_kind": "custom",
+      "entrypoint": "env RUN_E2E_INTERACTIVE=1 swift test --filter SliceD",
+      "working_dir": "gui-macos",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/SLICE-IMPLEMENTATION-PLAN.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "D.1"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "swift",
+        "gui",
+        "interactive",
+        "slice",
+        "start-stop"
+      ],
+      "notes": "Uses an isolated one-model temp config. Requires Accessibility-granted runner and visible MenuBarExtra popover controls."
+    },
+    {
+      "name": "Python Status + Lifecycle Contracts",
+      "suite_type": "regression",
+      "runner_kind": "pytest",
+      "entrypoint": ".venv/bin/pytest tests/test_status.py tests/test_status_watch.py tests/test_lifecycle_log_schema.py -q",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/LIFECYCLE-LOG-SCHEMA.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "O.1",
+        "O.2",
+        "O.3",
+        "O.4",
+        "O.5",
+        "O.6",
+        "O.7",
+        "X.1",
+        "X.3",
+        "X.4"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "pytest",
+        "status",
+        "schema",
+        "lifecycle"
+      ]
+    },
+    {
+      "name": "Python CLI External Invocation Contracts",
+      "suite_type": "regression",
+      "runner_kind": "pytest",
+      "entrypoint": ".venv/bin/pytest tests/test_cli_external_invocation.py -q",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/CLI-EXIT-CODES.md"
+      ],
+      "primary_source_doc": "docs/E2E-SLICES.md",
+      "workflow_id": [
+        "T.1",
+        "T.2",
+        "T.3",
+        "T.4",
+        "T.5",
+        "T.6"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "pytest",
+        "cli",
+        "contracts"
+      ]
+    },
+    {
+      "name": "Python Deploy Workflow Contracts",
+      "suite_type": "integration",
+      "runner_kind": "pytest",
+      "entrypoint": ".venv/bin/pytest tests/test_deploy_sh.py -q",
+      "runnable_independently": true,
+      "status": "registered",
+      "source_doc": [
+        "docs/E2E-SLICES.md",
+        "docs/DEPLOY-SCRIPT.md",
+        "docs/SLICE-IMPLEMENTATION-PLAN.md"
+      ],
+      "primary_source_doc": "docs/DEPLOY-SCRIPT.md",
+      "workflow_id": [
+        "Inst.10",
+        "Inst.11",
+        "Inst.12",
+        "Inst.13",
+        "Inst.14",
+        "Inst.16",
+        "Inst.18"
+      ],
+      "determinism_class": "deterministic",
+      "tags": [
+        "pytest",
+        "deploy",
+        "installation"
+      ]
+    }
+  ],
+  "mandatory_suite_status": {
+    "smoke": "present",
+    "regression_user": "partial",
+    "regression_runtime": "present"
+  }
+}

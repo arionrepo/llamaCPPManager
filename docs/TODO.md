@@ -197,6 +197,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [ ] **Execute the Slice Implementation Plan** (added 2026-06-25)
   - Canonical inventory of test slices: `docs/E2E-SLICES.md` (26 slices A–Z + Inst, 202 named variants covering every user-visible flow, every deployment_type, every meaningful variation).
   - Executable plan: `docs/SLICE-IMPLEMENTATION-PLAN.md` (14 phases, explicit DAG with `depends_on` declarations, designed for `/execute-plan` autonomous walking).
+  - Live execution tracker: `docs/EXECUTION-TRACKER.md` (current completion state, local automation blocker, aidevops seeding queue, platform `swift` runner follow-up, exact next actions).
   - Highest-ROI phases first: Phase 1 (schema locks O, X, T), Phase 2 (Slice Inst + new repo-root `deploy.sh` for aidevops Release Workflow), Phase 4 (Slice H crash detection — largest current reliability gap; creates the missing `test_monitor.py`).
   - Total estimated effort: ~38 hours of focused agent execution. Each phase independently shippable.
   - Cross-repo touchpoints: Phase 12 registers llamaCPPManager in aidevops via `.aidevops-stack.yml` and adds a `swift` runner_kind to aidevops `command-router.js`. The deploy.sh from Phase 2 fulfills the aidevops Release Workflow contract tracked as aidevops `design/TODO.md` #122.
