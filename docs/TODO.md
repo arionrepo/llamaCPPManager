@@ -194,6 +194,13 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
     3. New section on vertical-slice E2E: setUp picks an already-configured model, exercises the real stack, asserts shape-only outcomes (non-empty rows, non-empty assistant message, state transition).
     4. Reference the existing real-subprocess tests (`RunCommandStreamingTests` against `/bin/echo`, `/bin/sleep`, `/usr/bin/false`) as the existing in-tree model.
   - Reference: today's session ended with this decision but did not write the rewrite. The minimal-safe annotations on the plan + standard are in place to prevent future agents from being pulled back to mocks.
+- [ ] **Execute the Slice Implementation Plan** (added 2026-06-25)
+  - Canonical inventory of test slices: `docs/E2E-SLICES.md` (26 slices A–Z + Inst, 202 named variants covering every user-visible flow, every deployment_type, every meaningful variation).
+  - Executable plan: `docs/SLICE-IMPLEMENTATION-PLAN.md` (14 phases, explicit DAG with `depends_on` declarations, designed for `/execute-plan` autonomous walking).
+  - Highest-ROI phases first: Phase 1 (schema locks O, X, T), Phase 2 (Slice Inst + new repo-root `deploy.sh` for aidevops Release Workflow), Phase 4 (Slice H crash detection — largest current reliability gap; creates the missing `test_monitor.py`).
+  - Total estimated effort: ~38 hours of focused agent execution. Each phase independently shippable.
+  - Cross-repo touchpoints: Phase 12 registers llamaCPPManager in aidevops via `.aidevops-stack.yml` and adds a `swift` runner_kind to aidevops `command-router.js`. The deploy.sh from Phase 2 fulfills the aidevops Release Workflow contract tracked as aidevops `design/TODO.md` #122.
+  - To resume: `/execute-plan docs/SLICE-IMPLEMENTATION-PLAN.md` (resumable via `.plan-state.json`).
 - [ ] Prometheus endpoint/sidecar for metrics
 - [ ] Workspace profiles (multiple configs)
 - [ ] Raycast commands / VS Code tasks
