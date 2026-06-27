@@ -1,0 +1,26 @@
+# File: .aidevops-stack.yml
+# Description: Preparatory aidevops stack profile stub for llamaCPPManager.
+# Author: Codex
+# Created: 2026-06-25
+#
+# Note:
+# The live aidevops schema currently treats this file as a repo-specs profile,
+# not a test-suite manifest. Slice Inst suite registration remains deferred to
+# Phase 12 / Step 12.1, after the platform-side runner and manifest path align.
+
+repo: llamaCPPManager
+
+specs:
+  - operations/port-management
+  - development-practices/documentation-headers
+  - development-practices/fix-records
+  - development-practices/git-workflow
+  - development-practices/verification
+
+managed_block:
+  target: CLAUDE.md
+  inject: false
+
+symlinks:
+  target_dir: .claude/repo-specs
+  commit: false
