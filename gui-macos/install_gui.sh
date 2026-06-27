@@ -23,12 +23,16 @@
 set -eo pipefail
 
 # --- Configuration ---
-APP_NAME="llamaCPP Manager"
+APP_NAME="${INSTALL_GUI_APP_NAME:-llamaCPP Manager}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_APP="$SCRIPT_DIR/build/$APP_NAME.app"
-INSTALL_APP="/Applications/$APP_NAME.app"
-BUILD_SCRIPT="$SCRIPT_DIR/build_app.sh"
+BUILD_APP="${INSTALL_GUI_BUILD_APP:-$SCRIPT_DIR/build/$APP_NAME.app}"
+INSTALL_APP="${INSTALL_GUI_INSTALL_APP:-/Applications/$APP_NAME.app}"
+BUILD_SCRIPT="${INSTALL_GUI_BUILD_SCRIPT:-$SCRIPT_DIR/build_app.sh}"
+SOURCE_DIR="${INSTALL_GUI_SOURCE_DIR:-$SCRIPT_DIR/Sources}"
+VERSION_FILE="${INSTALL_GUI_VERSION_FILE:-$REPO_ROOT/VERSION}"
+PROCESS_PATTERN="${INSTALL_GUI_PROCESS_PATTERN:-llamacpp-gui}"
+SKIP_PROCESS_CLEANUP="${INSTALL_GUI_SKIP_PROCESS_CLEANUP:-false}"
 
 # --- Flags ---
 REBUILD="auto"
@@ -78,10 +82,10 @@ elif [[ "$REBUILD" == "auto" ]]; then
     BUILT_BIN="$BUILD_APP/Contents/MacOS/llamacpp-gui"
     if [[ -f "$BUILT_BIN" ]]; then
         # mtime comparison
-        if find "$SCRIPT_DIR/Sources" -name "*.swift" -newer "$BUILT_BIN" -print -quit 2>/dev/null | grep -q .; then
+        if find "$SOURCE_DIR" -name "*.swift" -newer "$BUILT_BIN" -print -quit 2>/dev/null | grep -q .; then
             NEED_REBUILD="true"
             log "Sources newer than built binary; will rebuild"
-        elif [[ -f "$REPO_ROOT/VERSION" ]] && [[ "$REPO_ROOT/VERSION" -nt "$BUILT_BIN" ]]; then
+        elif [[ -f "$VERSION_FILE" ]] && [[ "$VERSION_FILE" -nt "$BUILT_BIN" ]]; then
             NEED_REBUILD="true"
             log "VERSION newer than built binary; will rebuild"
         else
@@ -138,13 +142,15 @@ fi
 
 # --- 4. Kill any running instances ---
 log "Stopping any running instances..."
-killall "$APP_NAME" 2>/dev/null || true
-pkill -9 -f llamacpp-gui 2>/dev/null || true
-# Give the FS time to release file handles
-sleep 1.5
+if [[ "$SKIP_PROCESS_CLEANUP" != "true" ]]; then
+    killall "$APP_NAME" 2>/dev/null || true
+    pkill -9 -f "$PROCESS_PATTERN" 2>/dev/null || true
+    # Give the FS time to release file handles
+    sleep 1.5
+fi
 
 # Confirm nothing's running
-if pgrep -f "llamacpp-gui" >/dev/null 2>&1; then
+if [[ "$SKIP_PROCESS_CLEANUP" != "true" ]] && pgrep -f "$PROCESS_PATTERN" >/dev/null 2>&1; then
     fail "Could not kill all GUI processes - try manually: killall '$APP_NAME'"
     exit 3
 fi
@@ -157,6 +163,7 @@ if ! rm -rf "$INSTALL_APP" 2>/dev/null; then
 fi
 
 log "Copying new build to $INSTALL_APP..."
+mkdir -p "$(dirname "$INSTALL_APP")"
 if ! cp -R "$BUILD_APP" "$INSTALL_APP"; then
     fail "Copy to /Applications failed - check write permission"
     exit 3
@@ -191,7 +198,7 @@ if [[ "$LAUNCH" == "true" ]]; then
         exit 4
     fi
     sleep 1
-    if pgrep -f "llamacpp-gui" >/dev/null; then
+    if pgrep -f "$PROCESS_PATTERN" >/dev/null; then
         status "Launched ✓"
     else
         fail "App opened but process not detected - check Console.app"
