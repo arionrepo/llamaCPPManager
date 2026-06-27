@@ -1072,7 +1072,7 @@ final class StatusViewModel: ObservableObject {
         let script = """
         tell application "Terminal"
             activate
-            do script "export PATH=\\"$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\\"; echo \\"llamaCPP Manager CLI - Ready!\\"; echo \\"Try: llamacpp-manager --help\\"; echo"
+            do script "export PATH='$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH'; echo 'llamaCPP Manager CLI - Ready!'; echo 'Try: llamacpp-manager --help'; echo"
         end tell
         """
 
