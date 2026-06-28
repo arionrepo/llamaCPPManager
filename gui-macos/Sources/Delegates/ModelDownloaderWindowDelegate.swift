@@ -10,7 +10,8 @@
 
 import AppKit
 
-class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
+@MainActor
+final class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
 
     init(onClose: @escaping () -> Void) {
@@ -22,6 +23,9 @@ class ModelDownloaderWindowDelegate: NSObject, NSWindowDelegate {
         // Deferred to windowDidClose — see ChatWindowDelegate for the reason.
     }
 
+}
+
+extension ModelDownloaderWindowDelegate {
     func windowDidClose(_ notification: Notification) {
         onClose()
     }

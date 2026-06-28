@@ -6,6 +6,20 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.28.3] - 2026-06-28
+
+### Fixed
+
+- **Removed the remaining pre-existing `NSWindowDelegate` near-match warnings in the GUI build.**
+  The chat, preferences, and model-downloader window delegate types now place
+  `windowDidClose` in extensions, matching the compiler's recommended
+  structure and preserving the existing close/cleanup behavior.
+
+### Verification
+
+- `swift test` in `gui-macos`
+- `llamacpp-manager install-gui --force`
+
 ## [2026.06.28.2] - 2026-06-28
 
 ### Fixed

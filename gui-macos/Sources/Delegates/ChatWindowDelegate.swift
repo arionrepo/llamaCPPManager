@@ -10,7 +10,8 @@
 
 import AppKit
 
-class ChatWindowDelegate: NSObject, NSWindowDelegate {
+@MainActor
+final class ChatWindowDelegate: NSObject, NSWindowDelegate {
     private let modelName: String
     private let onClose: () -> Void
 
@@ -34,6 +35,9 @@ class ChatWindowDelegate: NSObject, NSWindowDelegate {
         // and its autorelease pool have fully unwound.
     }
 
+}
+
+extension ChatWindowDelegate {
     func windowDidClose(_ notification: Notification) {
         onClose()
         let policyAfter = NSApp.activationPolicy().rawValue

@@ -10,7 +10,8 @@
 
 import AppKit
 
-class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
+@MainActor
+final class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
 
     init(onClose: @escaping () -> Void) {
@@ -22,6 +23,9 @@ class PreferencesWindowDelegate: NSObject, NSWindowDelegate {
         // Deferred to windowDidClose — see ChatWindowDelegate for the reason.
     }
 
+}
+
+extension PreferencesWindowDelegate {
     func windowDidClose(_ notification: Notification) {
         onClose()
     }
