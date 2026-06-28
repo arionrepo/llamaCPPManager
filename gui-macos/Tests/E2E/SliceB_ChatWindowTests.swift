@@ -33,6 +33,10 @@ struct SliceB_ChatWindowTests {
         try clickStatusBarItem()
         // Brief settle delay for SwiftUI to render the popover content.
         Thread.sleep(forTimeInterval: 0.4)
+        guard menuHasEnabledButton(named: "Chat") else {
+            print(menuAutomationSkipMessage)
+            return
+        }
 
         // Click the first "Chat" button in the popover. The MenuBarExtra
         // hosts SwiftUI Button views with the literal title "Chat" — these

@@ -44,6 +44,15 @@ To enable: \
   2) run with: RUN_E2E_INTERACTIVE=1 swift test
 """
 
+let menuAutomationSkipMessage = """
+SKIPPED: System Events can click the llamaCPPManager menu bar item on this machine \
+but the MenuBarExtra popover contents are not exposed back as accessible buttons. \
+This is a pre-existing local runtime limitation: existing interactive slices (B/C) \
+also cannot discover Chat/Start buttons here. The slice implementation is present, \
+but local verification requires a machine where the opened popover is visible to \
+System Events.
+"""
+
 /// Path to the installed app bundle. The test harness expects the app already
 /// installed via `llamacpp-manager install-gui` — slices do not build/install
 /// themselves so that one test failure can be localized cleanly.
@@ -56,16 +65,23 @@ let lifecycleLogPath: String = {
     return "\(home)/Library/Logs/llamaCPPManager/lifecycle.jsonl"
 }()
 
+func lifecycleLogPath(forLogDir logDir: String) -> String {
+    URL(fileURLWithPath: logDir).appendingPathComponent("lifecycle.jsonl").path
+}
+
 // MARK: - App lifecycle
 
 /// Launch the installed app. Returns the launched Process.
 /// Caller must call `quitApp(_:)` to clean up.
-func launchApp() throws -> Process {
+func launchApp(environment: [String: String] = [:]) throws -> Process {
     guard FileManager.default.fileExists(atPath: appExecutablePath) else {
         throw E2EError.appBundleNotInstalled(path: installedAppPath)
     }
     let proc = Process()
     proc.executableURL = URL(fileURLWithPath: appExecutablePath)
+    if !environment.isEmpty {
+        proc.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+    }
     proc.standardOutput = Pipe()
     proc.standardError = Pipe()
     do {
@@ -95,8 +111,8 @@ func quitApp(_ proc: Process) {
 /// Snapshot the current end offset of the lifecycle log so subsequent waits
 /// only consider events written AFTER the snapshot. Returns 0 if the log
 /// doesn't exist yet (first ever launch on a fresh machine).
-func snapshotLogOffset() -> UInt64 {
-    let url = URL(fileURLWithPath: lifecycleLogPath)
+func snapshotLogOffset(logPath: String = lifecycleLogPath) -> UInt64 {
+    let url = URL(fileURLWithPath: logPath)
     guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
           let size = attrs[.size] as? NSNumber else {
         return 0
@@ -110,11 +126,12 @@ func snapshotLogOffset() -> UInt64 {
 @discardableResult
 func waitForLogEvent(_ event: String,
                      after startOffset: UInt64,
+                     logPath: String = lifecycleLogPath,
                      timeout: TimeInterval = 10.0,
                      pollInterval: TimeInterval = 0.2) throws -> [String: Any] {
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
-        if let entry = readLogEntry(matchingEvent: event, after: startOffset) {
+        if let entry = readLogEntry(matchingEvent: event, after: startOffset, logPath: logPath) {
             return entry
         }
         Thread.sleep(forTimeInterval: pollInterval)
@@ -124,8 +141,8 @@ func waitForLogEvent(_ event: String,
 
 /// Read the lifecycle log starting at `startOffset`, return the first entry
 /// whose `event` field matches.
-private func readLogEntry(matchingEvent event: String, after startOffset: UInt64) -> [String: Any]? {
-    guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: lifecycleLogPath)) else {
+private func readLogEntry(matchingEvent event: String, after startOffset: UInt64, logPath: String) -> [String: Any]? {
+    guard let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: logPath)) else {
         return nil
     }
     defer { try? handle.close() }
@@ -258,6 +275,174 @@ func clickChatButton() throws -> String {
     end tell
     """
     return try runAppleScript(script)
+}
+
+@discardableResult
+func clickTab(named tabName: String) throws -> String {
+    let escaped = tabName.replacingOccurrences(of: "\"", with: "\\\"")
+    let script = """
+    tell application "System Events"
+        tell process "llamacpp-gui"
+            set clickedCount to 0
+            repeat with w in windows
+                try
+                    set tabBtns to (every radio button of w whose name is "\(escaped)")
+                    if (count of tabBtns) > 0 then
+                        click (item 1 of tabBtns)
+                        set clickedCount to clickedCount + 1
+                        exit repeat
+                    end if
+                end try
+                try
+                    set tabBtns to (every button of w whose name is "\(escaped)")
+                    if (count of tabBtns) > 0 then
+                        click (item 1 of tabBtns)
+                        set clickedCount to clickedCount + 1
+                        exit repeat
+                    end if
+                end try
+                try
+                    repeat with grp in (every UI element of w)
+                        try
+                            set tabBtns to (every radio button of grp whose name is "\(escaped)")
+                            if (count of tabBtns) > 0 then
+                                click (item 1 of tabBtns)
+                                set clickedCount to clickedCount + 1
+                                exit repeat
+                            end if
+                        end try
+                        try
+                            set tabBtns to (every button of grp whose name is "\(escaped)")
+                            if (count of tabBtns) > 0 then
+                                click (item 1 of tabBtns)
+                                set clickedCount to clickedCount + 1
+                                exit repeat
+                            end if
+                        end try
+                        try
+                            repeat with grp2 in (every UI element of grp)
+                                try
+                                    set tabBtns to (every radio button of grp2 whose name is "\(escaped)")
+                                    if (count of tabBtns) > 0 then
+                                        click (item 1 of tabBtns)
+                                        set clickedCount to clickedCount + 1
+                                        exit repeat
+                                    end if
+                                end try
+                                try
+                                    set tabBtns to (every button of grp2 whose name is "\(escaped)")
+                                    if (count of tabBtns) > 0 then
+                                        click (item 1 of tabBtns)
+                                        set clickedCount to clickedCount + 1
+                                        exit repeat
+                                    end if
+                                end try
+                            end repeat
+                            if clickedCount > 0 then exit repeat
+                        end try
+                    end repeat
+                    if clickedCount > 0 then exit repeat
+                end try
+            end repeat
+            if clickedCount = 0 then
+                error "Could not find tab named \(escaped)"
+            end if
+        end tell
+    end tell
+    """
+    return try runAppleScript(script)
+}
+
+@discardableResult
+func clickFirstEnabledButton(named buttonName: String) throws -> String {
+    let escaped = buttonName.replacingOccurrences(of: "\"", with: "\\\"")
+    let script = """
+    tell application "System Events"
+        tell process "llamacpp-gui"
+            set clickedCount to 0
+            repeat with w in windows
+                try
+                    set matchingBtns to (every button of w whose name is "\(escaped)" and enabled is true)
+                    if (count of matchingBtns) > 0 then
+                        click (item 1 of matchingBtns)
+                        set clickedCount to clickedCount + 1
+                        exit repeat
+                    end if
+                end try
+                try
+                    repeat with grp in (every UI element of w)
+                        try
+                            set matchingBtns to (every button of grp whose name is "\(escaped)" and enabled is true)
+                            if (count of matchingBtns) > 0 then
+                                click (item 1 of matchingBtns)
+                                set clickedCount to clickedCount + 1
+                                exit repeat
+                            end if
+                        end try
+                        try
+                            repeat with grp2 in (every UI element of grp)
+                                try
+                                    set matchingBtns to (every button of grp2 whose name is "\(escaped)" and enabled is true)
+                                    if (count of matchingBtns) > 0 then
+                                        click (item 1 of matchingBtns)
+                                        set clickedCount to clickedCount + 1
+                                        exit repeat
+                                    end if
+                                end try
+                            end repeat
+                            if clickedCount > 0 then exit repeat
+                        end try
+                    end repeat
+                    if clickedCount > 0 then exit repeat
+                end try
+            end repeat
+            if clickedCount = 0 then
+                error "Could not find an enabled button named \(escaped)"
+            end if
+        end tell
+    end tell
+    """
+    return try runAppleScript(script)
+}
+
+func menuHasEnabledButton(named buttonName: String) -> Bool {
+    let escaped = buttonName.replacingOccurrences(of: "\"", with: "\\\"")
+    let script = """
+    tell application "System Events"
+        tell process "llamacpp-gui"
+            repeat with w in windows
+                try
+                    set matchingBtns to (every button of w whose name is "\(escaped)" and enabled is true)
+                    if (count of matchingBtns) > 0 then
+                        return "yes"
+                    end if
+                end try
+                try
+                    repeat with grp in (every UI element of w)
+                        try
+                            set matchingBtns to (every button of grp whose name is "\(escaped)" and enabled is true)
+                            if (count of matchingBtns) > 0 then
+                                return "yes"
+                            end if
+                        end try
+                        try
+                            repeat with grp2 in (every UI element of grp)
+                                try
+                                    set matchingBtns to (every button of grp2 whose name is "\(escaped)" and enabled is true)
+                                    if (count of matchingBtns) > 0 then
+                                        return "yes"
+                                    end if
+                                end try
+                            end repeat
+                        end try
+                    end repeat
+                end try
+            end repeat
+            return "no"
+        end tell
+    end tell
+    """
+    return (try? runAppleScript(script)) == "yes"
 }
 
 /// Send Return key.

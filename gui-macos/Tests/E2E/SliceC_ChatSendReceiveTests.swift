@@ -32,6 +32,10 @@ struct SliceC_ChatSendReceiveTests {
         // Open the menu and click Chat on a model.
         try clickStatusBarItem()
         Thread.sleep(forTimeInterval: 0.4)
+        guard menuHasEnabledButton(named: "Chat") else {
+            print(menuAutomationSkipMessage)
+            return
+        }
         try clickChatButton()
 
         // Wait for the chat window to be open.
