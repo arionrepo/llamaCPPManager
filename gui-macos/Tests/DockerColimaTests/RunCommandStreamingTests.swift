@@ -10,6 +10,25 @@ import XCTest
 @testable import llamacpp_gui
 
 final class RunCommandStreamingTests: XCTestCase {
+    func testResolveExecutableUsesPreferredDirectoriesWhenPATHIsMinimal() {
+        let service = DockerService(environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"])
+        let url = service.resolveExecutableURL(for: "colima")
+        XCTAssertEqual(url?.path, "/opt/homebrew/bin/colima")
+    }
+
+    func testResolveExecutableUsesInjectedPATHEntries() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let toolURL = tempDir.appendingPathComponent("demo-tool")
+        try "#!/bin/sh\nexit 0\n".write(to: toolURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: toolURL.path)
+
+        let service = DockerService(environment: ["PATH": tempDir.path])
+        let url = service.resolveExecutableURL(for: "demo-tool")
+
+        XCTAssertEqual(url?.path, toolURL.path)
+    }
 
     func testSuccessfulCommandReturnsOutput() async throws {
         let service = DockerService()
@@ -58,7 +77,7 @@ final class RunCommandStreamingTests: XCTestCase {
         await Task.yield()
         try await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
-        let lines = await collector.allLines()
+        let lines = collector.allLines()
         XCTAssertEqual(lines, ["line-one", "line-two", "line-three"],
                        "Expected exactly three streamed lines, got: \(lines)")
     }
@@ -152,7 +171,7 @@ private final class LineCollector: @unchecked Sendable {
         lines.append(line)
     }
 
-    func allLines() async -> [String] {
+    func allLines() -> [String] {
         lock.lock()
         defer { lock.unlock() }
         return lines

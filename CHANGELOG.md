@@ -6,6 +6,45 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.06.28.2] - 2026-06-28
+
+### Fixed
+
+- **Removed the new `DockerService` sendability warning introduced by the Colima profile fix.**
+  The service now resolves the executable path and snapshots the subprocess
+  environment before entering the background `DispatchQueue` closure, so the
+  closure no longer captures non-`Sendable` `self`.
+- **Cleaned the GUI unit-test target's async-lock warning** in
+  `RunCommandStreamingTests.swift` by making the test line collector's read
+  method synchronous.
+
+### Verification
+
+- `swift test` in `gui-macos`
+- `llamacpp-manager install-gui --force`
+
+## [2026.06.28.1] - 2026-06-28
+
+### Fixed
+
+- **Colima profiles render again in the macOS GUI when the app is launched without a Homebrew-inheriting shell `PATH`.**
+  `gui-macos/Sources/Services/DockerService.swift` now resolves `colima` and
+  `docker` from explicit executable locations before falling back to `PATH`,
+  so the Docker/Colima view no longer collapses to "No Colima profiles found"
+  in launchd-style environments.
+
+### Added
+
+- **Regression coverage for GUI executable resolution** in
+  `gui-macos/Tests/DockerColimaTests/RunCommandStreamingTests.swift`,
+  locking the minimal-`PATH` Colima lookup case and an injected-`PATH`
+  custom executable case.
+
+### Verification
+
+- `swift test` in `gui-macos`
+- `llamacpp-manager install-gui --force`
+
 ## [2026.06.25.1] - 2026-06-25
 
 ### Fixed

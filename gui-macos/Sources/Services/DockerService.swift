@@ -36,6 +36,11 @@ struct DockerContainer: Identifiable {
 }
 
 final class DockerService {
+    private let environment: [String: String]
+
+    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        self.environment = environment
+    }
 
     // MARK: - Colima Profile Management
 
@@ -246,11 +251,14 @@ final class DockerService {
     // bar and the confirmation dialog. Using withCheckedThrowingContinuation +
     // terminationHandler keeps the @MainActor caller free while we wait.
     private func runCommand(_ command: String, args: [String]) async throws -> String {
+        let executableURL = try requireExecutableURL(for: command)
+        let environment = self.environment
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = [command] + args
+                process.executableURL = executableURL
+                process.arguments = args
+                process.environment = environment
 
                 let pipe = Pipe()
                 process.standardOutput = pipe
@@ -309,6 +317,8 @@ final class DockerService {
         args: [String],
         onLine: ((String) -> Void)?
     ) async throws -> String {
+        let executableURL = try requireExecutableURL(for: command)
+        let environment = self.environment
         // Shared Process reference so the cancellation handler (which may run
         // on any executor) can terminate the subprocess. ProcessBox is defined
         // below the function (see "ProcessBox" comment for the safety argument).
@@ -318,8 +328,9 @@ final class DockerService {
             return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
                 DispatchQueue.global(qos: .userInitiated).async {
                     let process = Process()
-                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                    process.arguments = [command] + args
+                    process.executableURL = executableURL
+                    process.arguments = args
+                    process.environment = environment
 
                     let pipe = Pipe()
                     process.standardOutput = pipe
@@ -405,6 +416,55 @@ final class DockerService {
         } onCancel: {
             processBox.terminate()
         }
+    }
+
+    func resolveExecutableURL(for command: String) -> URL? {
+        if command.contains("/") {
+            let url = URL(fileURLWithPath: command)
+            return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+        }
+
+        let preferredDirs = [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/Applications/Docker.app/Contents/Resources/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin"
+        ]
+
+        for dir in preferredDirs {
+            let url = URL(fileURLWithPath: dir).appendingPathComponent(command)
+            if FileManager.default.isExecutableFile(atPath: url.path) {
+                AppLogger.log("Resolved \(command) via preferred path: \(url.path)", level: .debug)
+                return url
+            }
+        }
+
+        if let path = environment["PATH"] {
+            for dir in path.split(separator: ":") {
+                let url = URL(fileURLWithPath: String(dir)).appendingPathComponent(command)
+                if FileManager.default.isExecutableFile(atPath: url.path) {
+                    AppLogger.log("Resolved \(command) via PATH: \(url.path)", level: .debug)
+                    return url
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func requireExecutableURL(for command: String) throws -> URL {
+        if let url = resolveExecutableURL(for: command) {
+            return url
+        }
+        AppLogger.log("Failed to resolve executable for command: \(command)", level: .error)
+        throw NSError(
+            domain: "DockerService",
+            code: 127,
+            userInfo: [NSLocalizedDescriptionKey: "Command not found: \(command)"]
+        )
     }
 
     private func parseColimaList(_ output: String) -> [ColimaProfile] {
