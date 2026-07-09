@@ -32,7 +32,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 ## M3 — Discovery, Status, Health
 - [x] Add process discovery (map running llama-server → models)
 - [x] Implement `health.py` (TCP + HTTP checks, latency, version)
-- [ ] CLI: `status [--watch]` (table) and `status --json`
+- [x] CLI: `status [--watch]` (table) and `status --json` *(verified 2026-07-09: --watch loop + --interval implemented in cli.py)*
 - [x] CLI: `config list --json`
 - [x] Tests for health and JSON serialization
  - [x] CLI: `ensure-running` to auto-start missing autostart models
@@ -49,21 +49,21 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [ ] (Optional) Homebrew tap formula draft
 
 ## M6 — GUI (SwiftUI Menu Bar)
-- [ ] Create SwiftUI menu bar app skeleton (`gui-macos/`)
-- [ ] Parse `status --json` and render model list
-- [ ] Wire actions: Start/Stop/Restart, Tail Logs, Open Config
-- [ ] Preferences (paths, refresh interval); call CLI `config set|get`
-- [ ] App icon and packaging (.app)
+- [x] Create SwiftUI menu bar app skeleton (`gui-macos/`) *(verified 2026-07-09: full MenuBarExtra app in App.swift)*
+- [x] Parse `status --json` and render model list *(verified 2026-07-09)*
+- [x] Wire actions: Start/Stop/Restart, Tail Logs, Open Config *(verified 2026-07-09)*
+- [x] Preferences (paths, refresh interval); call CLI `config set|get` *(verified 2026-07-09)*
+- [x] App icon and packaging (.app) *(verified 2026-07-09: build_app.sh + install-gui)*
 
 ## M7 — Unified Model Manager (In Progress)
-- [ ] Add model groups with mutual exclusion to config schema
-- [ ] Implement unified ModelManager supporting native + container deployments
-- [ ] Add on-demand model lifecycle management
-- [ ] Create model downloader module for large coding models
-- [ ] Extend MCP server with coding model tools
-- [ ] Add model groups view to GUI
-- [ ] Download Qwen Coder 32B, 14B, DeepSeek Coder Lite
-- [ ] Document flexible deployment options
+- [x] Add model groups with mutual exclusion to config schema *(verified 2026-07-09: config.py + model_manager.py)*
+- [x] Implement unified ModelManager supporting native + container deployments *(verified 2026-07-09: model_manager.py)*
+- [x] Add on-demand model lifecycle management *(verified 2026-07-09)*
+- [x] Create model downloader module for large coding models *(verified 2026-07-09: models/downloader.py)*
+- [x] Extend MCP server with coding model tools *(verified 2026-07-09: mcp_server.py, 8 tools)*
+- [ ] Add model groups view to GUI *(confirmed open: no group UI found in App.swift)*
+- [ ] Download Qwen Coder 32B, 14B, DeepSeek Coder Lite *(requires runtime verification)*
+- [ ] Document flexible deployment options *(partially done in README; incomplete)*
 
 ## M8 — Container Support (Optional)
 - [ ] Create containers/ module (docker_client.py, lifecycle.py, templates.py)
@@ -140,19 +140,20 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
   - `LLAMA_SERVER=$(which llama-server 2>/dev/null || echo "/opt/homebrew/bin/llama-server")` falls back to a path that doesn't exist on this system. If `llama-server` isn't on the GUI subprocess's PATH (the LocalProjects build dir typically isn't), the script gets a "No such file or directory" before reaching mode-arg parsing. The GUI then sees the eventual exit code only.
   - Fix: replace the fallback with the actual local-build path (`/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llama.cpp/build/bin/llama-server`) OR have the GUI's `start-script` invocation export a PATH that includes the local build dir, OR pin the script to a config-read value.
 
-- [ ] **MEDIUM — MLX models silently ignore the `mode` field**
-  - `src/llamacpp_manager/mlx_process.py:build_mlx_argv` does not branch on `spec.mode`. So picking `performance`, `tools`, or `extended` for any MLX model has zero effect — only `--model`, `--host`, `--port`, and `spec.args` are appended.
-  - User impact: confusing UX (mode picker appears active but does nothing for MLX). For MLX-relevant tuning (e.g. KV cache type, draft model, max_kv_size) `mlx_lm.server` has its own flag set; the GUI/CLI should either route an MLX-specific mode table OR hide the mode picker on MLX rows.
+- [ ] **LOW — Download integrity pre-check before model start** *(split from MEDIUM-HIGH start-failure item, 2026-07-09)*
+  - Verify file count / total size matches expected for completed downloads before allowing Start, so corrupt/partial GGUFs fail early with a clear message rather than letting llama-server crash at load time.
+  - ~30 min: extend `checkIfDownloaded`-style logic into a `verify_model_files()` helper; call it in `startWithScript` before invoking the CLI.
+
+- [ ] **MEDIUM — MLX models silently ignore most `mode` values** *(partially fixed 2026-07-09: mlx_process.py now honours "think" mode via --enable-thinking; all other modes basic/tools/performance/extended are no-ops for MLX)*
+  - Remaining gap: GUI mode picker still shows all GGUF modes for MLX models. Should either hide the picker on MLX rows or replace it with MLX-specific options (think/basic only).
   - Affected: mlx-gemma-3-1b, mlx-gemma4-31b, gemma-270m-compliance-mlx, gemma-3-27b-mlx, mistral-05b-compliance-mlx, mlx-diffusiongemma.
 
-- [ ] **LOW — `parseStartupLog` reads stale log lines and produces false "Issue detected" alerts**
-  - `Sources/ViewModels/StatusViewModel.swift` `parseStartupLog()` scans the last 50 lines of `<model>.log` for the substring `error`. The log file is append-only across runs, so historical tracebacks from prior failed attempts (e.g. the gemma4 `ValueError: Model type gemma4 not supported` lines that lingered after the mlx-lm upgrade) keep triggering the false alert during legitimate new starts.
-  - Three possible fixes (cheapest first): (1) anchor parsing to lines after the most recent "Starting httpd" / startup banner, (2) parse in reverse and let the most recent success/fail signal win, (3) truncate `<model>.log` on each fresh start (destructive — loses history).
+- [x] **LOW — `parseStartupLog` reads stale log lines and produces false "Issue detected" alerts** *(verified fixed 2026-07-09: StatusViewModel.swift anchors parse to latest startup banner before scanning; option 1 implemented)*
 
 - [x] **HIGH — Closing chat window quits the entire app** *(fixed v2026.06.23.6–7, verified by user)*
   - Root cause 1 (v2026.06.23.6): `ChatWindowDelegate.windowWillClose` called `onClose()` which removed the last strong ref to `self` while still on the call stack → use-after-free/SIGSEGV in `objc_release`. Fixed: deferred `onClose()` to `windowDidClose` in all three delegates (`ChatWindowDelegate`, `ModelDownloaderWindowDelegate`, `PreferencesWindowDelegate`).
   - Root cause 2 (v2026.06.23.7): `isReleasedWhenClosed = true` (Cocoa default) caused the NSWindow to be freed by ObjC runtime before `windowDidClose` fired, leaving dangling refs in `chatWindows`/`windowDelegates`. Fixed: `window.isReleasedWhenClosed = false` on all stored windows in `StatusViewModel`. Added `applicationShouldTerminateAfterLastWindowClosed → false` in `AppDelegate`.
-- [ ] **MEDIUM-HIGH — Some larger models fail to start with no UI feedback** (found 2026-06-22)
+- [x] **MEDIUM-HIGH — Some larger models fail to start with no UI feedback** *(verified fixed 2026-07-09: StatusViewModel uses runAndCapture, surfaceStartFailure() sets errorMessage + opens log in Console.app; download-integrity pre-check still not implemented — tracked separately below)*
   - Symptom: click Start on a (typically larger) model → spinner appears briefly → spinner disappears → model stays stopped → no error message, no toast, no modal. No way for the user to know why.
   - Root cause (confirmed via code read): `App.swift:1278-1284` in `StatusViewModel.startWithScript` — when `service.run(...)` returns non-zero exit code, the code logs "Failed to start" to `AppLogger` (a file/os.log destination, not the UI) and removes the entry from `startupProgress` (which is why the spinner disappears). It does NOT set any UI-visible error. `StatusViewModel` doesn't even have an `errorMessage` property.
   - Additional limitation: `CLIService.run(_:)` returns only `Int32` exit code, discarding stderr text. Even if we surface the failure, we have no message to display unless we also capture stderr. CLIService does have `runAndCapture` for other call sites — should use it here.
