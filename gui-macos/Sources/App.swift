@@ -225,15 +225,38 @@ struct LlamaCPPManagerApp: App {
                     // MARK: - Native Models Tab
                     ScrollView {
                         VStack(alignment: .leading, spacing: 6) {
-                Text("Native Models")
-                    .font(.headline)
+                HStack {
+                    Text("Native Models")
+                        .font(.headline)
+                    Spacer()
+                    if !vm.nativeSearchText.isEmpty {
+                        Button(action: { vm.nativeSearchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
+                    }
+                }
+                .padding(.horizontal, 8)
+
+                TextField("Search models…", text: $vm.nativeSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
                     .padding(.horizontal, 8)
+                    .padding(.bottom, 2)
 
                 if vm.rows.isEmpty {
                     Text("No native models configured")
                         .padding(.horizontal, 8)
+                } else if vm.filteredNativeRows.isEmpty {
+                    Text("No models match \"\(vm.nativeSearchText)\"")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
                 } else {
-                    ForEach(vm.rows, id: \.name) { row in
+                    ForEach(vm.filteredNativeRows, id: \.name) { row in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 // Enhanced health indicator

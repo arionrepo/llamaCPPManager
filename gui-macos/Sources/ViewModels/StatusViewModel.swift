@@ -21,6 +21,7 @@ final class StatusViewModel: ObservableObject {
     @Published var selectedModes: [String: String] = [:]  // Model name -> mode
     @Published var startupProgress: [String: ModelStartupProgress] = [:]
     @Published var errorMessage: String?  // Surfaces start failures in the menu UI
+    @Published var nativeSearchText: String = ""
     private var logMonitorTasks: [String: Task<Void, Never>] = [:]
 
     // Persistent download view model — survives catalog window closes
@@ -37,6 +38,17 @@ final class StatusViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Computed Status Properties
+
+    var filteredNativeRows: [StatusRow] {
+        let query = nativeSearchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if query.isEmpty {
+            // Pin running models to top, preserve original order within each group
+            let running = rows.filter { $0.up }
+            let stopped = rows.filter { !$0.up }
+            return running + stopped
+        }
+        return rows.filter { $0.name.lowercased().contains(query) }
+    }
 
     var isAnyModelRunning: Bool {
         // Check if any native model is running
