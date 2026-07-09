@@ -6,6 +6,32 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.07.09.1] - 2026-07-09
+
+### Fixed
+
+- **Model Downloader "already downloaded" detection now finds flat `.gguf` files.**
+  `checkIfDownloaded` previously only checked for `~/llms/<name>/*.gguf`
+  (subdirectory style). Models downloaded organically (e.g. directly via
+  `hf download` or `huggingface-cli`) land as flat files in `~/llms/` (e.g.
+  `Mistral-Small-3.2-24B-Instruct-2506-Q8_0.gguf`). The function now also
+  checks for an exact flat-file match and does a suffix scan to handle vendor
+  prefixes like `mistralai_` that the catalog filename carries but the actual
+  downloaded file may not. Fixes false "not downloaded" state for at least
+  `mistral-small-3.2-24b`, `deepseek-r1-qwen-32b`, and `gemma-3-27b`.
+
+### Added
+
+- **`mistral-small-3.2-24b-q6` catalog entry** — Q6_K quant from
+  `bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF`, ~19.5 GB,
+  ~24 GB RAM, positioned between the existing Q8 (25 GB) and Q4 (14.3 GB)
+  entries for balanced quality/memory use.
+
+### Verification
+
+- `llamacpp-manager install-gui` (build + install + launch confirmed)
+- `pipx reinstall llamacpp-manager` (CLI catalog live)
+
 ## [2026.06.28.3] - 2026-06-28
 
 ### Fixed

@@ -294,7 +294,7 @@ final class DownloadViewModel: ObservableObject {
                     if let catalogResponse = try? JSONDecoder().decode(CatalogResponse.self, from: data) {
                         var models = catalogResponse.models
                         for i in 0..<models.count {
-                            models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                            models[i].isDownloaded = await checkIfDownloaded(model: models[i])
                         }
                         self.availableModels = models
                         self.catalogFetchedAt = catalogResponse.catalog_fetched_at
@@ -303,7 +303,7 @@ final class DownloadViewModel: ObservableObject {
                         // Fallback to old format (array only)
                         var models = try JSONDecoder().decode([ModelInfo].self, from: data)
                         for i in 0..<models.count {
-                            models[i].isDownloaded = await checkIfDownloaded(modelName: models[i].name)
+                            models[i].isDownloaded = await checkIfDownloaded(model: models[i])
                         }
                         self.availableModels = models
                     }
@@ -327,25 +327,44 @@ final class DownloadViewModel: ObservableObject {
         }
     }
 
-    private func checkIfDownloaded(modelName: String) async -> Bool {
-        // Check if model directory exists and contains at least one .gguf file
+    private func checkIfDownloaded(model: ModelInfo) async -> Bool {
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        let modelDir = homeDir.appendingPathComponent("llms").appendingPathComponent(modelName)
+        let llmsDir = homeDir.appendingPathComponent("llms")
 
-        // First check if directory exists
+        // Check 1: subdirectory ~/llms/<name>/ contains a .gguf file
+        let modelDir = llmsDir.appendingPathComponent(model.name)
         var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: modelDir.path, isDirectory: &isDir),
-              isDir.boolValue else {
-            return false
+        if FileManager.default.fileExists(atPath: modelDir.path, isDirectory: &isDir), isDir.boolValue {
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: modelDir.path),
+               contents.contains(where: { $0.lowercased().hasSuffix(".gguf") }) {
+                return true
+            }
         }
 
-        // Then check for .gguf files in the directory
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(atPath: modelDir.path)
-            return contents.contains { $0.lowercased().hasSuffix(".gguf") }
-        } catch {
-            return false
+        // Check 2: flat file ~/llms/<filename> or ~/llms/<filename-minus-vendor-prefix>
+        // Some models were downloaded directly (not via the downloader) and live as
+        // flat files. The catalog filename may include a vendor prefix (e.g. "mistralai_")
+        // that the user's file doesn't have — so we check both the exact name and any
+        // suffix match against files already present in ~/llms/.
+        if let catalogFilename = model.filename {
+            let exactFlat = llmsDir.appendingPathComponent(catalogFilename)
+            if FileManager.default.fileExists(atPath: exactFlat.path) {
+                return true
+            }
+
+            // Scan ~/llms/*.gguf for a file whose lowercased name is a suffix of
+            // the catalog filename (handles "mistralai_Mistral-Small..." → "Mistral-Small...")
+            let catalogLower = catalogFilename.lowercased()
+            if let flatFiles = try? FileManager.default.contentsOfDirectory(atPath: llmsDir.path) {
+                for file in flatFiles where file.lowercased().hasSuffix(".gguf") {
+                    if catalogLower.hasSuffix(file.lowercased()) {
+                        return true
+                    }
+                }
+            }
         }
+
+        return false
     }
 
     func downloadModel(name: String) {

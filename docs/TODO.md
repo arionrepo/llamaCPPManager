@@ -110,6 +110,7 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
     - `parseStartupLog` regex may not match the current mlx-lm 0.31.3 log format. The "Fetching N files" pattern was added when MLX models lazy-download weights on first start. Worth a re-check, but only AFTER a controlled repro: clear `~/.cache/huggingface/hub/models--mlx-community--gemma-3-1b-it-4bit`, click Start, compare log output to parseStartupLog patterns.
 
 - [ ] **MEDIUM — Model Downloader UI doesn't allow downloading all listed models** (especially diffusion models)
+  - **Partial fix 2026-07-09:** `checkIfDownloaded` now correctly detects flat `.gguf` files in `~/llms/` (exact match + vendor-prefix suffix scan). Models downloaded outside the GUI (e.g. `mistral-small-3.2-24b`, `deepseek-r1-qwen-32b`, `gemma-3-27b`) now show "Downloaded" correctly. Remaining scope below.
   - User report (2026-06-22): the in-app Model Downloader window lists models but doesn't let the user download some of them, particularly diffusion-class models.
   - Probable causes:
     1. **Curated catalog filter** — the downloader UI may filter to a known-good subset (GGUF-only? text-only?). Diffusion / multimodal entries may be displayed but Download button is disabled/missing.

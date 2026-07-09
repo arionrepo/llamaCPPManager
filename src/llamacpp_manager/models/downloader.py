@@ -873,6 +873,15 @@ CODING_MODELS = {
         "version": "3.2",
         "note": "Multimodal support (text + images)"
     },
+    "mistral-small-3.2-24b-q6": {
+        "repo_id": "bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF",
+        "filename": "mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q6_K.gguf",
+        "description": "Mistral Small 3.2 24B Q6 - Balanced quality/speed multimodal",
+        "size_gb": 19.5,
+        "ram_gb": 24,
+        "use_case": "Multimodal tasks with quality/memory balance",
+        "version": "3.2"
+    },
     "mistral-small-3.2-24b-q4": {
         "repo_id": "bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF",
         "filename": "mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf",
