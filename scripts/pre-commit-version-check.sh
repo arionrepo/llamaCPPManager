@@ -6,10 +6,15 @@
 #              spec, version bumps must run BEFORE commit via /commit-and-sync
 #              (which invokes version-bump.py + .versionbump.yaml), not here.
 # Author: Libor Ballaty <libor@arionetworks.com>
-# Updated: 2026-06-24 — rewritten to compare against VERSION file instead of
-#                      git describe --tags. Closes the chicken-and-egg that
-#                      forced --no-verify on every release commit. Reference:
-#                      ~/.ai-dev-dotfiles/repo-specs/release-engineering/CLAUDE.md
+# Updated: 2026-06-24 — rewritten to compare against the VERSION file instead of
+#                      tag descriptions (the rejected `git-describe --tags`
+#                      pattern). Closes the chicken-and-egg that forced
+#                      --no-verify on every release commit.
+# Updated: 2026-07-14 — confirmed compliant with the now-normative Versioning
+#                      spec §1.5. This repo keeps its tailored gui-scoped
+#                      validator; the reusable equivalent lives at
+#                      ~/.ai-dev-dotfiles/tools/hooks/version-validate.pre-commit.sh
+# Reference:           ~/.ai-dev-dotfiles/repo-specs/release-engineering/CLAUDE.md
 
 set -e
 
