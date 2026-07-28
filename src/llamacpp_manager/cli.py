@@ -2009,9 +2009,16 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         host = m.get("host", "127.0.0.1")
         port = int(m.get("port"))
         pid = None
-        process_source = "stopped"  # Track how process was started (stopped/direct/launchd)
+        # Track how the process was started. Values:
+        #   stopped  - no live process found
+        #   direct   - manager-owned; llamaCPPManager spawned it and wrote a PID file
+        #   launchd  - manager-owned via a launchd agent (plist installed)
+        #   external - a live process was discovered by port/model-path scan but the
+        #              manager did NOT start it (no PID file, no plist). The manager
+        #              cannot capture its stdout/stderr, so <name>.log will be stale.
+        process_source = "stopped"
 
-        # Try to read PID from file first
+        # Try to read PID from file first (a PID file means the manager spawned it)
         try:
             pid_from_file = read_pid(name)
             if process_alive(pid_from_file):
@@ -2045,7 +2052,15 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         pass
             if found:
                 pid = found.get("pid")
-                process_source = "direct"
+                # Discovered without a PID file. If a launchd agent is installed for
+                # this model it is manager-managed (launchd captures output to the
+                # plist's log paths); otherwise the process was started outside the
+                # manager and its output is NOT captured.
+                try:
+                    is_launchd = plist_path(name).exists()
+                except Exception:
+                    is_launchd = False
+                process_source = "launchd" if is_launchd else "external"
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
 
         # Get uptime if process is running
@@ -2141,6 +2156,25 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             pass
 
+        # Whether the manager is capturing this process's stdout/stderr into its
+        # log file. Only true for manager-owned processes (direct/launchd). An
+        # externally-started process writes its output wherever its launcher
+        # directed it, so <name>.log will be stale/empty for the current run.
+        if process_source in ("direct", "launchd"):
+            logs_available = True
+            logs_hint = None
+        elif process_source == "external":
+            logs_available = False
+            logs_hint = (
+                f"Process on port {port} was not started by llamaCPPManager "
+                "(discovered by port scan); its stdout/stderr are not captured, so "
+                f"the log file will be stale. Stop it and restart via "
+                f"'llamacpp-manager start {name}' to enable logging."
+            )
+        else:  # stopped
+            logs_available = None
+            logs_hint = None
+
         entry = {
             "name": name,
             "pid": pid,
@@ -2153,6 +2187,8 @@ def _gather_status(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "mode": startup_mode,
             "format": format_type,
             "process_source": process_source,
+            "logs_available": logs_available,
+            "logs_hint": logs_hint,
             "log_path": str(Path(cfg.get("log_dir")).expanduser() / f"{name}.log"),
             "health_state": health.get("health_state", "down"),
             "uptime": uptime,
@@ -2240,11 +2276,17 @@ def _print_table(status_data: Dict[str, Any]) -> None:
     if models:
         print("Models:")
         print("-" * 80)
-        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms", "uptime"]
+        headers = ["name", "mode", "pid", "host", "port", "up", "latency_ms", "uptime", "source"]
         print(" ".join(f"{h:>12}" for h in headers))
+        hints = []
         for r in models:
-            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms"), r.get("uptime", "")]
+            vals = [r.get("name"), r.get("mode"), r.get("pid"), r.get("host"), r.get("port"), r.get("up"), r.get("latency_ms"), r.get("uptime", ""), r.get("process_source", "")]
             print(" ".join(f"{str(v):>12}" for v in vals))
+            if r.get("process_source") == "external":
+                hints.append((r.get("name"), r.get("logs_hint")))
+        for name, hint in hints:
+            if hint:
+                print(f"  ⚠ {name}: {hint}")
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -2954,6 +2996,30 @@ def cmd_logs(args: argparse.Namespace) -> int:
     if not log_path.exists():
         print(f"error: log file not found: {log_path}", file=sys.stderr)
         return 2
+
+    # Warn if a server is running that the manager did not start: its stdout/stderr
+    # are not captured, so this log file reflects an earlier (manager-started) run,
+    # not the process currently answering on the port.
+    host = model.get("host", "127.0.0.1")
+    port = int(model.get("port", 0)) if model.get("port") else 0
+    manager_owned = False
+    try:
+        if process_alive(read_pid(model_name)):
+            manager_owned = True
+    except Exception:
+        pass
+    if not manager_owned:
+        try:
+            manager_owned = plist_path(model_name).exists()
+        except Exception:
+            pass
+    if not manager_owned and port and port_in_use(host, port):
+        print(
+            f"warning: a process is running on {host}:{port} that llamaCPPManager did "
+            f"not start; its output is not captured. The log below may be stale. "
+            f"Restart via 'llamacpp-manager start {model_name}' to capture live logs.",
+            file=sys.stderr,
+        )
 
     # ANSI color codes
     RED = '\033[91m'      # Bright red for errors

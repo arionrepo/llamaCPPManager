@@ -6,6 +6,31 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.07.28.1] - 2026-07-28
+
+### Added
+
+- **`status` now distinguishes manager-owned processes from externally-started ones.**
+  A live `llama-server` discovered only by port/model-path scan (no manager PID
+  file and no launchd plist) is now reported with `process_source: "external"`
+  instead of being conflated with manager-started processes under `"direct"`.
+  Two new JSON fields accompany every model entry: `logs_available` (bool/null)
+  and `logs_hint` (string/null). For external processes `logs_available` is
+  `false` and `logs_hint` explains that the manager did not start the process,
+  so its stdout/stderr are not captured and `<name>.log` will be stale until the
+  model is restarted via `llamacpp-manager start <name>`. The human-readable
+  status table gained a `source` column and prints a `⚠` note per external model.
+- **`logs` command warns on stale logs.** When a server is answering on a
+  model's port but was not started by the manager, `llamacpp-manager logs
+  <model>` now prints a warning that the displayed log reflects an earlier
+  manager-started run, not the currently-running process.
+
+  Motivation: a `mistral-small-24b` server started outside the manager (by the
+  hermes agent) appeared "running" in `status` yet wrote nothing to its log
+  file, because log capture is wired up only at manager spawn time. The status
+  output gave no indication the process was unmanaged. This surfaces that state
+  explicitly instead of looking like a silent logging bug.
+
 ## [2026.07.09.1] - 2026-07-09
 
 ### Fixed

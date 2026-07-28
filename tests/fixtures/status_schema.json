@@ -28,6 +28,8 @@
           "mode",
           "format",
           "process_source",
+          "logs_available",
+          "logs_hint",
           "log_path",
           "health_state",
           "uptime",
@@ -59,8 +61,10 @@
           },
           "process_source": {
             "type": "string",
-            "enum": ["direct", "launchd", "stopped"]
+            "enum": ["direct", "launchd", "external", "stopped"]
           },
+          "logs_available": { "type": ["boolean", "null"] },
+          "logs_hint": { "type": ["string", "null"] },
           "log_path": { "type": "string", "minLength": 1 },
           "health_state": { "type": "string", "minLength": 1 },
           "uptime": { "type": ["string", "null"] },
