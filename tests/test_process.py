@@ -66,6 +66,57 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
     assert (tmp_path / "logs" / "m1.log").exists()
 
 
+def _count(argv, flag):
+    return argv.count(flag)
+
+
+def _value_after(argv, flag):
+    return argv[argv.index(flag) + 1]
+
+
+def test_build_argv_non_performance_modes_pin_single_slot(tmp_path):
+    """I8: basic/tools/extended must pin --parallel 1 (llama-server defaults to 4
+    slots, which silently quarters the context window for a single request)."""
+    from llamacpp_manager.process import build_argv
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    for mode in ("basic", "tools", "extended"):
+        spec = ModelSpec(name="m", model_path=str(model), port=8081, mode=mode)
+        argv = build_argv("/bin/llama-server", spec)
+        assert _count(argv, "--parallel") == 1, f"{mode}: exactly one --parallel"
+        assert _value_after(argv, "--parallel") == "1", f"{mode}: single slot"
+    # tools/extended enable jinja; basic does not
+    assert "--jinja" in build_argv("/bin/llama-server", ModelSpec(name="m", model_path=str(model), port=8081, mode="tools"))
+    assert "--jinja" not in build_argv("/bin/llama-server", ModelSpec(name="m", model_path=str(model), port=8081, mode="basic"))
+
+
+def test_build_argv_performance_mode_uses_four_slots(tmp_path):
+    from llamacpp_manager.process import build_argv
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    spec = ModelSpec(name="m", model_path=str(model), port=8081, mode="performance")
+    argv = build_argv("/bin/llama-server", spec)
+    assert _count(argv, "--parallel") == 1
+    assert _value_after(argv, "--parallel") == "4"
+    assert "--jinja" in argv and "--batch-size" in argv
+
+
+def test_build_argv_dedups_user_overridden_flags(tmp_path):
+    """I5: a per-model arg must override the default WITHOUT producing a
+    duplicate flag in the launch command."""
+    from llamacpp_manager.process import build_argv
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    spec = ModelSpec(
+        name="m", model_path=str(model), port=8081, mode="tools",
+        args=["--ctx-size", "131072", "--parallel", "1", "--flash-attn", "on"],
+    )
+    argv = build_argv("/bin/llama-server", spec)
+    # Each overridden flag appears exactly once, with the user's value.
+    assert _count(argv, "--ctx-size") == 1 and _value_after(argv, "--ctx-size") == "131072"
+    assert _count(argv, "--parallel") == 1 and _value_after(argv, "--parallel") == "1"
+    assert _count(argv, "--flash-attn") == 1 and _value_after(argv, "--flash-attn") == "on"
+    # Non-overridden default still present exactly once.
+    assert _count(argv, "--n-gpu-layers") == 1
+
+
 def test_stop_process_sends_sigterm(monkeypatch):
     from llamacpp_manager import process as proc
 

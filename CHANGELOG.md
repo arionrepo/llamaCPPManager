@@ -6,6 +6,22 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.07.28.2] - 2026-07-28
+
+### Fixed
+
+- **Non-performance modes now pin `--parallel 1` (KNOWN-ISSUES I8).**
+  `llama-server` (b10154+) defaults to 4 slots and divides `--ctx-size` across
+  them, so a single request in `basic`/`tools`/`extended` mode silently received
+  only ctx/4. `build_argv` now emits `--parallel 1` for those modes (the correct
+  default for a single-user local manager); `performance` still runs 4 slots for
+  throughput. A per-model `--parallel` in `args` overrides either default.
+- **No more duplicate flags in the launch command (KNOWN-ISSUES I5).**
+  `build_argv` previously emitted its default `--ctx-size` (etc.) and then also
+  appended the per-model `args`, producing lines like `--ctx-size 32768 …
+  --ctx-size 131072`. Any flag set explicitly in a model's `args` now suppresses
+  the corresponding default, so each flag appears once with the model's value.
+
 ## [2026.07.28.1] - 2026-07-28
 
 ### Added

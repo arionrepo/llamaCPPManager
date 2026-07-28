@@ -28,32 +28,58 @@ def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
 
     argv: List[str] = [llama_server_path, "-m", model_path]
 
+    # Per-model args take precedence over our base/mode defaults. Collect the
+    # flag tokens the user set explicitly so we never emit a duplicate default
+    # for the same flag (llama-server tolerates duplicates via last-wins, but it
+    # is confusing in logs — see KNOWN-ISSUES I5). Anything in spec.args wins.
+    user_args = list(spec.args or [])
+    user_flags = {a for a in user_args if isinstance(a, str) and a.startswith("--")}
+
+    def add_default(flag: str, *values: object) -> None:
+        """Append a default flag (+optional value) unless the model overrode it."""
+        if flag in user_flags:
+            return
+        argv.append(flag)
+        argv.extend(str(v) for v in values)
+
     # GPU offload — default to "all layers to Metal" on Apple Silicon. The
     # bash launcher restart-llm-interactive.sh always passed `--n-gpu-layers 999`
     # for the same reason. Per-model override available via spec.n_gpu_layers.
     n_gpu_layers = spec.n_gpu_layers if spec.n_gpu_layers is not None else 999
-    argv.extend(["--n-gpu-layers", str(n_gpu_layers)])
+    add_default("--n-gpu-layers", n_gpu_layers)
 
     # Context size — default 32768 (matches the bash launcher's general-case
     # default). Per-model override via spec.ctx_size (e.g. phi3 needs 8192
     # because Phi-3-mini-4k natively supports 4k and only RoPE-extends to 8k).
     ctx_size = spec.ctx_size if spec.ctx_size is not None else 32768
-    argv.extend(["--ctx-size", str(ctx_size)])
+    add_default("--ctx-size", ctx_size)
 
-    # Add mode-specific arguments before user-specified args
+    # Slot count + mode flags.
+    #
+    # llama-server (b10154+) defaults to 4 slots and divides --ctx-size across
+    # them, so a single request silently gets only ctx/4 (KNOWN-ISSUES I8). This
+    # is a single-user local manager, so every mode except `performance` pins
+    # `--parallel 1` to give one request the full context window. `performance`
+    # intentionally runs 4 slots for throughput. A per-model `--parallel` in
+    # spec.args overrides either default.
     mode = getattr(spec, 'mode', 'basic')
-    if mode == "tools":
-        argv.append("--jinja")
-    elif mode == "performance":
-        # Fixed: Use --parallel (not --n-parallel) to match llama-server syntax
-        argv.extend(["--jinja", "--parallel", "4", "--batch-size", "512", "--ubatch-size", "512"])
-    elif mode == "extended":
-        argv.extend(["--jinja", "--flash-attn", "on"])
-    # basic mode has no extra args
+    if mode == "performance":
+        add_default("--parallel", 4)
+        add_default("--jinja")
+        add_default("--batch-size", 512)
+        add_default("--ubatch-size", 512)
+    else:
+        add_default("--parallel", 1)
+        if mode == "tools":
+            add_default("--jinja")
+        elif mode == "extended":
+            add_default("--jinja")
+            add_default("--flash-attn", "on")
+        # basic mode: no --jinja (no tool calling), just the single slot.
 
-    # Add user-specified args (these can override mode defaults if needed)
-    if spec.args:
-        argv.extend(spec.args)
+    # Explicit per-model args last — defaults for these flags were skipped above,
+    # so this both applies the override and guarantees no duplicate flag.
+    argv.extend(user_args)
 
     argv.extend(["--host", spec.host, "--port", str(spec.port)])
     return argv
