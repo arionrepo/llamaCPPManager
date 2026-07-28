@@ -263,6 +263,7 @@ models:
     deployment_type: native  # native | container | mlx | mlx-vlm
     autostart: false
     args: []               # extra llama-server flags, e.g. [--ctx-size, '131072']
+    # llama_server_path: /path/to/llama.cpp-b10154/build/bin/llama-server  # optional per-model binary override
 ```
 
 **Configuration Fields:**
@@ -274,7 +275,12 @@ models:
   `extended` (`--jinja --flash-attn on`)
 - `deployment_type`: Runtime backend (`native` llama.cpp, `container`, `mlx`, `mlx-vlm`)
 - `autostart`: Start automatically (via launchd agent, when installed)
-- `args`: Extra flags appended to the launch command (last-wins over mode defaults)
+- `args`: Extra flags appended to the launch command (a flag here overrides the
+  matching mode/base default, and no duplicate is emitted)
+- `llama_server_path` *(optional)*: per-model llama-server binary override; when
+  unset the global `llama_server_path` is used. Set it with
+  `config add … --llama-server-path <path>` (or `config update`); pass an empty
+  string to clear.
 
 ### Port Management
 

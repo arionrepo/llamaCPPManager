@@ -51,10 +51,12 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
     spec = ModelSpec(name="m1", model_path=str(tmp_path / "m.gguf"), port=8081, host="127.0.0.1", args=["-c", "8192"])
     # create a dummy model file to satisfy validation elsewhere if added later
     Path(spec.model_path).write_text("x")
+    # create a dummy binary so start_process's existence check passes
+    binary = tmp_path / "llama-server"; binary.write_text("#!/bin/sh\n")
 
     # Test with timestamps disabled to get direct binary execution
     logging_config = {"enabled": True, "timestamps": False}
-    pid = proc.start_process("/opt/homebrew/bin/llama-server", spec, Path(tmp_path / "logs"), logging_config=logging_config)
+    pid = proc.start_process(str(binary), spec, Path(tmp_path / "logs"), logging_config=logging_config)
     assert pid == 12345
     argv = recorded["args"]
     # Contains binary, -m, model path, --host, --port, and extra args order preserved
@@ -115,6 +117,31 @@ def test_build_argv_dedups_user_overridden_flags(tmp_path):
     assert _count(argv, "--flash-attn") == 1 and _value_after(argv, "--flash-attn") == "on"
     # Non-overridden default still present exactly once.
     assert _count(argv, "--n-gpu-layers") == 1
+
+
+def test_build_argv_per_model_binary_override(tmp_path):
+    """I3: a per-model llama_server_path overrides the global binary; when unset
+    the global is used."""
+    from llamacpp_manager.process import build_argv
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    # override set
+    spec = ModelSpec(name="m", model_path=str(model), port=8081,
+                     llama_server_path="/custom/llama.cpp-b10154/llama-server")
+    assert build_argv("/global/llama-server", spec)[0] == "/custom/llama.cpp-b10154/llama-server"
+    # override unset -> global
+    spec2 = ModelSpec(name="m", model_path=str(model), port=8081)
+    assert build_argv("/global/llama-server", spec2)[0] == "/global/llama-server"
+
+
+def test_start_process_missing_binary_fails_loud(tmp_path):
+    """I2/I3: a non-existent absolute binary path raises a clear RuntimeError
+    rather than a bare Popen FileNotFoundError."""
+    from llamacpp_manager import process as proc
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    spec = ModelSpec(name="m", model_path=str(model), port=8081)
+    with pytest.raises(RuntimeError, match="binary not found"):
+        proc.start_process("/nonexistent/path/llama-server", spec, tmp_path / "logs",
+                            logging_config={"enabled": False})
 
 
 def test_stop_process_sends_sigterm(monkeypatch):

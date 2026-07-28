@@ -144,18 +144,11 @@ class ModelMonitor:
 
             logger.info(f"Attempting to restart crashed model: {model_name}")
 
-            # Build model spec
-            from .config import ModelSpec
-            spec = ModelSpec(
-                name=model_config["name"],
-                model_path=model_config["model_path"],
-                host=model_config.get("host", "127.0.0.1"),
-                port=int(model_config["port"]),
-                args=list(model_config.get("args", []) or []),
-                env=dict(model_config.get("env", {}) or {}),
-                autostart=bool(model_config.get("autostart", False)),
-                logging=model_config.get("logging"),
-            )
+            # Build model spec (canonical mapping — previously dropped
+            # mode/ctx_size/n_gpu_layers, so an auto-restart relaunched the model
+            # in basic mode with default context regardless of its config)
+            from .config import spec_from_dict
+            spec = spec_from_dict(model_config)
 
             # Start the process
             llama_path = config.get("llama_server_path")

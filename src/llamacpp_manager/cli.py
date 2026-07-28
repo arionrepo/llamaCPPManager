@@ -11,6 +11,7 @@ from . import __version__
 from .config import (
     DEFAULT_LLAMA_SERVER_PATH,
     ModelSpec,
+    spec_from_dict,
     add_model,
     get_model,
     load_config,
@@ -137,6 +138,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             args=parse_args_list(args.extra_args),
             env=parse_env(args.env or []),
             autostart=args.autostart,
+            llama_server_path=getattr(args, "llama_server_path", None) or None,
         )
         try:
             add_model(cfg, spec)
@@ -180,6 +182,10 @@ def cmd_config(args: argparse.Namespace) -> int:
             updates["env"] = parse_env(args.env)
         if args.autostart is not None:
             updates["autostart"] = bool(args.autostart)
+        if getattr(args, "llama_server_path", None) is not None:
+            # Non-empty sets the override; empty string clears it (spec_from_dict
+            # normalizes "" -> None so it is dropped from the persisted config).
+            updates["llama_server_path"] = args.llama_server_path
         try:
             update_model(cfg, args.name, updates)
             save_config(cfg)
@@ -204,19 +210,7 @@ def cmd_config(args: argparse.Namespace) -> int:
             return 1
 
         # Build the full command that would be executed
-        spec = ModelSpec(
-            name=m["name"],
-            model_path=m["model_path"],
-            host=m.get("host", "127.0.0.1"),
-            port=int(m["port"]),
-            mode=m.get("mode", "basic"),
-            ctx_size=m.get("ctx_size"),
-            n_gpu_layers=m.get("n_gpu_layers"),
-            args=list(m.get("args", []) or []),
-            env=dict(m.get("env", {}) or {}),
-            autostart=bool(m.get("autostart", False)),
-            deployment_type=m.get("deployment_type", "native"),
-        )
+        spec = spec_from_dict(m)
 
         # Route to correct argv builder based on deployment type
         if spec.deployment_type == "mlx":
@@ -835,6 +829,7 @@ Examples:
     sp_cfg_add.add_argument("--extra-args", help="Additional llama-server args as quoted string")
     sp_cfg_add.add_argument("--env", nargs="*", help="Environment variables: KEY=VALUE KEY2=VALUE2")
     sp_cfg_add.add_argument("--autostart", action="store_true", help="Auto-start this model with 'ensure-running'")
+    sp_cfg_add.add_argument("--llama-server-path", help="Per-model llama-server binary override (defaults to the global llama_server_path)")
     sp_cfg_add.set_defaults(func=cmd_config)
 
     sp_cfg_upd = cfg_sub.add_parser("update", help="Update an existing model entry")
@@ -848,6 +843,7 @@ Examples:
     sp_cfg_upd.add_argument("--env", nargs="*", help="Replace env vars: KEY=VALUE ... (omit to keep, pass empty to clear)")
     sp_cfg_upd.add_argument("--autostart", dest="autostart", action="store_true")
     sp_cfg_upd.add_argument("--no-autostart", dest="autostart", action="store_false")
+    sp_cfg_upd.add_argument("--llama-server-path", help="Per-model llama-server binary override (empty string clears it)")
     sp_cfg_upd.set_defaults(func=cmd_config)
 
     sp_cfg_show = cfg_sub.add_parser("show", help="🔍 Show detailed model configuration and parameters")
@@ -1365,35 +1361,23 @@ def cmd_start(args: argparse.Namespace) -> int:
     mlx_python_path = cfg.get("mlx_python_path", "python3")
     log_dir = Path(cfg.get("log_dir"))
     logging_config = cfg.get("logging", {})
-    # Validate llama-server binary unless overridden for tests or using MLX
+    # Validate the llama-server binary per selected model — each may override the
+    # global path (KNOWN-ISSUES I3). Skipped for tests and non-native (MLX) models.
     if not os.environ.get("LLAMACPP_MANAGER_SKIP_BIN_CHECK"):
-        lp = Path(llama_path).expanduser()
-        if not (lp.exists() and os.access(str(lp), os.X_OK)):
-            # Check if we're only starting MLX models
-            selected = _select_models(cfg, args.target)
-            all_mlx = all(m.get("deployment_type") == "mlx" for m in selected)
-            if not all_mlx:
-                print(f"error: llama-server not found or not executable at {lp}. Install via Homebrew: brew install llama.cpp", file=sys.stderr)
+        for m in _select_models(cfg, args.target):
+            if m.get("deployment_type") in ("mlx", "mlx-vlm"):
+                continue
+            resolved = m.get("llama_server_path") or llama_path
+            lp = Path(resolved).expanduser()
+            if not (lp.exists() and os.access(str(lp), os.X_OK)):
+                print(f"error: llama-server not found or not executable at {lp} "
+                      f"(model '{m.get('name')}'). Install via Homebrew: "
+                      f"brew install llama.cpp, or set a valid llama_server_path.", file=sys.stderr)
                 return 2
     selected = _select_models(cfg, args.target)
     rc = 0
     for m in selected:
-        spec = ModelSpec(
-            name=m["name"],
-            model_path=m["model_path"],
-            host=m.get("host", "127.0.0.1"),
-            port=int(m["port"]),
-            args=list(m.get("args", []) or []),
-            env=dict(m.get("env", {}) or {}),
-            autostart=bool(m.get("autostart", False)),
-            deployment_type=m.get("deployment_type", "native"),
-            mode=m.get("mode", "basic"),
-            ctx_size=m.get("ctx_size"),
-            n_gpu_layers=m.get("n_gpu_layers"),
-            group=m.get("group"),
-            metadata=m.get("metadata"),
-            logging=m.get("logging"),
-        )
+        spec = spec_from_dict(m)
         # Warn/refuse remote binds unless explicitly allowed
         if spec.host not in ("127.0.0.1", "localhost", "::1") and not getattr(args, "allow_remote", False):
             print(f"error: refusing to bind non-local host '{spec.host}' without --allow-remote", file=sys.stderr)
@@ -2314,15 +2298,7 @@ def cmd_launchd(args: argparse.Namespace) -> int:
     log_dir = Path(cfg.get("log_dir")).expanduser()
     if args.subcommand == "install":
         for m in selected:
-            spec = ModelSpec(
-                name=m["name"],
-                model_path=m["model_path"],
-                host=m.get("host", "127.0.0.1"),
-                port=int(m["port"]),
-                args=list(m.get("args", []) or []),
-                env=dict(m.get("env", {}) or {}),
-                autostart=bool(m.get("autostart", False)),
-            )
+            spec = spec_from_dict(m)
             data = render_plist(llama_path, spec, log_dir=log_dir)
             p = plist_path(spec.name)
             write_plist(p, data)
@@ -2371,15 +2347,7 @@ def cmd_ensure_running(args: argparse.Namespace) -> int:
         health = check_endpoint(host, port, timeout_ms=timeout_ms)
         if health.get("up"):
             continue
-        spec = ModelSpec(
-            name=name,
-            model_path=m["model_path"],
-            host=host,
-            port=port,
-            args=list(m.get("args", []) or []),
-            env=dict(m.get("env", {}) or {}),
-            autostart=True,
-        )
+        spec = spec_from_dict({**m, "autostart": True})
         if args.mode == "launchd":
             data = render_plist(llama_path, spec, log_dir=log_dir)
             p = plist_path(spec.name)

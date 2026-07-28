@@ -23,7 +23,8 @@ from .config import (
     get_model_group,
     get_model_group_for_model,
     list_model_groups,
-    ModelSpec
+    ModelSpec,
+    spec_from_dict,
 )
 from .process import start_process, stop_process
 from .utils import write_pid, read_pid, process_alive, port_in_use
@@ -177,20 +178,9 @@ class ModelManager:
         log_dir = Path(self.config.get("log_dir"))
         logging_config = self.config.get("logging", {})
 
-        # Create ModelSpec from config
-        spec = ModelSpec(
-            name=model_config["name"],
-            model_path=model_config["model_path"],
-            host=model_config.get("host", "127.0.0.1"),
-            port=int(model_config["port"]),
-            args=list(model_config.get("args", []) or []),
-            env=dict(model_config.get("env", {}) or {}),
-            autostart=bool(model_config.get("autostart", False)),
-            deployment_type=model_config.get("deployment_type", "native"),
-            group=model_config.get("group"),
-            metadata=model_config.get("metadata"),
-            logging=model_config.get("logging")
-        )
+        # Create ModelSpec from config (canonical mapping — previously dropped
+        # mode/ctx_size/n_gpu_layers, so a managed start ignored the model's mode)
+        spec = spec_from_dict(model_config)
 
         # Check port availability
         if port_in_use(spec.host, spec.port):

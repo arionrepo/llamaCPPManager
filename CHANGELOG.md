@@ -6,6 +6,39 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.07.28.3] - 2026-07-28
+
+### Added
+
+- **Per-model `llama_server_path` override (KNOWN-ISSUES I3).** A model may now
+  pin its own llama-server binary (e.g. a newer/fixed build) without changing
+  the global default. Set via `config add … --llama-server-path <path>` or
+  `config update … --llama-server-path <path>` (empty string clears it); the
+  field is persisted only when set. `build_argv`, the launchd argv builder, the
+  `start` binary pre-check, and `start_process`'s validation all resolve
+  `spec.llama_server_path or <global>`.
+- **Fail-loud on a missing binary.** `start_process` now raises a clear
+  `RuntimeError` naming the model and path when the resolved (absolute)
+  llama-server binary does not exist, instead of a bare `Popen`
+  `FileNotFoundError` (KNOWN-ISSUES I2/I3).
+
+### Fixed
+
+- **Auto-restart / managed start ignored `mode`/`ctx_size`/`n_gpu_layers`
+  (KNOWN-ISSUES I6).** `monitor.py` and `model_manager.py` built `ModelSpec`
+  without those fields, so a monitor-triggered restart relaunched a model in
+  `basic` mode with default context regardless of its config. All config→spec
+  construction now routes through a single canonical `config.spec_from_dict`;
+  `update_model` uses it too, fixing a lossy round-trip that wiped
+  `ctx_size`/`n_gpu_layers` on any `config update`.
+
+### Known issues
+
+- **launchd argv diverges from `build_argv` (new: I9).** launchd-installed
+  agents still miss `--n-gpu-layers`/`--ctx-size`/mode flags/`--parallel`;
+  tracked for a follow-up that unifies the two builders. The per-model binary
+  override *is* honored by launchd.
+
 ## [2026.07.28.2] - 2026-07-28
 
 ### Fixed

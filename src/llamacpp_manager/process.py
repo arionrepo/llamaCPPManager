@@ -26,7 +26,12 @@ def build_argv(llama_server_path: str, spec: ModelSpec) -> List[str]:
     elif not expanded_path.exists():
         raise RuntimeError(f"Model file not found: {expanded_path}")
 
-    argv: List[str] = [llama_server_path, "-m", model_path]
+    # Per-model binary override (KNOWN-ISSUES I3): a model may pin its own
+    # llama-server build (e.g. a newer/fixed commit) without changing the global
+    # default. Falls back to the global path when unset.
+    server_path = getattr(spec, "llama_server_path", None) or llama_server_path
+
+    argv: List[str] = [server_path, "-m", model_path]
 
     # Per-model args take precedence over our base/mode defaults. Collect the
     # flag tokens the user set explicitly so we never emit a duplicate default
@@ -123,6 +128,20 @@ def start_process(
     if extra_env:
         env.update(extra_env)
     argv = build_argv(llama_server_path, spec)
+
+    # Fail loud on a missing binary rather than letting Popen raise a bare
+    # FileNotFoundError with no context (KNOWN-ISSUES I2/I3). argv[0] is the
+    # resolved server path (per-model override or global). Only enforce for
+    # absolute paths — a bare name is resolved via PATH by the OS.
+    server_path = argv[0]
+    if os.path.sep in server_path and not Path(server_path).expanduser().exists():
+        from .lifecycle_log import log_event as _log_event
+        _log_event("process.start.binary_missing", model=spec.name, server_path=server_path)
+        raise RuntimeError(
+            f"llama-server binary not found for model '{spec.name}': {server_path}. "
+            f"Set a valid global 'llama_server_path' or a per-model override."
+        )
+
     log_event("process.start.begin", model=spec.name, caller="process.start_process",
               argv=argv, port=spec.port, deployment="native",
               logging_enabled=enabled, timestamps=timestamps)

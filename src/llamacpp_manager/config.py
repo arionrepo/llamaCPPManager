@@ -28,6 +28,7 @@ class ModelSpec:
     group: Optional[str] = None  # Model group name for mutual exclusion
     metadata: Optional[Dict[str, Any]] = None  # size_gb, ram_gb, use_case, etc.
     logging: Optional[Dict[str, Any]] = None  # enabled, max_bytes, backups
+    llama_server_path: Optional[str] = None  # Per-model binary override; if None, uses the global cfg["llama_server_path"] (KNOWN-ISSUES I3)
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -38,10 +39,41 @@ class ModelSpec:
             d["env"] = {}
         if d.get("metadata") is None:
             d["metadata"] = {}
-        # Don't include group if None
+        # Don't include optional scalars that are unset (keeps YAML clean)
         if d.get("group") is None:
             del d["group"]
+        if d.get("llama_server_path") is None:
+            del d["llama_server_path"]
         return d
+
+
+def spec_from_dict(m: Dict[str, Any]) -> "ModelSpec":
+    """Canonical mapping from a persisted config model-dict to a ModelSpec.
+
+    Use this everywhere a ModelSpec is built from config (start, dry-run,
+    monitor auto-restart, launchd, update) so every field round-trips
+    consistently. Threading fields through divergent inline constructors
+    previously dropped `mode`/`ctx_size`/`n_gpu_layers` on some paths
+    (e.g. monitor-triggered restarts relaunched in basic mode).
+    """
+    return ModelSpec(
+        name=m["name"],
+        model_path=m["model_path"],
+        host=m.get("host", "127.0.0.1"),
+        port=int(m["port"]),
+        args=list(m.get("args", []) or []),
+        env=dict(m.get("env", {}) or {}),
+        autostart=bool(m.get("autostart", False)),
+        deployment_type=m.get("deployment_type", "native"),
+        mode=m.get("mode", "basic"),
+        ctx_size=m.get("ctx_size"),
+        n_gpu_layers=m.get("n_gpu_layers"),
+        group=m.get("group"),
+        metadata=m.get("metadata"),
+        logging=m.get("logging"),
+        # normalize "" -> None so an empty override is dropped, not persisted
+        llama_server_path=(m.get("llama_server_path") or None),
+    )
 
 
 @dataclass
@@ -232,20 +264,10 @@ def update_model(cfg: Dict[str, Any], name: str, updates: Dict[str, Any]) -> Non
     if not m:
         raise ValueError(f"model '{name}' not found")
     merged = {**m, **{k: v for k, v in updates.items() if v is not None}}
-    spec = ModelSpec(
-        name=merged.get("name", name),
-        model_path=merged["model_path"],
-        host=merged.get("host", "127.0.0.1"),
-        port=int(merged["port"]),
-        args=list(merged.get("args", []) or []),
-        env=dict(merged.get("env", {}) or {}),
-        autostart=bool(merged.get("autostart", False)),
-        deployment_type=merged.get("deployment_type", "native"),
-        mode=merged.get("mode", "basic"),
-        group=merged.get("group"),
-        metadata=merged.get("metadata"),
-        logging=merged.get("logging"),
-    )
+    merged.setdefault("name", name)
+    # Canonical mapping — preserves ctx_size/n_gpu_layers/llama_server_path that
+    # the previous inline constructor silently dropped on every update.
+    spec = spec_from_dict(merged)
     errs = validate_model(cfg, spec, updating=True)
     if errs:
         raise ValueError("; ".join(errs))

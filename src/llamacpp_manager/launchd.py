@@ -23,7 +23,11 @@ def plist_path(name: str) -> Path:
 
 
 def build_program_arguments(llama_server_path: str, spec: ModelSpec) -> List[str]:
-    argv: List[str] = [llama_server_path, "-m", spec.model_path]
+    # Per-model binary override (KNOWN-ISSUES I3), consistent with process.build_argv.
+    # NOTE: unlike process.build_argv this does NOT apply mode/ctx/parallel defaults
+    # — the launchd path has a known argv divergence tracked as I9.
+    server_path = getattr(spec, "llama_server_path", None) or llama_server_path
+    argv: List[str] = [server_path, "-m", spec.model_path]
     if spec.args:
         argv.extend(spec.args)
     argv.extend(["--host", spec.host, "--port", str(spec.port)])
