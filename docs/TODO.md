@@ -36,6 +36,12 @@ This file tracks actionable tasks using GitHub task list checkboxes. Update as w
 - [x] CLI: `config list --json`
 - [x] Tests for health and JSON serialization
  - [x] CLI: `ensure-running` to auto-start missing autostart models
+- [x] **Distinguish externally-started processes in `status` + expose log-capture state** (added + completed 2026-07-28, commit `8ac9a5d`, v2026.07.28.1)
+  - Trigger: `mistral-small-24b` server started outside the manager (by the hermes agent on port 8089) reported as running in `status` but wrote nothing to `<name>.log`, because the manager only wires up stdout/stderr capture at its own spawn time. `status` gave no signal the process was unmanaged, so it looked like a silent logging bug.
+  - A process discovered only by port/model-path scan (no manager PID file, no launchd plist) is now `process_source: "external"` (was conflated into `"direct"`). launchd-managed discoveries → `"launchd"`.
+  - Added `logs_available` (bool/null) and `logs_hint` (string/null) to every model status entry. `status` table gained a `source` column + prints a `⚠` note per external model. `logs <model>` warns when the answering process was not manager-started (log may be stale).
+  - Files: `src/llamacpp_manager/cli.py` (`_gather_status`, `_print_table`, `cmd_logs`), `tests/test_discovery_status.py`, `tests/fixtures/status_schema.json` (schema v1 — added `external` enum value + 2 fields).
+  - This addresses the *visibility* half of the confusion in `KNOWN-ISSUES.md` (external/reparented servers, I7); it does NOT capture logs for foreign processes — not possible for a PID the manager didn't spawn on macOS. Operator rule stands: start via `llamacpp-manager start <name>` to get logs.
 
 ## M4 — launchd Autostart
 - [x] Implement `launchd.py` (render/load/unload plists)
