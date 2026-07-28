@@ -15,15 +15,17 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 
 ## Issues
 
-### I1 — Two divergent configs; unclear which is authoritative  (severity: high)
-- pipx CLI reads `~/.config/llamacpp-manager/models.yaml`.
-- GUI reads `~/Library/Application Support/llamaCPPManager/config.yaml`.
-- They disagree: e.g. mistral-small is `mode: performance` in the pipx models.yaml but `mode: tools` in the GUI config; `llama_server_path` differs between them. The live server is launched by the GUI, so the pipx CLI's view is misleading.
-- **Impact:** operator edits the "wrong" config and nothing changes. Consolidate to one source of truth, or make the divergence explicit.
+### I1 — Two divergent configs; unclear which is authoritative  (severity: high) — **RECLASSIFIED 2026-07-28: original premise FALSE; root cause was a stale README. Doc fixed.**
+- **Original claim (2026-07-27):** "pipx CLI reads `~/.config/llamacpp-manager/models.yaml`; GUI reads `~/Library/Application Support/llamaCPPManager/config.yaml`; they diverge."
+- **Verified false (2026-07-28):** `config.py:load_config()` → `utils.py:config_path()` reads **only** `~/Library/Application Support/llamaCPPManager/config.yaml`. There is **no code path** that reads `~/.config/llamacpp-manager/models.yaml`. The CLI and GUI already share one source of truth (confirmed: `llamacpp-manager config list --json` returns the 36-model Application Support config, not the 15-model `~/.config` file).
+- **Actual root cause:** `README.md` (→ packaged `PKG-INFO`) documented the config location as `~/.config/llamacpp-manager/models.yaml` **and** used a legacy dict schema (`path`/`context_size`/`auto_start`). An operator/tool following that doc creates a `~/.config/.../models.yaml` that nothing reads — producing the exact "edit does nothing" symptom, but from a dead orphan file, not a competing live config.
+- **Fix applied 2026-07-28:** README Model Configuration section corrected — right path (`~/Library/Application Support/llamaCPPManager/config.yaml`), correct list schema, note that `~/.config/llamacpp-manager/` is catalog-cache-only, and guidance to prefer `config add/update` over hand-editing.
+- **Residual (open, low):** an orphan `~/.config/llamacpp-manager/models.yaml` (15 models, includes a **duplicate port 8089** for `mistral-small-3.2-24b` + `qwen-32b`) exists on this host, birth-time 2026-07-28 17:08 — provenance unconfirmed (possibly written by hermes or a personal script; **not** the manager). It is inert. Operator decision: delete it or leave it. The manager will never read it.
 
-### I2 — pipx CLI `llama_server_path` points at a non-existent binary  (severity: high)
-- `~/.config/llamacpp-manager/models.yaml` → `llama_server_path: /opt/homebrew/bin/llama-server` which **does not exist** on this host.
-- **Impact:** `llamacpp-manager` CLI cannot start native models; silently the GUI path is the only working one.
+### I2 — pipx CLI `llama_server_path` points at a non-existent binary  (severity: high) — **CLOSED / MOOT 2026-07-28**
+- **Original claim (2026-07-27):** `~/.config/llamacpp-manager/models.yaml` → `llama_server_path: /opt/homebrew/bin/llama-server` (does not exist).
+- **Status 2026-07-28:** Moot — that file is not read by the manager (see I1). Independently, the orphan file's `llama_server_path` has since been updated to the valid local build path, and the **live** config's `llama_server_path` = `/Users/liborballaty/LocalProjects/GitHubProjectsDocuments/llama.cpp/build/bin/llama-server`. No CLI-cannot-start-native-models condition exists from this cause.
+- **Confirmed 2026-07-28:** live `llama.cpp/build/bin/llama-server` reports `version: 10154 (0e4a03622)` (built 2026-07-27 23:37). The 2026-07-27 mitigation has been consolidated — the canonical `llama.cpp/build` was rebuilt to b10154 and the temporary `llama.cpp-b10154/` dir no longer exists. No regression to b8559. Both live config and orphan file point at this valid b10154 binary.
 
 ### I3 — Single global `llama_server_path`; no per-model binary override  (severity: medium)
 - `build_argv` / config use one global binary for all models. Can't run one model on a fixed/newer llama.cpp build while leaving others on another.
@@ -32,7 +34,8 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 ### I4 — Stale/crashing binary shipped as the default path  (severity: high, mitigated)
 - GUI `llama_server_path` was `…/llama.cpp/build/bin/llama-server` (build **b8559**), which crashes on Mistral-Small-3.2 tool calls (`Failed to parse input at pos N: </s>`), fixed upstream in llama.cpp **b10154**.
 - **Mitigation applied 2026-07-27:** GUI `llama_server_path` repointed to `…/llama.cpp-b10154/build/bin/llama-server`.
-- **Follow-up:** decide the canonical llama.cpp build/version policy; b8559 is ~1595 commits behind master.
+- **Consolidated 2026-07-28 (verified):** the canonical `…/llama.cpp/build/bin/llama-server` was itself rebuilt to **b10154** (`--version` → `10154 (0e4a03622)`, built 2026-07-27 23:37); the temporary `llama.cpp-b10154/` dir is gone and both configs point at the canonical path. The crash-binary condition is cleared for now.
+- **Follow-up (still open):** decide the canonical llama.cpp build/version *policy* so the canonical `build/` can't silently regress to an old commit on the next rebuild. A per-model `llama_server_path` / build override (see I3) is the durable fix.
 
 ### I5 — Duplicate `--ctx-size` in launch argv  (severity: low)
 - mistral entry yields `--ctx-size 32768 … --ctx-size 65536` (mode default from `build_argv` + per-model `args: [--ctx-size, '65536']`). Last wins (65536), so harmless, but sloppy and confusing in logs.

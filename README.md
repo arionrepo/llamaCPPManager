@@ -133,9 +133,11 @@ llamacpp-manager history search "keyword"  # Search chat history
 llamacpp-manager history export --format json  # Export conversations
 
 # Configuration
-llamacpp-manager config show             # Display current configuration
-llamacpp-manager config add-model <name> --path /path/to/model.gguf
-llamacpp-manager config set-port <model> <port>  # Assign specific port
+llamacpp-manager config list             # List configured models and settings
+llamacpp-manager config show <model>     # Detailed config/parameters for one model
+llamacpp-manager config add <name> /path/to/model.gguf --port 8081 [--mode tools]
+llamacpp-manager config update <model> --port 8090   # Change port (or --mode/--model-path)
+llamacpp-manager config remove <model>   # Remove a model entry
 ```
 
 ### GUI Application
@@ -221,28 +223,58 @@ echo "GUI app path: $APP_PATH"
 
 ### Model Configuration
 
-Models are configured in `~/.config/llamacpp-manager/models.yaml`:
+The canonical config file is:
+
+```
+~/Library/Application Support/llamaCPPManager/config.yaml
+```
+
+The CLI (`llamacpp-manager`) and the macOS GUI **read and write the same
+file** — there is one source of truth. The location can be overridden with the
+`LLAMACPP_MANAGER_CONFIG_DIR` environment variable (used mainly by tests).
+
+> **Note:** a `~/.config/llamacpp-manager/` directory may exist on your system —
+> it is used only for the Hugging Face catalog cache
+> (`hf_catalog_cache.json`), **not** for model configuration. A `models.yaml`
+> placed there is ignored. Earlier docs incorrectly pointed here; edit the
+> Application Support `config.yaml` instead.
+
+**Prefer the CLI over hand-editing** so validation (unique ports, path checks)
+runs:
+
+```bash
+llamacpp-manager config add phi3 /Users/username/llms/phi3/Phi-3-mini-4k-instruct-fp16.gguf --port 8081
+llamacpp-manager config list
+llamacpp-manager config update phi3 --mode tools
+```
+
+The on-disk schema is a top-level `llama_server_path` plus a **list** of model
+entries:
 
 ```yaml
+llama_server_path: /Users/username/LocalProjects/.../llama.cpp/build/bin/llama-server
+log_dir: /Users/username/Library/Logs/llamaCPPManager
 models:
-  phi3:
-    path: /Users/username/models/phi-3-mini-4k-instruct.Q4_K_M.gguf
+  - name: phi3
+    model_path: /Users/username/llms/phi3/Phi-3-mini-4k-instruct-fp16.gguf
+    host: 127.0.0.1
     port: 8081
-    context_size: 4096
-    auto_start: false
-
-  smollm3:
-    path: /Users/username/models/SmolLM2-1.7B-Instruct-Q8_0.gguf
-    port: 8082
-    context_size: 2048
-    auto_start: false
+    mode: basic            # basic | tools | performance | extended
+    deployment_type: native  # native | container | mlx | mlx-vlm
+    autostart: false
+    args: []               # extra llama-server flags, e.g. [--ctx-size, '131072']
 ```
 
 **Configuration Fields:**
-- `path`: Absolute path to GGUF model file
-- `port`: Port number for llama-server (8081-8089 recommended)
-- `context_size`: Context window size (tokens)
-- `auto_start`: Whether to start on system boot (future feature)
+- `name`: Unique model identifier used by all CLI/GUI commands
+- `model_path`: Absolute path to the GGUF file (or model dir for MLX)
+- `host` / `port`: Bind address and port for llama-server (8081-8099 typical)
+- `mode`: Flag preset — `basic` (no `--jinja`, no tool calling), `tools`
+  (`--jinja`), `performance` (`--jinja --parallel 4 --batch-size 512`),
+  `extended` (`--jinja --flash-attn on`)
+- `deployment_type`: Runtime backend (`native` llama.cpp, `container`, `mlx`, `mlx-vlm`)
+- `autostart`: Start automatically (via launchd agent, when installed)
+- `args`: Extra flags appended to the launch command (last-wins over mode defaults)
 
 ### Port Management
 
