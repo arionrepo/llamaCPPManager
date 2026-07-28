@@ -23,15 +23,14 @@ def plist_path(name: str) -> Path:
 
 
 def build_program_arguments(llama_server_path: str, spec: ModelSpec) -> List[str]:
-    # Per-model binary override (KNOWN-ISSUES I3), consistent with process.build_argv.
-    # NOTE: unlike process.build_argv this does NOT apply mode/ctx/parallel defaults
-    # — the launchd path has a known argv divergence tracked as I9.
-    server_path = getattr(spec, "llama_server_path", None) or llama_server_path
-    argv: List[str] = [server_path, "-m", spec.model_path]
-    if spec.args:
-        argv.extend(spec.args)
-    argv.extend(["--host", spec.host, "--port", str(spec.port)])
-    return argv
+    # KNOWN-ISSUES I9: a launchd agent must launch with the EXACT same command as
+    # `llamacpp-manager start`, so delegate to the single source of truth. This
+    # gives launchd agents GPU offload, context sizing, mode flags, --parallel,
+    # the per-model binary override (I3), flag dedup (I5) and the single-slot
+    # default (I8) — none of which the old bespoke builder applied. Like `start`,
+    # this now validates the model file exists (build_argv raises otherwise).
+    from .process import build_argv
+    return build_argv(llama_server_path, spec)
 
 
 def render_plist(llama_server_path: str, spec: ModelSpec, *, log_dir: Path) -> Dict[str, Any]:

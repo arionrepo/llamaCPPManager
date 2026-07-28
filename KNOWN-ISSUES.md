@@ -60,10 +60,11 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 - **Fix for the manager:** for single-user/agentic models, default `--parallel 1` (or make it a per-model/per-mode setting); don't let mode presets silently inherit a 4-slot server default.
 - **Fixed 2026-07-28:** `build_argv` now emits `--parallel 1` for basic/tools/extended; `performance` keeps 4. Per-model `--parallel` in `args` overrides. Tests in `test_process.py`.
 
-### I9 — launchd argv builder diverges from `build_argv`  (severity: medium) — **NEW, discovered 2026-07-28**
+### I9 — launchd argv builder diverges from `build_argv`  (severity: medium) — **CLOSED 2026-07-28 (v2026.07.28.4)**
 - `launchd.build_program_arguments` is a second, simpler argv builder: `[binary, -m, model_path] + spec.args + [--host, --port]`. It does **not** apply `--n-gpu-layers`, `--ctx-size`, mode flags, or the new `--parallel 1` default. So a model started via a launchd agent gets a materially different (and worse) launch command than the same model started via `llamacpp-manager start`.
 - **Impact:** autostart/launchd models silently miss GPU offload, context sizing, jinja/tool support, and single-slot pinning. The 2026-07-28 I3 fix made it honor the per-model binary, but the flag divergence remains.
-- **Fix:** have `build_program_arguments` reuse `process.build_argv` (minus the log-wrapper concern) so both paths produce identical launch commands. Needs care: changing launchd argv affects already-installed autostart agents on next reload; verify against a real launchd agent.
+- **Fixed 2026-07-28:** `build_program_arguments` now delegates to `process.build_argv`, so launchd `ProgramArguments` are byte-identical to what `start` runs (GPU offload, ctx sizing, mode flags, `--parallel 1`, dedup, per-model binary). `test_launchd.py::test_render_plist_matches_start_argv` asserts equality. **Behavior change:** like `start`, launchd render now validates the model file exists (raises if missing) — installing an agent for a missing model now fails loud instead of writing a plist that would fail at load.
+- **Not yet verified against a live launchd agent** — asserted equal to the verified `start` argv via unit test; a real `launchd install` + reload on the machine is the remaining supervised check (bundles naturally with I7).
 
 ## Mode reference (from `src/llamacpp_manager/process.py:build_argv`)
 | Mode | Extra flags (beyond `--ctx-size <n>` default 32768, `--n-gpu-layers 999`) |

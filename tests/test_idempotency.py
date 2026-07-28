@@ -139,7 +139,8 @@ class TestLaunchdServiceIdempotency:
         """
         plist_file = tmp_path / "test.plist"
 
-        spec = ModelSpec(name="plist-test", model_path="/test/model", port=8083)
+        model_file = tmp_path / "plist-test.gguf"; model_file.write_text("x")
+        spec = ModelSpec(name="plist-test", model_path=str(model_file), port=8083)
         plist_data = render_plist("/usr/bin/llama-server", spec, log_dir=tmp_path)
 
         # Write plist multiple times
@@ -208,7 +209,8 @@ class TestLaunchdServiceIdempotency:
             from llamacpp_manager.launchd import agents_dir, write_plist, render_plist
 
             service_dir = agents_dir()
-            spec = ModelSpec(name="dir-test", model_path="/test", port=8084)
+            model_file = tmp_path / "dir-test.gguf"; model_file.write_text("x")
+            spec = ModelSpec(name="dir-test", model_path=str(model_file), port=8084)
             plist_data = render_plist("/usr/bin/llama-server", spec, log_dir=tmp_path)
             plist_file = service_dir / "test.plist"
 

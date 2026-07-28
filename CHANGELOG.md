@@ -6,6 +6,24 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.07.28.4] - 2026-07-28
+
+### Fixed
+
+- **launchd agents now launch with the same command as `start` (KNOWN-ISSUES
+  I9).** `launchd.build_program_arguments` was a second, simpler argv builder
+  that omitted `--n-gpu-layers`, `--ctx-size`, mode flags, and `--parallel`, so
+  autostart/launchd-managed models ran with a materially worse launch command
+  than `llamacpp-manager start`. It now delegates to `process.build_argv`, so
+  the plist `ProgramArguments` are identical (GPU offload, context sizing, mode
+  flags, single-slot default, flag dedup, per-model binary override).
+
+### Changed
+
+- **`launchd install` now validates the model file exists.** Because launchd
+  argv is built by `build_argv`, rendering a plist for a missing model file
+  raises a clear error instead of writing a plist that would fail at load time.
+
 ## [2026.07.28.3] - 2026-07-28
 
 ### Added
