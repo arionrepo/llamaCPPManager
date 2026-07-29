@@ -4,14 +4,16 @@
 **Description:** Issues discovered while diagnosing Mistral-Small-3.2-24B tool-calling failures on port 8089 (2026-07-27). Recorded for follow-up.
 **Author:** Claude (Opus 4.8)
 **Created:** 2026-07-27
-**Last Updated:** 2026-07-28
-**Last Updated By:** Claude (Opus 4.8)
+**Last Updated:** 2026-07-29
+**Last Updated By:** Claude (Opus 4.8) — verify-reconcile pass
 
 ## Context
 Session traced a Mistral-Small-3.2-24B tool-call crash (`</s>` parse 500) on 8089 to an outdated llama.cpp binary (b8559). Fixed by building b10154 and pointing the manager at it. Along the way, several manager issues surfaced.
 
 ## Update 2026-07-28 — external-process visibility now surfaced in `status`
-A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility** half of the "server runs on 8089 but the manager didn't start it" confusion that underlies several issues here (esp. I7). `status` now reports `process_source: "external"` for a live server discovered only by port scan (no manager PID file, no launchd plist), and adds `logs_available` / `logs_hint` fields plus a `⚠` note; `logs <model>` warns the log may be stale. This does **not** fix the root causes below (config divergence I1/I2, per-model binary I3, binary-version policy I4, lifecycle/reparenting I7, parallel-slots I8) — those remain open. It just makes an unmanaged/externally-started process obvious instead of looking like a silent logging bug.
+A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility** half of the "server runs on 8089 but the manager didn't start it" confusion that underlies several issues here (esp. I7). `status` now reports `process_source: "external"` for a live server discovered only by port scan (no manager PID file, no launchd plist), and adds `logs_available` / `logs_hint` fields plus a `⚠` note; `logs <model>` warns the log may be stale. This visibility commit did **not** by itself fix the root causes below — it just makes an unmanaged/externally-started process obvious instead of looking like a silent logging bug.
+
+**Root-cause status as of the 2026-07-28 remediation batch (v2026.07.28.2–.4):** I1 (reclassified; README fixed), I3, I5, I6 (largely), I8, and I9 were subsequently **closed** in later commits the same day (see per-issue entries below for commit hashes). I2 is moot. The only items still **open** are **I4** (canonical llama.cpp build/version *policy*, low) and **I7** (kill/restart lifecycle, deferred — needs supervised live testing, bundles with the I9 live-launchd check).
 
 ## Issues
 
