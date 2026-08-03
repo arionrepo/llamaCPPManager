@@ -155,17 +155,24 @@ def start_process(
             # For timestamp logging, we need a persistent helper process
             # since daemon threads die when the CLI exits.
             # Use a wrapper script approach instead.
-            import tempfile
             import shlex
 
-            # Create a wrapper script that adds timestamps
-            wrapper_script = tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, dir='/tmp')
-            wrapper_path = wrapper_script.name
+            # Timestamp-logger wrapper. Use a DETERMINISTIC per-model path (not a
+            # random /tmp file) so wrappers cannot accumulate: each start overwrites
+            # the model's single wrapper, and the wrapper self-deletes on exit via a
+            # trap. The previous approach (tempfile.NamedTemporaryFile in /tmp +
+            # daemon-thread unlink) leaked because the daemon thread dies when the
+            # short-lived CLI process exits — see KNOWN-ISSUES I12.
+            wrappers_dir = log_dir / "wrappers"
+            wrappers_dir.mkdir(parents=True, exist_ok=True)
+            wrapper_path = str(wrappers_dir / f"{spec.name}.sh")
 
             # Build the wrapper script content
             quoted_argv = ' '.join(shlex.quote(arg) for arg in argv)
             script_content = f'''#!/bin/bash
 # Timestamp logger wrapper for {spec.name}
+# Self-deletes on exit; overwritten on each start (KNOWN-ISSUES I12).
+trap 'rm -f "$0"' EXIT
 # Intelligently tag lines as INFO or ERROR based on content
 
 exec {quoted_argv} 2>&1 | while IFS= read -r line; do
@@ -177,8 +184,8 @@ exec {quoted_argv} 2>&1 | while IFS= read -r line; do
     fi
 done >> {shlex.quote(str(log_path))}
 '''
-            wrapper_script.write(script_content)
-            wrapper_script.close()
+            with open(wrapper_path, "w") as wrapper_script:
+                wrapper_script.write(script_content)
 
             # Make wrapper executable
             os.chmod(wrapper_path, 0o755)
@@ -191,16 +198,10 @@ done >> {shlex.quote(str(log_path))}
             log_event("process.start.wrapper_spawned", model=spec.name,
                       pid=wrapper_pid, wrapper_path=wrapper_path)
 
-            # Clean up wrapper script after a delay (it will keep running)
-            import threading
-            def cleanup_wrapper():
-                import time
-                time.sleep(5)
-                try:
-                    os.unlink(wrapper_path)
-                except:
-                    pass
-            threading.Thread(target=cleanup_wrapper, daemon=True).start()
+            # Wrapper cleanup is handled by the wrapper's own `trap ... EXIT`
+            # (self-delete on server exit) plus the deterministic path being
+            # overwritten on each start. No daemon-thread unlink — that died with
+            # the CLI and leaked /tmp scripts (KNOWN-ISSUES I12).
 
             # CRITICAL FIX: Track actual llama-server child PID, not bash wrapper
             # The wrapper is just a logging helper; we need to track the real server process

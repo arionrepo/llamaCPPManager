@@ -15,7 +15,7 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 
 **Root-cause status as of the 2026-07-28 remediation batch (v2026.07.28.2–.4):** I1 (reclassified; README fixed), I3, I5, I6 (largely), I8, and I9 were subsequently **closed** in later commits the same day (see per-issue entries below for commit hashes). I2 is moot. Still **open** from that batch: **I4** (canonical llama.cpp build/version *policy*, low) and **I7** (kill/restart lifecycle, deferred — needs supervised live testing, bundles with the I9 live-launchd check).
 
-**New issues from the 2026-07-29 live lifecycle test (corrected 2026-08-01), all OPEN:** **I10** (`start`/`restart` CLI hangs after spawning), **I11** (MLX `restart` port-release race), **I12** (`/tmp` timestamp-wrapper scripts leak). See the "Live lifecycle test results" block and per-issue entries below.
+**New issues from the 2026-07-29 live lifecycle test (corrected 2026-08-01):** **I10** (`start`/`restart` CLI hangs after spawning) — OPEN; **I11** (MLX `restart` port-release race) — OPEN; **I12** (`/tmp` timestamp-wrapper scripts leak) — **CLOSED 2026-08-03 (v2026.08.03.1)**. See the "Live lifecycle test results" block and per-issue entries below.
 
 ## Issues
 
@@ -86,9 +86,10 @@ Ran start → stop → restart → stop, one model at a time, via the **live pip
 - **Cosmetic sub-bug:** `cmd_restart`'s internal `cmd_stop` returns `1` ("not running") when the model was already stopped, so `restart` can report a non-zero exit (`max(r1,r2)`) even when the model then starts fine.
 - **Fix direction:** after stop, poll until the port is actually free (or health is down) before the start phase; treat "already stopped" as success within restart. GGUF restart passed live but shares the same structural gap (llama-server just releases the port faster).
 
-### I12 — timestamp-logger `/tmp` wrapper scripts leak  (severity: low) — **OPEN**
-- `process.py:start_process` writes a per-start bash wrapper via `NamedTemporaryFile(delete=False, dir='/tmp')` and attempts cleanup in a **daemon thread**, which dies when the short-lived CLI exits — the exact failure mode the surrounding code comment warns about. Result: `/tmp/tmp*.sh` files accumulate indefinitely (8 observed from a single session).
-- **Fix direction (built-in management):** (1) write to a deterministic per-model path under app-support (`wrappers/<model>.sh`), overwritten each start — bounds it to one file per model and moves it out of `/tmp`; (2) have the stop path delete that model's wrapper (start creates, stop removes); (3) extend the existing `cleanup` command to sweep wrappers whose owning process is dead, and sweep on start. Remove the non-functional daemon-thread cleanup.
+### I12 — timestamp-logger `/tmp` wrapper scripts leak  (severity: low) — **CLOSED 2026-08-03 (v2026.08.03.1)**
+- `process.py:start_process` wrote a per-start bash wrapper via `NamedTemporaryFile(delete=False, dir='/tmp')` and attempted cleanup in a **daemon thread**, which dies when the short-lived CLI exits — the exact failure mode the surrounding code comment warns about. Result: `/tmp/tmp*.sh` files accumulated indefinitely (8 observed from a single session).
+- **Fixed 2026-08-03:** the wrapper is now written to a deterministic per-model path `<log_dir>/wrappers/<model>.sh` (created via `mkdir(parents=True, exist_ok=True)`, **overwritten each start** → at most one file per model, out of `/tmp`) and **self-deletes on exit** via `trap 'rm -f "$0"' EXIT`. The non-functional daemon-thread cleanup was removed. Test: `test_process.py::test_start_process_wrapper_uses_deterministic_path_and_self_deletes`. The spawn/detach and `pgrep -P` child-tracking logic was intentionally left untouched (fragile I7 territory).
+- **Residual (low):** on `SIGKILL` the `EXIT` trap does not fire, so one stale wrapper can remain until the next start overwrites it (still bounded to one per model). An optional sweep in the `cleanup` command (remove wrappers whose owning process is dead) would close even that edge — deferred.
 
 ## Mode reference (from `src/llamacpp_manager/process.py:build_argv`)
 | Mode | Extra flags (beyond `--ctx-size <n>` default 32768, `--n-gpu-layers 999`) |

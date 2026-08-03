@@ -6,6 +6,19 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.03.1] - 2026-08-03
+
+### Fixed
+
+- **Timestamp-logger wrapper scripts no longer leak to `/tmp` (KNOWN-ISSUES
+  I12).** `start_process` previously wrote each server's timestamp-logging
+  wrapper to a random `/tmp/tmp*.sh` and tried to remove it in a daemon thread
+  that dies when the short-lived CLI exits, so the scripts accumulated
+  indefinitely. The wrapper is now written to a deterministic per-model path
+  (`<log_dir>/wrappers/<model>.sh`, overwritten each start) and self-deletes via
+  a `trap 'rm -f "$0"' EXIT`, bounding it to one file per model and removing it
+  on server exit. The non-functional daemon-thread cleanup was removed.
+
 ## [2026.07.28.4] - 2026-07-28
 
 ### Fixed

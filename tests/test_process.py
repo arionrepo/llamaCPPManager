@@ -68,6 +68,40 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
     assert (tmp_path / "logs" / "m1.log").exists()
 
 
+def test_start_process_wrapper_uses_deterministic_path_and_self_deletes(tmp_path, monkeypatch):
+    """KNOWN-ISSUES I12: the timestamp-logger wrapper must be written to a
+    deterministic per-model path (log_dir/wrappers/<name>.sh), NOT a random /tmp
+    file, and must self-delete via a `trap ... EXIT` — no daemon-thread unlink."""
+    from llamacpp_manager import process as proc
+
+    recorded = {}
+
+    def fake_popen(args, stdout=None, stderr=None, env=None, start_new_session=False):
+        recorded["args"] = args
+        return DummyPopen(args, env=env)
+
+    monkeypatch.setattr(proc, "Popen", fake_popen)
+
+    log_dir = tmp_path / "logs"
+    spec = ModelSpec(name="m1", model_path=str(tmp_path / "m.gguf"), port=8081, host="127.0.0.1")
+    Path(spec.model_path).write_text("x")
+    binary = tmp_path / "llama-server"; binary.write_text("#!/bin/sh\n")
+
+    # timestamps=True selects the wrapper-script logging path
+    logging_config = {"enabled": True, "timestamps": True}
+    proc.start_process(str(binary), spec, log_dir, logging_config=logging_config)
+
+    wrapper = log_dir / "wrappers" / "m1.sh"
+    # Popen must launch the wrapper from the deterministic path, not /tmp
+    assert recorded["args"][0] == "/bin/bash"
+    assert recorded["args"][1] == str(wrapper)
+    assert not recorded["args"][1].startswith("/tmp/")
+    # Wrapper file was written there with a self-delete trap
+    assert wrapper.exists()
+    content = wrapper.read_text()
+    assert 'trap \'rm -f "$0"\' EXIT' in content
+
+
 def _count(argv, flag):
     return argv.count(flag)
 
