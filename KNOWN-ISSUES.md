@@ -15,7 +15,7 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 
 **Root-cause status as of the 2026-07-28 remediation batch (v2026.07.28.2–.4):** I1 (reclassified; README fixed), I3, I5, I6 (largely), I8, and I9 were subsequently **closed** in later commits the same day (see per-issue entries below for commit hashes). I2 is moot. Still **open** from that batch: **I4** (canonical llama.cpp build/version *policy*, low) and **I7** (kill/restart lifecycle, deferred — needs supervised live testing, bundles with the I9 live-launchd check).
 
-**New issues from the 2026-07-29 live lifecycle test (corrected 2026-08-01):** **I10** (`start`/`restart` CLI hangs after spawning) — OPEN; **I11** (MLX `restart` port-release race) — OPEN; **I12** (`/tmp` timestamp-wrapper scripts leak) — **CLOSED 2026-08-03 (v2026.08.03.1)**. See the "Live lifecycle test results" block and per-issue entries below.
+**New issues from the 2026-07-29 live lifecycle test (corrected 2026-08-01):** **I10** (`start`/`restart` CLI hangs after spawning) — OPEN; **I11** (MLX `restart` port-release race) — **CLOSED 2026-08-03 (v2026.08.03.2)**; **I12** (`/tmp` timestamp-wrapper scripts leak) — **CLOSED 2026-08-03 (v2026.08.03.1)**. See the "Live lifecycle test results" block and per-issue entries below.
 
 ## Issues
 
@@ -81,10 +81,10 @@ Ran start → stop → restart → stop, one model at a time, via the **live pip
 - **Impact:** anything scripting around `start`/`restart` blocks; interactive use looks hung. The server itself is unaffected.
 - **Fix direction:** fully detach the logging wrapper (setsid + redirect wrapper stdout to the logfile so the CLI never holds the pipe); optionally health-gate the success message so "started" means "answering". Same root mechanism as I7.
 
-### I11 — MLX `restart` race: port not released before re-start  (severity: medium) — **OPEN**
-- `cmd_restart` = `cmd_stop` + `cmd_start` with **no wait for port release between them**. `mlx_lm.server` frees its port more slowly than `llama-server`, so a back-to-back restart intermittently hits `cmd_start`'s port-in-use pre-check → `rc=2`, and the model does not come up. Reproduced live: both MLX models failed restart in the automated back-to-back run; a slower manual restart-from-stopped succeeded.
-- **Cosmetic sub-bug:** `cmd_restart`'s internal `cmd_stop` returns `1` ("not running") when the model was already stopped, so `restart` can report a non-zero exit (`max(r1,r2)`) even when the model then starts fine.
-- **Fix direction:** after stop, poll until the port is actually free (or health is down) before the start phase; treat "already stopped" as success within restart. GGUF restart passed live but shares the same structural gap (llama-server just releases the port faster).
+### I11 — MLX `restart` race: port not released before re-start  (severity: medium) — **CLOSED 2026-08-03 (v2026.08.03.2)**
+- `cmd_restart` = `cmd_stop` + `cmd_start` with **no wait for port release between them**. `mlx_lm.server` frees its port more slowly than `llama-server`, so a back-to-back restart intermittently hit `cmd_start`'s port-in-use pre-check → `rc=2`, and the model did not come up. Reproduced live: both MLX models failed restart in the automated back-to-back run; a slower manual restart-from-stopped succeeded.
+- **Cosmetic sub-bug:** `cmd_restart`'s internal `cmd_stop` returned `1` ("not running") when the model was already stopped, so `restart` could report a non-zero exit (`max(r1,r2)`) even when the model then started fine.
+- **Fixed 2026-08-03:** `cmd_restart` now waits (up to 10s) for each target's port to be released after stop; if still held, it force-kills whatever holds the model's own registered port (`lsof -ti tcp:<port>` → `SIGKILL`) and re-waits (up to 6s) before the start phase. It now returns the start result (`r2`) rather than `max(r1, r2)`, so a stop that found nothing running does not inflate the exit code. Verified live: 5/5 back-to-back MLX restarts succeeded (was flaky at 2/3). Validated via live smoke; `pytest` remains green (the fix is in the `stop`+`start` orchestration, exercised end-to-end rather than by a new unit test).
 
 ### I12 — timestamp-logger `/tmp` wrapper scripts leak  (severity: low) — **CLOSED 2026-08-03 (v2026.08.03.1)**
 - `process.py:start_process` wrote a per-start bash wrapper via `NamedTemporaryFile(delete=False, dir='/tmp')` and attempted cleanup in a **daemon thread**, which dies when the short-lived CLI exits — the exact failure mode the surrounding code comment warns about. Result: `/tmp/tmp*.sh` files accumulated indefinitely (8 observed from a single session).

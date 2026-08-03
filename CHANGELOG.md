@@ -6,6 +6,20 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.03.2] - 2026-08-03
+
+### Fixed
+
+- **MLX `restart` no longer intermittently fails with "port already in use"
+  (KNOWN-ISSUES I11).** `cmd_restart` (`stop` + `start`) had no wait between the
+  two phases; `mlx_lm.server` frees its port more slowly than `llama-server`, so
+  a back-to-back restart could hit `cmd_start`'s port-in-use pre-check (rc=2) and
+  fail to come up. `restart` now waits for the model's port to be released after
+  stop and, if it is still held, force-kills whatever holds the model's own
+  registered port before re-starting. `restart` also now reports success based on
+  the start result, so a stop that found nothing running no longer inflates the
+  exit code. Verified live: 5/5 back-to-back MLX restarts succeeded (was flaky).
+
 ## [2026.08.03.1] - 2026-08-03
 
 ### Fixed

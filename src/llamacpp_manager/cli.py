@@ -1641,12 +1641,56 @@ def cmd_stop(args: argparse.Namespace) -> int:
 
 
 def cmd_restart(args: argparse.Namespace) -> int:
+    from .lifecycle_log import log_event
     # Stop ignores missing pid files
     r1 = cmd_stop(argparse.Namespace(target=args.target, launchd=getattr(args, "launchd", False)))
     if args.dry_run:
         return 0
+
+    # KNOWN-ISSUES I11: wait for each target's port to actually be released
+    # before re-starting. `mlx_lm.server` frees its port more slowly than
+    # `llama-server`, so a back-to-back restart could otherwise hit cmd_start's
+    # port-in-use pre-check (rc=2) and fail to come up.
+    import time as _time
+    cfg = load_config()
+    for m in _select_models(cfg, args.target):
+        host = m.get("host", "127.0.0.1")
+        port = m.get("port")
+        if not port:
+            continue
+        deadline = _time.time() + 10.0
+        while _time.time() < deadline and port_in_use(host, port):
+            _time.sleep(0.25)
+        if port_in_use(host, port):
+            # Stop did not release the port in time (mlx_lm.server can be slow to
+            # exit and does not always honour SIGTERM promptly). Force-kill
+            # whatever still holds the model's OWN registered port, then re-wait,
+            # so cmd_start's pre-check does not fail with port-in-use (rc=2).
+            log_event("cli.restart.port_still_bound", model=m.get("name"), port=port,
+                      action="force_kill_by_port")
+            try:
+                import subprocess as _sp
+                res = _sp.run(["lsof", "-ti", f"tcp:{port}"],
+                              capture_output=True, text=True, timeout=3)
+                for pid_str in res.stdout.split():
+                    try:
+                        os.kill(int(pid_str), signal.SIGKILL)
+                    except (ValueError, ProcessLookupError, PermissionError):
+                        pass
+            except Exception:
+                pass
+            deadline2 = _time.time() + 6.0
+            while _time.time() < deadline2 and port_in_use(host, port):
+                _time.sleep(0.25)
+            if port_in_use(host, port):
+                print(f"warning: port {port} for {m.get('name')} still in use after "
+                      f"force-kill; start may fail", file=sys.stderr)
+
     r2 = cmd_start(argparse.Namespace(target=args.target, dry_run=False, launchd=getattr(args, "launchd", False), allow_remote=getattr(args, "allow_remote", False)))
-    return max(r1, r2)
+    # KNOWN-ISSUES I11 (cosmetic): a restart's success is defined by the start
+    # succeeding. A stop that found nothing running (r1 != 0) must not make an
+    # otherwise-successful restart report failure.
+    return r2
 
 
 def cmd_launch(args: argparse.Namespace) -> int:
