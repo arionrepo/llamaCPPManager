@@ -36,11 +36,11 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 - **Impact:** forced the 2026-07-27 fix to repoint the global path (acceptable only because other models were deprioritized). A per-model `llama_server_path` / build override would be the correct design.
 - **Fixed 2026-07-28:** added optional `llama_server_path` to `ModelSpec`; `build_argv` and `launchd.build_program_arguments` resolve `spec.llama_server_path or <global>`. Surfaced via `config add/update --llama-server-path` (empty string clears). `start`'s binary pre-check and `start_process`'s fail-loud check both resolve per-model. Persisted only when set (omitted from YAML otherwise). Tests in `test_process.py` / `test_config.py`.
 
-### I4 — Stale/crashing binary shipped as the default path  (severity: high, mitigated)
+### I4 — Stale/crashing binary shipped as the default path  (severity: high, mitigated) — **CLOSED 2026-08-03 (policy documented)**
 - GUI `llama_server_path` was `…/llama.cpp/build/bin/llama-server` (build **b8559**), which crashes on Mistral-Small-3.2 tool calls (`Failed to parse input at pos N: </s>`), fixed upstream in llama.cpp **b10154**.
 - **Mitigation applied 2026-07-27:** GUI `llama_server_path` repointed to `…/llama.cpp-b10154/build/bin/llama-server`.
 - **Consolidated 2026-07-28 (verified):** the canonical `…/llama.cpp/build/bin/llama-server` was itself rebuilt to **b10154** (`--version` → `10154 (0e4a03622)`, built 2026-07-27 23:37); the temporary `llama.cpp-b10154/` dir is gone and both configs point at the canonical path. The crash-binary condition is cleared for now.
-- **Follow-up (still open):** decide the canonical llama.cpp build/version *policy* so the canonical `build/` can't silently regress to an old commit on the next rebuild. A per-model `llama_server_path` / build override (see I3) is the durable fix.
+- **Resolved 2026-08-03:** the canonical build/version *policy* is now documented in [`docs/LLAMA-CPP-VERSION-POLICY.md`](docs/LLAMA-CPP-VERSION-POLICY.md): version floor **b10154** (never regress below), verify-before-adopt (version check + tools-mode smoke + logged commit) on any rebuild, rebuild discipline (record old→new commit; no silent in-place rebuild), and per-model pinning via I3 for exceptions. The operator may adjust the specifics, but the anti-silent-regression process is now written down rather than tribal knowledge.
 
 ### I5 — Duplicate `--ctx-size` in launch argv  (severity: low) — **CLOSED 2026-07-28 (v2026.07.28.2)**
 - mistral entry yields `--ctx-size 32768 … --ctx-size 65536` (mode default from `build_argv` + per-model `args: [--ctx-size, '65536']`). Last wins (65536), so harmless, but sloppy and confusing in logs.
