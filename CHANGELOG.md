@@ -6,6 +6,20 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.03.3] - 2026-08-03
+
+### Fixed
+
+- **`start`/`restart` no longer appear to hang (KNOWN-ISSUES I10).** The
+  timestamp-logging wrapper was spawned without redirecting its stdio, so the
+  detached child inherited and held open the CLI's stdout/stderr. Any caller
+  capturing the CLI's output (a pipe) then blocked waiting for EOF until the
+  long-lived server exited — i.e. `start` looked hung even though the server was
+  up. The wrapper `Popen` now redirects `stdin`/`stdout`/`stderr` to `DEVNULL`
+  (it writes its own log to the logfile internally), so the CLI returns
+  immediately. Verified live: `start` with captured output returned in ~0.2s
+  (was blocking to the 90s harness timeout).
+
 ## [2026.08.03.2] - 2026-08-03
 
 ### Fixed

@@ -71,13 +71,21 @@ def test_start_process_builds_correct_args_and_logs(tmp_path, monkeypatch):
 def test_start_process_wrapper_uses_deterministic_path_and_self_deletes(tmp_path, monkeypatch):
     """KNOWN-ISSUES I12: the timestamp-logger wrapper must be written to a
     deterministic per-model path (log_dir/wrappers/<name>.sh), NOT a random /tmp
-    file, and must self-delete via a `trap ... EXIT` — no daemon-thread unlink."""
+    file, and must self-delete via a `trap ... EXIT` — no daemon-thread unlink.
+    KNOWN-ISSUES I10: the wrapper Popen must redirect its stdio to DEVNULL so the
+    detached child does not inherit (and hold open) the CLI's stdout/stderr,
+    which otherwise makes `start`/`restart` appear to hang for output-capturing
+    callers."""
+    import subprocess
     from llamacpp_manager import process as proc
 
     recorded = {}
 
-    def fake_popen(args, stdout=None, stderr=None, env=None, start_new_session=False):
+    def fake_popen(args, stdin=None, stdout=None, stderr=None, env=None, start_new_session=False):
         recorded["args"] = args
+        recorded["stdin"] = stdin
+        recorded["stdout"] = stdout
+        recorded["stderr"] = stderr
         return DummyPopen(args, env=env)
 
     monkeypatch.setattr(proc, "Popen", fake_popen)
@@ -96,10 +104,14 @@ def test_start_process_wrapper_uses_deterministic_path_and_self_deletes(tmp_path
     assert recorded["args"][0] == "/bin/bash"
     assert recorded["args"][1] == str(wrapper)
     assert not recorded["args"][1].startswith("/tmp/")
-    # Wrapper file was written there with a self-delete trap
+    # Wrapper file was written there with a self-delete trap (I12)
     assert wrapper.exists()
     content = wrapper.read_text()
     assert 'trap \'rm -f "$0"\' EXIT' in content
+    # Wrapper stdio detached to DEVNULL so the CLI does not hang (I10)
+    assert recorded["stdin"] == subprocess.DEVNULL
+    assert recorded["stdout"] == subprocess.DEVNULL
+    assert recorded["stderr"] == subprocess.DEVNULL
 
 
 def _count(argv, flag):

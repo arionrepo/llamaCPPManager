@@ -1,7 +1,7 @@
 import os
 import signal
 from pathlib import Path
-from subprocess import Popen
+from subprocess import Popen, DEVNULL
 import time
 from typing import List, Optional
 
@@ -190,10 +190,16 @@ done >> {shlex.quote(str(log_path))}
             # Make wrapper executable
             os.chmod(wrapper_path, 0o755)
 
-            # Start the wrapper script
+            # Start the wrapper script.
             # start_new_session=True detaches the child into its own process group / session
-            # so it survives the parent CLI exiting (was causing models to die ~30s after start)
-            proc = Popen(['/bin/bash', wrapper_path], env=env, start_new_session=True)
+            # so it survives the parent CLI exiting (was causing models to die ~30s after start).
+            # KNOWN-ISSUES I10: redirect the wrapper's stdio to DEVNULL so the detached child
+            # does NOT inherit (and hold open) the CLI's stdout/stderr. Otherwise a caller that
+            # captures the CLI's output (a pipe) blocks for EOF until the long-lived server exits,
+            # making `start`/`restart` appear to hang. The wrapper writes its own log to the
+            # logfile internally (`... >> <log_path>`), so DEVNULL here loses nothing.
+            proc = Popen(['/bin/bash', wrapper_path], env=env, start_new_session=True,
+                         stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
             wrapper_pid = proc.pid
             log_event("process.start.wrapper_spawned", model=spec.name,
                       pid=wrapper_pid, wrapper_path=wrapper_path)
