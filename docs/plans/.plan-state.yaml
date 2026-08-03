@@ -1,0 +1,39 @@
+# Plan-state for plan-known-issues-i11-i10-i7-i4.md — updated after every step outcome.
+plan: plan-known-issues-i11-i10-i7-i4
+created: 2026-08-03
+steps:
+  step-1:
+    issue: I11
+    status: succeeded
+    depends_on: []
+    fatal_on_failure: false
+    commit: 616caea
+    note: "restart port-release wait + force-kill fallback; live 5/5 back-to-back MLX restarts"
+  step-2:
+    issue: I10
+    status: succeeded
+    depends_on: [step-1]
+    fatal_on_failure: false
+    commit: 1adb988
+    note: "wrapper Popen stdio -> DEVNULL; live start returned in 0.2s (was hanging)"
+  step-3:
+    issue: I7
+    status: succeeded
+    depends_on: [step-2]
+    fatal_on_failure: false
+    commit: e2b6d9a
+    note: "verified live (no code change); no reparented orphan on GGUF+MLX; real-pid tracking + SIGKILL escalation work"
+  step-4:
+    issue: I4
+    status: succeeded
+    depends_on: []
+    fatal_on_failure: false
+    commit: 4f39736
+    note: "docs/LLAMA-CPP-VERSION-POLICY.md written; version floor b10154 + anti-regression process"
+goal_validation:
+  pytest: green (163 passed, 3 skipped)
+  live_smoke: "I11 5/5 MLX restart; I10 start returned 0.2s; I7 no orphan GGUF+MLX"
+  commits: [616caea, 1adb988, e2b6d9a, 4f39736]
+  version: 2026.08.03.3
+  pushed: pending
+
