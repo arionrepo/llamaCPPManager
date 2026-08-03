@@ -4,8 +4,8 @@
 **Description:** Issues discovered while diagnosing Mistral-Small-3.2-24B tool-calling failures on port 8089 (2026-07-27). Recorded for follow-up.
 **Author:** Claude (Opus 4.8)
 **Created:** 2026-07-27
-**Last Updated:** 2026-07-29
-**Last Updated By:** Claude (Opus 4.8) — verify-reconcile pass
+**Last Updated:** 2026-08-03
+**Last Updated By:** Claude (Opus 4.8) — live lifecycle test findings (I10–I12)
 
 ## Context
 Session traced a Mistral-Small-3.2-24B tool-call crash (`</s>` parse 500) on 8089 to an outdated llama.cpp binary (b8559). Fixed by building b10154 and pointing the manager at it. Along the way, several manager issues surfaced.
@@ -13,7 +13,9 @@ Session traced a Mistral-Small-3.2-24B tool-call crash (`</s>` parse 500) on 808
 ## Update 2026-07-28 — external-process visibility now surfaced in `status`
 A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility** half of the "server runs on 8089 but the manager didn't start it" confusion that underlies several issues here (esp. I7). `status` now reports `process_source: "external"` for a live server discovered only by port scan (no manager PID file, no launchd plist), and adds `logs_available` / `logs_hint` fields plus a `⚠` note; `logs <model>` warns the log may be stale. This visibility commit did **not** by itself fix the root causes below — it just makes an unmanaged/externally-started process obvious instead of looking like a silent logging bug.
 
-**Root-cause status as of the 2026-07-28 remediation batch (v2026.07.28.2–.4):** I1 (reclassified; README fixed), I3, I5, I6 (largely), I8, and I9 were subsequently **closed** in later commits the same day (see per-issue entries below for commit hashes). I2 is moot. The only items still **open** are **I4** (canonical llama.cpp build/version *policy*, low) and **I7** (kill/restart lifecycle, deferred — needs supervised live testing, bundles with the I9 live-launchd check).
+**Root-cause status as of the 2026-07-28 remediation batch (v2026.07.28.2–.4):** I1 (reclassified; README fixed), I3, I5, I6 (largely), I8, and I9 were subsequently **closed** in later commits the same day (see per-issue entries below for commit hashes). I2 is moot. Still **open** from that batch: **I4** (canonical llama.cpp build/version *policy*, low) and **I7** (kill/restart lifecycle, deferred — needs supervised live testing, bundles with the I9 live-launchd check).
+
+**New issues from the 2026-07-29 live lifecycle test (corrected 2026-08-01), all OPEN:** **I10** (`start`/`restart` CLI hangs after spawning), **I11** (MLX `restart` port-release race), **I12** (`/tmp` timestamp-wrapper scripts leak). See the "Live lifecycle test results" block and per-issue entries below.
 
 ## Issues
 
@@ -67,6 +69,26 @@ A follow-up session (commit `8ac9a5d`, v2026.07.28.1) addressed the **visibility
 - **Impact:** autostart/launchd models silently miss GPU offload, context sizing, jinja/tool support, and single-slot pinning. The 2026-07-28 I3 fix made it honor the per-model binary, but the flag divergence remains.
 - **Fixed 2026-07-28:** `build_program_arguments` now delegates to `process.build_argv`, so launchd `ProgramArguments` are byte-identical to what `start` runs (GPU offload, ctx sizing, mode flags, `--parallel 1`, dedup, per-model binary). `test_launchd.py::test_render_plist_matches_start_argv` asserts equality. **Behavior change:** like `start`, launchd render now validates the model file exists (raises if missing) — installing an agent for a missing model now fails loud instead of writing a plist that would fail at load.
 - **Not yet verified against a live launchd agent** — asserted equal to the verified `start` argv via unit test; a real `launchd install` + reload on the machine is the remaining supervised check (bundles naturally with I7).
+
+## Live lifecycle test results (2026-07-29, corrected 2026-08-01)
+Ran start → stop → restart → stop, one model at a time, via the **live pipx CLI** (`~/.local/bin/llamacpp-manager`), each model on its own registered port, capacity-reserved per model.
+- **GGUF (`llama-server`): gemma-3-270m, qwen3-0.6b, mistral-05b-compliance — all PASS.** start/stop/restart reliable; restart produced a fresh pid each time; stops clean (no SIGKILL escalation needed). Gives **live** confidence for the direct start/stop/restart path — partially closes I7's "needs live testing" gap for GGUF. Launchd install/reload + reparent edge still pending (see I7/I9).
+- **MLX (`mlx_lm.server`): gemma-270m-compliance-mlx, mistral-05b-compliance-mlx — start/stop PASS; restart FLAKY (see I11).**
+- **Methodology note:** an earlier run used the repo dev `.venv` (missing `psutil`/`mlx_lm`) and wrongly reported MLX as broken. MLX works via the pipx CLI, which launches MLX through the configured `mlx_python_path` = `~/mlx_env` (mlx_lm 0.31.3). Lesson: test against the shipped (pipx) environment, not the dev venv.
+
+### I10 — `start`/`restart` CLI does not return (hangs) after spawning  (severity: medium) — **OPEN**
+- `llamacpp-manager start <model>` spawns the server (correctly detached, `start_new_session=True`) and prints `started <name> pid=… port=…`, but the CLI process then **hangs instead of exiting**. Root: the timestamp-logging wrapper in `process.py:start_process` runs `llama-server … 2>&1 | while read line` and the parent retains the pipe/fd. Verified live — the test harness had to force-kill each `start`/`restart` after 90s; the server stayed up and healthy throughout.
+- **Impact:** anything scripting around `start`/`restart` blocks; interactive use looks hung. The server itself is unaffected.
+- **Fix direction:** fully detach the logging wrapper (setsid + redirect wrapper stdout to the logfile so the CLI never holds the pipe); optionally health-gate the success message so "started" means "answering". Same root mechanism as I7.
+
+### I11 — MLX `restart` race: port not released before re-start  (severity: medium) — **OPEN**
+- `cmd_restart` = `cmd_stop` + `cmd_start` with **no wait for port release between them**. `mlx_lm.server` frees its port more slowly than `llama-server`, so a back-to-back restart intermittently hits `cmd_start`'s port-in-use pre-check → `rc=2`, and the model does not come up. Reproduced live: both MLX models failed restart in the automated back-to-back run; a slower manual restart-from-stopped succeeded.
+- **Cosmetic sub-bug:** `cmd_restart`'s internal `cmd_stop` returns `1` ("not running") when the model was already stopped, so `restart` can report a non-zero exit (`max(r1,r2)`) even when the model then starts fine.
+- **Fix direction:** after stop, poll until the port is actually free (or health is down) before the start phase; treat "already stopped" as success within restart. GGUF restart passed live but shares the same structural gap (llama-server just releases the port faster).
+
+### I12 — timestamp-logger `/tmp` wrapper scripts leak  (severity: low) — **OPEN**
+- `process.py:start_process` writes a per-start bash wrapper via `NamedTemporaryFile(delete=False, dir='/tmp')` and attempts cleanup in a **daemon thread**, which dies when the short-lived CLI exits — the exact failure mode the surrounding code comment warns about. Result: `/tmp/tmp*.sh` files accumulate indefinitely (8 observed from a single session).
+- **Fix direction (built-in management):** (1) write to a deterministic per-model path under app-support (`wrappers/<model>.sh`), overwritten each start — bounds it to one file per model and moves it out of `/tmp`; (2) have the stop path delete that model's wrapper (start creates, stop removes); (3) extend the existing `cleanup` command to sweep wrappers whose owning process is dead, and sweep on start. Remove the non-functional daemon-thread cleanup.
 
 ## Mode reference (from `src/llamacpp_manager/process.py:build_argv`)
 | Mode | Extra flags (beyond `--ctx-size <n>` default 32768, `--n-gpu-layers 999`) |
