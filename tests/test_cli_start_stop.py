@@ -48,3 +48,22 @@ def test_start_stop_dry_run_and_pidfile(tmp_path, monkeypatch, capsys):
     # Stop (reads pid and removes file)
     assert main(["stop", "m1"]) == 0
     assert not p.exists()
+
+
+def test_start_port_override_is_ephemeral(tmp_path, capsys):
+    """`start --port` overrides the configured port for this run only, without
+    changing the persisted config."""
+    model = tmp_path / "m.gguf"; model.write_text("x")
+    assert main(["init"]) == 0
+    assert main(["config", "add", "m1", str(model), "--port", "9200"]) == 0
+
+    # Dry-run with an override port should show the override, not the config port.
+    assert main(["start", "m1", "--port", "8199", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "--port 8199" in out
+    assert "--port 9200" not in out
+
+    # The persisted config is unchanged.
+    assert main(["config", "show", "m1"]) == 0
+    show = capsys.readouterr().out
+    assert "9200" in show and "8199" not in show

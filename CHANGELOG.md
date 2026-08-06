@@ -6,6 +6,29 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.06.1] - 2026-08-06
+
+### Added
+
+- **`history` CLI command** — `history list`, `history search "<query>"`, and
+  `history export [--conversation ID]` now expose the chat-history database that
+  `compare --save` and multi-model queries already populate. The `ChatStorage`
+  query layer existed but had no CLI surface (documented-but-unimplemented drift
+  found in the 2026-08-06 audit); this wires it up.
+- **`start --port N`** — override a model's configured port for a single run
+  (persisted config is unchanged; single-model target only). Verified via
+  `test_start_port_override_is_ephemeral`.
+
+### Fixed
+
+- **README drift corrected** (2026-08-06 verification pass): documented commands
+  that did not exist or used wrong syntax — `stop-all` → `stop all`, top-level
+  `list` → `config list` / `models list`, `compare --output <file>` →
+  `--format json` (+ `--save`) — and the wrong chat-history DB path
+  (`~/.local/share/...` → `~/Library/Application Support/llamaCPPManager/...`).
+  The `history` and `start --port` docs are now backed by real implementations
+  (see Added).
+
 ## [2026.08.03.3] - 2026-08-03
 
 ### Fixed

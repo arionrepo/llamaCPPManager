@@ -934,6 +934,7 @@ Examples:
     sp_start.add_argument("--dry-run", action="store_true", help="Show command that would run without executing")
     sp_start.add_argument("--launchd", action="store_true", help="Use macOS launchd for background service")
     sp_start.add_argument("--allow-remote", action="store_true", help="Allow external IP binds (security risk)")
+    sp_start.add_argument("--port", type=int, help="Override the configured port for this start only (single-model target; config is not changed)")
     sp_start.set_defaults(func=cmd_start)
 
     sp_start_script = sub.add_parser("start-script", help="▶️  Start model using restart-llm-interactive.sh script")
@@ -990,6 +991,27 @@ Examples:
     sp_models_check = models_sub.add_parser("check-updates", help="🔄 Check for model updates")
     sp_models_check.add_argument("--json", action="store_true", help="Output as JSON")
     sp_models_check.set_defaults(func=cmd_models)
+
+    # history group (browse the chat-history DB written by `compare --save` / multi-model queries)
+    sp_history = sub.add_parser("history", help="🗂️  Browse saved multi-model chat history")
+    history_sub = sp_history.add_subparsers(dest="history_command", required=True, help="History commands")
+
+    sp_hist_list = history_sub.add_parser("list", help="📋 Show recent conversations")
+    sp_hist_list.add_argument("--limit", type=int, default=50, help="Max conversations (default: 50)")
+    sp_hist_list.add_argument("--format", choices=["table", "json"], default="table", help="Output format")
+    sp_hist_list.set_defaults(func=cmd_history)
+
+    sp_hist_search = history_sub.add_parser("search", help="🔎 Full-text search past questions")
+    sp_hist_search.add_argument("query", help="Search query")
+    sp_hist_search.add_argument("--limit", type=int, default=50, help="Max results (default: 50)")
+    sp_hist_search.add_argument("--format", choices=["table", "json"], default="table", help="Output format")
+    sp_hist_search.set_defaults(func=cmd_history)
+
+    sp_hist_export = history_sub.add_parser("export", help="📤 Export conversation(s) as JSON")
+    sp_hist_export.add_argument("--conversation", type=int, help="Conversation id (omit to export all)")
+    sp_hist_export.add_argument("--limit", type=int, default=1000, help="Max conversations when exporting all")
+    sp_hist_export.add_argument("--format", choices=["json"], default="json", help="Output format (json)")
+    sp_hist_export.set_defaults(func=cmd_history)
 
     # status
     sp_status = sub.add_parser("status", help="📊 Show model status, health, and response times")
@@ -1378,6 +1400,12 @@ def cmd_start(args: argparse.Namespace) -> int:
     rc = 0
     for m in selected:
         spec = spec_from_dict(m)
+        # Ephemeral per-invocation port override (single-model target only). The
+        # persisted config is NOT changed; this only affects this run's argv,
+        # port-in-use check, and pid tracking.
+        _port_override = getattr(args, "port", None)
+        if _port_override and len(selected) == 1:
+            spec.port = _port_override
         # Warn/refuse remote binds unless explicitly allowed
         if spec.host not in ("127.0.0.1", "localhost", "::1") and not getattr(args, "allow_remote", False):
             print(f"error: refusing to bind non-local host '{spec.host}' without --allow-remote", file=sys.stderr)
@@ -2642,6 +2670,51 @@ def cmd_monitor(args: argparse.Namespace) -> int:
                 return 2
 
     print("unknown monitor subcommand", file=sys.stderr)
+    return 2
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    """Browse the chat-history database written by `compare --save` and
+    multi-model queries. Thin CLI over the existing ChatStorage query API."""
+    from .chat_storage import ChatStorage
+    sub = getattr(args, "history_command", None)
+    fmt = getattr(args, "format", "table")
+    storage = ChatStorage()
+
+    if sub == "list":
+        convs = storage.list_conversations(limit=getattr(args, "limit", 50))
+        if fmt == "json":
+            print(to_json(convs))
+        elif not convs:
+            print("No saved conversations. (Populate with `compare --save`.)")
+        else:
+            for c in convs:
+                print(f"[{c.get('id')}] {c.get('title') or '(untitled)'} — "
+                      f"{c.get('message_count', 0)} msg, updated {c.get('updated_at')}")
+        return 0
+
+    if sub == "search":
+        results = storage.search_messages(args.query, limit=getattr(args, "limit", 50))
+        if fmt == "json":
+            print(to_json(results))
+        elif not results:
+            print(f"No messages match {args.query!r}.")
+        else:
+            for r in results:
+                print(f"[conv {r.get('conversation_id')}] "
+                      f"{r.get('conversation_title') or ''}: {r.get('content')}")
+        return 0
+
+    if sub == "export":
+        cid = getattr(args, "conversation", None)
+        if cid is not None:
+            data = storage.get_conversation(int(cid))
+        else:
+            data = storage.list_conversations(limit=getattr(args, "limit", 1000))
+        print(to_json(data))
+        return 0
+
+    print("error: unknown history subcommand; use list | search | export", file=sys.stderr)
     return 2
 
 

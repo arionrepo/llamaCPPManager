@@ -84,8 +84,8 @@ pip install -e .
 ### Basic Usage
 
 ```bash
-# Start a model
-llamacpp-manager start phi3 --port 8081
+# Start a model (port comes from config; add --port to override for this run only)
+llamacpp-manager start phi3
 
 # Chat with a model
 llamacpp-manager query chat phi3 --message "user:What is the capital of France?"
@@ -97,7 +97,7 @@ llamacpp-manager status
 llamacpp-manager compare "Explain quantum computing" --models phi3,smollm3
 
 # Stop all running models
-llamacpp-manager stop-all
+llamacpp-manager stop all
 
 # Launch GUI application
 open "/Applications/llamaCPP Manager.app"
@@ -111,10 +111,12 @@ open "/Applications/llamaCPP Manager.app"
 
 ```bash
 # Model Management
-llamacpp-manager list                    # List available models
-llamacpp-manager start <model>           # Start a model server
+llamacpp-manager config list             # List configured models
+llamacpp-manager models list             # List downloaded model files
+llamacpp-manager start <model>           # Start a model server (port from config)
+llamacpp-manager start <model> --port N  # Start with a one-off port override (config unchanged)
 llamacpp-manager stop <model>            # Stop a model server
-llamacpp-manager stop-all                # Stop all running models
+llamacpp-manager stop all                # Stop all running models
 llamacpp-manager status                  # Show status of all models
 llamacpp-manager status --json           # JSON output for scripting
 
@@ -125,12 +127,13 @@ llamacpp-manager query completion <model> --prompt "text"    # Text completion
 
 # Multi-Model Comparison
 llamacpp-manager compare "prompt" --models phi3,smollm3,llama3
-llamacpp-manager compare "prompt" --models phi3,smollm3 --output comparison.json
+llamacpp-manager compare "prompt" --models phi3,smollm3 --format json   # JSON to stdout (redirect to a file)
+llamacpp-manager compare "prompt" --models phi3,smollm3 --save          # Save to chat-history DB
 
-# Chat History
-llamacpp-manager history list            # Show recent conversations
-llamacpp-manager history search "keyword"  # Search chat history
-llamacpp-manager history export --format json  # Export conversations
+# Chat History (browses the DB populated by `compare --save`)
+llamacpp-manager history list            # Recent saved conversations
+llamacpp-manager history search "keyword"  # Full-text search saved questions
+llamacpp-manager history export [--conversation ID]  # Export conversation(s) as JSON
 
 # Configuration
 llamacpp-manager config list             # List configured models and settings
@@ -460,10 +463,10 @@ Follow the [GUI Development Workflow](#gui-development-workflow) exactly:
 
 ```bash
 # Check database location
-ls -la ~/.local/share/llamacpp-manager/chat_history.db
+ls -la ~/Library/Application Support/llamaCPPManager/chat_history.db
 
 # Verify permissions
-chmod 644 ~/.local/share/llamacpp-manager/chat_history.db
+chmod 644 ~/Library/Application Support/llamaCPPManager/chat_history.db
 ```
 
 #### **Import Errors**
