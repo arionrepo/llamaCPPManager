@@ -228,8 +228,13 @@ done >> {shlex.quote(str(log_path))}
                         # Get first child PID (should be llama-server)
                         llama_server_pid = int(result.stdout.strip().split()[0])
                         break
-                except:
-                    pass
+                except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+                    # Narrowed from a bare `except:` (KNOWN-ISSUES audit): a bare
+                    # except also swallowed KeyboardInterrupt/SystemExit and hid
+                    # real pgrep failures. Record the failure; the loop retries,
+                    # and the child_resolved event below captures a None result.
+                    log_event("process.start.child_lookup_retry", model=spec.name,
+                              attempt=attempt, error=str(e), error_type=type(e).__name__)
 
             log_event("process.start.child_resolved", model=spec.name,
                       wrapper_pid=wrapper_pid, llama_server_pid=llama_server_pid,

@@ -150,8 +150,9 @@ def cmd_config(args: argparse.Namespace) -> int:
         try:
             if port_in_use(spec.host, spec.port):
                 print(f"warning: port {spec.port} on {spec.host} appears in use right now", file=sys.stderr)
-        except Exception:
-            pass
+        except OSError as e:
+            # Non-fatal, but surface it instead of silently swallowing (audit).
+            print(f"note: could not check whether port {spec.port} is in use: {e}", file=sys.stderr)
         print(f"Added model '{spec.name}'")
 
         # Add to continue.dev configuration

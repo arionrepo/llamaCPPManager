@@ -6,6 +6,26 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.06.2] - 2026-08-06
+
+### Fixed
+
+- **Narrowed a bare `except:` in `start_process` child-PID lookup** (audit).
+  It previously swallowed `KeyboardInterrupt`/`SystemExit` and hid `pgrep`
+  failures; now catches `(OSError, ValueError, TimeoutExpired)` and records a
+  `process.start.child_lookup_retry` lifecycle event.
+- **`config add` port-check no longer silently swallows errors** — narrowed to
+  `OSError` and surfaces a `note:` instead of `except Exception: pass`.
+- **`.projectrc` paths corrected** to match `utils`: `CONFIG_DIR` →
+  `~/Library/Application Support/llamaCPPManager`, `LOG_DIR` →
+  `~/Library/Logs/llamaCPPManager` (was an inert `~/.config` path + mis-cased dir).
+
+### Tests
+
+- Added unit tests for KNOWN-ISSUES **I11** (`cmd_restart` waits for port release
+  and returns the start result, not `max(stop, start)`) and the new **`history`**
+  CLI (`list`/`search`/`export`), closing coverage gaps flagged in the audit.
+
 ## [2026.08.06.1] - 2026-08-06
 
 ### Added

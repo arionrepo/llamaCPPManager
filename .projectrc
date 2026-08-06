@@ -18,8 +18,8 @@ APPLICATION_PATH="/Applications/Llama CPP Manager.app"
 # CLI Executable
 CLI_EXECUTABLE="${PROJECT_ROOT}/.venv/bin/llamacpp-manager"
 
-# Logging
-LOG_DIR="${HOME}/Library/Logs/LlamaCPPManager"
+# Logging (matches utils.logs_dir(): ~/Library/Logs/llamaCPPManager)
+LOG_DIR="${HOME}/Library/Logs/llamaCPPManager"
 
-# Configuration
-CONFIG_DIR="${HOME}/.config/llamacpp-manager"
+# Configuration (matches utils.config_path(): ~/Library/Application Support/llamaCPPManager)
+CONFIG_DIR="${HOME}/Library/Application Support/llamaCPPManager"
