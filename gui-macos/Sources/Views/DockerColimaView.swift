@@ -11,6 +11,10 @@ class DockerColimaViewModel: ObservableObject {
     @Published var dockerContainers: [DockerContainer] = []
     @Published var containerStats: [String: (cpu: Double, memory: String)] = [:]
     @Published var isLoading = false
+    // Non-nil when the last `colima list` query failed (vs. genuinely zero
+    // profiles). Carries colima's own stderr so the Infra tab can show an
+    // actionable reason instead of a misleading "No Colima profiles found".
+    @Published var colimaError: String?
 
     private let dockerService = DockerService()
     private var refreshTask: Task<Void, Never>?
@@ -31,15 +35,30 @@ class DockerColimaViewModel: ObservableObject {
 
     func refresh() async {
         isLoading = true
-        async let profiles = dockerService.getColimaProfiles()
+        async let profilesResult = fetchProfilesCapturingError()
         async let containers = dockerService.getDockerContainers()
         async let stats = dockerService.getContainerStats()
 
-        colimaProfiles = await profiles
+        let (profiles, error) = await profilesResult
+        colimaProfiles = profiles
+        colimaError = error
         dockerContainers = await containers
         containerStats = await stats
         AppLogger.log("ViewModel refresh: got \(dockerContainers.count) containers from running profiles", level: .debug)
         isLoading = false
+    }
+
+    // Runs the throwing profile query and maps a failure to a trimmed message.
+    // Returns ([], message) on failure and (profiles, nil) on success so refresh()
+    // can update the profile list and the error banner atomically.
+    private func fetchProfilesCapturingError() async -> ([ColimaProfile], String?) {
+        do {
+            return (try await dockerService.getColimaProfiles(), nil)
+        } catch {
+            let msg = (error as NSError).localizedDescription
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return ([], msg.isEmpty ? "colima list failed (exit code \((error as NSError).code))" : msg)
+        }
     }
 
     func startColima(profile: String) async {
@@ -146,7 +165,21 @@ struct DockerColimaView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
 
-                if viewModel.colimaProfiles.isEmpty {
+                if let colimaError = viewModel.colimaError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Could not query Colima", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+                        Text(colimaError)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                } else if viewModel.colimaProfiles.isEmpty {
                     Text("No Colima profiles found")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -244,7 +277,12 @@ struct DockerColimaView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
 
-                if viewModel.colimaProfiles.isEmpty {
+                if viewModel.colimaError != nil {
+                    Text("Colima unavailable — see error above")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.leading, 8)
+                } else if viewModel.colimaProfiles.isEmpty {
                     Text("No Colima profiles found")
                         .font(.caption)
                         .foregroundColor(.secondary)

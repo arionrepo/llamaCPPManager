@@ -16,6 +16,60 @@ final class RunCommandStreamingTests: XCTestCase {
         XCTAssertEqual(url?.path, "/opt/homebrew/bin/colima")
     }
 
+    // Regression: 2026-08-06 "no colima profiles found". A GUI app launched via
+    // LaunchServices with a minimal PATH (no /opt/homebrew/bin) located the
+    // `colima` binary (via preferredDirs) but then handed colima that same
+    // minimal PATH; `colima list` execs `limactl` via $PATH and failed with
+    // "executable file not found in $PATH", so the Infra tab showed no profiles.
+    // environmentWithToolPath() must guarantee the Homebrew/tool dirs are on the
+    // PATH given to the subprocess.
+    func testEnvironmentWithToolPathPrependsHomebrewWhenPATHIsMinimal() {
+        let service = DockerService(environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"])
+        let path = service.environmentWithToolPath()["PATH"] ?? ""
+        let dirs = path.split(separator: ":").map(String.init)
+        XCTAssertTrue(dirs.contains("/opt/homebrew/bin"),
+                      "Homebrew bin must be on PATH so colima can find limactl; got: \(path)")
+        // Prepended, not appended — tool dirs take precedence.
+        XCTAssertEqual(dirs.first, "/opt/homebrew/bin",
+                       "Tool dirs should be prepended; got: \(path)")
+        // Original entries preserved.
+        XCTAssertTrue(dirs.contains("/usr/bin"), "Original PATH entries must be preserved; got: \(path)")
+    }
+
+    func testEnvironmentWithToolPathDeduplicatesExistingEntries() {
+        let service = DockerService(environment: ["PATH": "/opt/homebrew/bin:/usr/bin"])
+        let path = service.environmentWithToolPath()["PATH"] ?? ""
+        let count = path.split(separator: ":").filter { $0 == "/opt/homebrew/bin" }.count
+        XCTAssertEqual(count, 1, "PATH must not contain duplicate /opt/homebrew/bin; got: \(path)")
+    }
+
+    func testEnvironmentWithToolPathSuppliesPATHWhenAbsent() {
+        let service = DockerService(environment: [:])
+        let path = service.environmentWithToolPath()["PATH"] ?? ""
+        XCTAssertTrue(path.contains("/opt/homebrew/bin"),
+                      "Even with no inherited PATH, tool dirs must be present; got: \(path)")
+    }
+
+    // End-to-end integration proof for the 2026-08-06 fix: construct DockerService
+    // with the exact minimal PATH a LaunchServices-launched app can inherit (no
+    // Homebrew dir) and call the REAL getColimaProfiles(). Before the fix this
+    // returned [] because colima could not exec limactl; after the fix the PATH
+    // augmentation lets colima succeed. Skipped on machines without colima+limactl
+    // installed (i.e. not a real regression environment).
+    func testGetColimaProfilesSucceedsUnderMinimalPATH() async throws {
+        let fm = FileManager.default
+        guard fm.isExecutableFile(atPath: "/opt/homebrew/bin/colima"),
+              fm.isExecutableFile(atPath: "/opt/homebrew/bin/limactl") else {
+            throw XCTSkip("colima/limactl not installed at /opt/homebrew/bin — integration test not applicable")
+        }
+        // The failing condition: minimal PATH, homebrew absent.
+        let service = DockerService(environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"])
+        let profiles = try await service.getColimaProfiles()
+        XCTAssertFalse(profiles.isEmpty,
+                       "getColimaProfiles() must return colima profiles even when the inherited " +
+                       "PATH lacks /opt/homebrew/bin (regression: 'No Colima profiles found')")
+    }
+
     func testResolveExecutableUsesInjectedPATHEntries() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -44,13 +44,19 @@ final class DockerService {
 
     // MARK: - Colima Profile Management
 
-    func getColimaProfiles() async -> [ColimaProfile] {
+    // Throws on failure (colima missing, limactl/HOME unresolved, non-zero exit)
+    // so callers can distinguish a genuine "zero profiles" from a failed query and
+    // surface the reason. The NSError's localizedDescription carries colima's own
+    // stderr (e.g. the limactl-not-found message), which the UI shows verbatim.
+    // Internal callers that only need the list use `try?`; the view model catches
+    // and publishes the message.
+    func getColimaProfiles() async throws -> [ColimaProfile] {
         do {
             let output = try await runCommand("colima", args: ["list"])
             return parseColimaList(output)
         } catch {
             AppLogger.log("Failed to get Colima profiles: \(error)", level: .error)
-            return []
+            throw error
         }
     }
 
@@ -152,8 +158,10 @@ final class DockerService {
 
     func getDockerContainers() async -> [DockerContainer] {
         // Get Colima profiles and query containers from RUNNING profiles only
-        // Stopped profiles have no Docker context, so containers cannot be queried
-        let profiles = await getColimaProfiles()
+        // Stopped profiles have no Docker context, so containers cannot be queried.
+        // A failed profile query surfaces via the view model's colimaError; here we
+        // just proceed with an empty list so container discovery degrades cleanly.
+        let profiles = (try? await getColimaProfiles()) ?? []
         var allContainers: [DockerContainer] = []
 
         let profilesToQuery = profiles.filter { $0.isRunning }
@@ -226,7 +234,7 @@ final class DockerService {
 
     func getContainerStats() async -> [String: (cpu: Double, memory: String)] {
         // Query stats from all running Colima profiles
-        let profiles = await getColimaProfiles()
+        let profiles = (try? await getColimaProfiles()) ?? []
         var allStats: [String: (cpu: Double, memory: String)] = [:]
 
         for profile in profiles where profile.isRunning {
@@ -252,7 +260,7 @@ final class DockerService {
     // terminationHandler keeps the @MainActor caller free while we wait.
     private func runCommand(_ command: String, args: [String]) async throws -> String {
         let executableURL = try requireExecutableURL(for: command)
-        let environment = self.environment
+        let environment = environmentWithToolPath()
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
@@ -318,7 +326,7 @@ final class DockerService {
         onLine: ((String) -> Void)?
     ) async throws -> String {
         let executableURL = try requireExecutableURL(for: command)
-        let environment = self.environment
+        let environment = environmentWithToolPath()
         // Shared Process reference so the cancellation handler (which may run
         // on any executor) can terminate the subprocess. ProcessBox is defined
         // below the function (see "ProcessBox" comment for the safety argument).
@@ -418,23 +426,70 @@ final class DockerService {
         }
     }
 
+    // Directories that must be on PATH for colima/docker to work. These hold the
+    // entry binaries (colima, docker) AND — critically — the runtime dependencies
+    // those binaries exec via $PATH (e.g. `limactl`, which colima shells out to
+    // for every `list`/`start`/`stop`). Homebrew installs both under
+    // /opt/homebrew/bin (or /usr/local/bin on Intel); Docker Desktop under its
+    // Resources/bin.
+    private static let preferredDirs = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/Applications/Docker.app/Contents/Resources/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin"
+    ]
+
+    // Returns `self.environment` hardened for invoking colima/docker, guaranteeing
+    // the two environment values those tools require regardless of launch context:
+    //
+    //   1. PATH — `preferredDirs` prepended (de-duplicated, existing entries kept
+    //      after). resolveExecutableURL(for:) finds the *entry* binary via a
+    //      hardcoded search path, so `colima` is located even under a minimal
+    //      PATH. But we hand the subprocess this environment, and `colima list`
+    //      internally execs `limactl` via $PATH. A GUI app launched via
+    //      LaunchServices/`open` from a non-login context can inherit a minimal
+    //      PATH (/usr/bin:/bin:/usr/sbin:/sbin) with no Homebrew dir — so colima
+    //      fails with: fatal: exec: "limactl": executable file not found in $PATH.
+    //      (Root cause of the 2026-08-06 "No Colima profiles found" report.)
+    //
+    //   2. HOME — colima/limactl resolve their state dir (~/.colima, ~/.lima) from
+    //      $HOME and hard-fail without it ("cannot fetch required directory: $HOME
+    //      is not defined"). A launched app always has HOME, but we set it
+    //      defensively from NSHomeDirectory() when absent so a stripped
+    //      environment can never silently empty the Infra tab.
+    //
+    // getColimaProfiles() swallows any failure into an empty result, so either
+    // missing value would surface only as an empty tab — hardening the
+    // environment here is the durable fix.
+    //
+    // Internal (not private) so the unit test target can verify augmentation via
+    // @testable import, matching runCommandStreaming/resolveExecutableURL.
+    func environmentWithToolPath() -> [String: String] {
+        var env = environment
+        let existing = env["PATH"]?.split(separator: ":").map(String.init) ?? []
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for dir in DockerService.preferredDirs + existing where !dir.isEmpty && !seen.contains(dir) {
+            seen.insert(dir)
+            ordered.append(dir)
+        }
+        env["PATH"] = ordered.joined(separator: ":")
+        if (env["HOME"] ?? "").isEmpty {
+            env["HOME"] = NSHomeDirectory()
+        }
+        return env
+    }
+
     func resolveExecutableURL(for command: String) -> URL? {
         if command.contains("/") {
             let url = URL(fileURLWithPath: command)
             return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
         }
 
-        let preferredDirs = [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/Applications/Docker.app/Contents/Resources/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin"
-        ]
-
-        for dir in preferredDirs {
+        for dir in DockerService.preferredDirs {
             let url = URL(fileURLWithPath: dir).appendingPathComponent(command)
             if FileManager.default.isExecutableFile(atPath: url.path) {
                 AppLogger.log("Resolved \(command) via preferred path: \(url.path)", level: .debug)

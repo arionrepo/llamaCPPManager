@@ -6,6 +6,39 @@ is in the repo's `VERSION` file. Use `/version-bump` or
 
 ## [Unreleased]
 
+## [2026.08.06.3] - 2026-08-06
+
+### Fixed
+
+- **Infrastructure tab no longer shows "No Colima profiles found" depending on
+  how the app was launched.** `DockerService` located the `colima` binary via a
+  hardcoded search path but then handed the subprocess the app's own
+  environment. `colima list` execs `limactl` (a Homebrew-only tool) via `$PATH`,
+  so when the app was launched with a minimal `PATH` (e.g. via LaunchServices /
+  `open` from a non-login context, which omits `/opt/homebrew/bin`) colima
+  failed with `exec: "limactl": executable file not found in $PATH`, the error
+  was swallowed in `getColimaProfiles()`, and the tab rendered empty. Colima
+  also hard-fails without `$HOME`. `environmentWithToolPath()` now guarantees
+  both the Homebrew/tool dirs on `PATH` (prepended, de-duplicated) and `HOME`
+  (from `NSHomeDirectory()` when absent) for every colima/docker invocation, so
+  the Infra tab is robust to launch context.
+
+### Changed
+
+- **Infra tab now distinguishes a failed Colima query from genuinely zero
+  profiles.** `getColimaProfiles()` now throws instead of swallowing the error
+  into `[]`; the view model publishes `colimaError` and the tab renders a red
+  "Could not query Colima" banner with colima's own (selectable) stderr message
+  instead of a misleading "No Colima profiles found". Container discovery still
+  degrades cleanly (internal callers use `try?`).
+
+### Tests
+
+- Added `environmentWithToolPath` unit tests (prepend/dedup/absent-PATH) and an
+  end-to-end integration test that calls the real `getColimaProfiles()` under
+  the exact failing environment (minimal `PATH`, no `HOME`) and asserts profiles
+  are returned. Guarded to skip where colima/limactl are not installed.
+
 ## [2026.08.06.2] - 2026-08-06
 
 ### Fixed
